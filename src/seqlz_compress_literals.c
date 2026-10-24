@@ -230,7 +230,7 @@ static __always_inline u8 *lit_flush(u8 *p, const u8 *end, u64 acc,
 				     unsigned int *cnt, unsigned int *sum)
 {
 	unsigned int n = *cnt + (*sum & 255U);
-	u64 w = __builtin_bswap64(acc << ((64U - n) & 63U));
+	u64 w = swab64(acc << ((64U - n) & 63U));
 
 	if (end - p >= 8)
 		put_unaligned_le64(w, p);
@@ -688,9 +688,10 @@ static unsigned int size_width(const unsigned int *sizes)
  *
  * The coded literals are written over the raw ones in d, so they are read from
  * a copy: raw if the caller has one, with spare NULL, else spare, at least a
- * block, which they are copied into once it is clear they get coded. The bitstream stays behind
- * the raw literals until it moves down behind the coded ones at the end. So d
- * needs no room beyond len, and the block is coded in any dst it fits into raw.
+ * block, which they are copied into once it is clear they get coded. The
+ * bitstream stays behind the raw literals until it moves down behind the coded
+ * ones at the end. So d needs no room beyond len, and the block is coded in any
+ * dst it fits into raw.
  *
  * With delta not 0, raw has the literals' deltas, see SEQLZ_LIT_DELTA_AT,
  * which are coded instead, and the header says so; if they stay raw, d keeps

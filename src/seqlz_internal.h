@@ -16,8 +16,7 @@
  * compiler cannot look into.
  * __builtin_memcpy() for copies of 8 and 16 bytes, as LZ4_memcpy() and
  * ZSTD_memcpy(): it is always inlined, and memcpy() is not with every
- * CONFIG_FORTIFY_SOURCE, which makes each copy a call. __builtin_bswap64()
- * turns a literal stream's bits around once, in a register, see lit_flush().
+ * CONFIG_FORTIFY_SOURCE, which makes each copy a call.
  */
 
 /*
