@@ -39,8 +39,8 @@ static inline unsigned int seqlz_match_len(const u8 *p, const u8 *q,
 	 * tells the compiler so: __builtin_ctzll() of 0 is undefined.
 	 */
 	if (end - p >= 16) {
-		u64 x1 = get_unaligned_le64(p) ^ get_unaligned_le64(q),
-		    x2 = get_unaligned_le64(p + 8) ^ get_unaligned_le64(q + 8);
+		u64 x1 = get_unaligned_le64(p) ^ get_unaligned_le64(q);
+		u64 x2 = get_unaligned_le64(p + 8) ^ get_unaligned_le64(q + 8);
 		u64 x = x1 ? x1 : x2;
 
 		if (x | x2)
@@ -84,8 +84,8 @@ static __always_inline unsigned int
 seqlz_lazy(u16 *table, const u8 *src, unsigned int *pos, unsigned int *m,
 	   unsigned int len, unsigned int last, u64 v, unsigned int h)
 {
-	const u8 *const next = src + *pos + 1, *const end =
-						       src + SEQLZ_BLOCK_SIZE;
+	const u8 *const next = src + *pos + 1;
+	const u8 *const end = src + SEQLZ_BLOCK_SIZE;
 	const unsigned int cand = table[h];
 	unsigned int best = len, l;
 

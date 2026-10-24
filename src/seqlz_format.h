@@ -201,8 +201,8 @@ static inline unsigned int seqlz_len_symbol(unsigned int v,
 static inline unsigned int seqlz_off_class(unsigned int off, unsigned int last,
 					   unsigned int *raw_bits)
 {
-	unsigned int is_new = (off == last) - 1U,
-		     aligned = ((off & 7U) == 0) &
+	unsigned int is_new = (off == last) - 1U;
+	unsigned int aligned = ((off & 7U) == 0) &
 			       (off < 8U << SEQLZ_CLASS5_BITS);
 	/*
 	 * 2 for offsets below 256, else 3; offset 2 moves to 1, a multiple of
