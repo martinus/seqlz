@@ -146,7 +146,8 @@ BLOCK_BITS_KERNEL = """/*
 """
 
 # the comment of the counts in the kernel's copy, instead of the one of bench/
-COUNTS_HEAD = """# The symbol counts of seqlz's tables for blocks of 4 KiB, which
+COUNTS_HEAD = """# SPDX-License-Identifier: GPL-2.0-only OR MIT
+# The symbol counts of seqlz's tables for blocks of 4 KiB, which
 # scripts/gen-seqlz-lengths.py turns into lib/seqlz/seqlz_lengths.h. Counted on
 # 1 091 983 memory pages of a desktop and a phone, with seqlz's matcher; the
 # literal tables by k-means over the 963 723 pages with more than 64 literals.
@@ -345,6 +346,7 @@ def port_tables_h():
     """lib/seqlz/seqlz_tables.h: the tables' layout, and the tables themselves, generated"""
     t = spdx((SRC / "seqlz_tables.h").read_text(), False)
     t = guard(t, "seqlz_tables")
+    t = must(t, '#include "seqlz_format.h"\n', includes("tables") + '\n#include "seqlz_format.h"\n')
     return fix_comments(t)
 
 
@@ -365,13 +367,17 @@ def port_internal():
 # what each file uses itself, not what it gets through another header; seqlz_format.h builds for the
 # host too, for gen_seqlz_tables, so only with headers that tools/include has
 INCLUDES = {
-    "format": ["linux/build_bug.h", "linux/types.h"],
-    "internal": ["linux/cache.h", "linux/minmax.h", "linux/prefetch.h", "linux/seqlz.h", "linux/stddef.h",
+    "format": ["linux/types.h"],
+    "tables": ["linux/build_bug.h"],
+    "internal": ["linux/build_bug.h", "linux/cache.h", "linux/minmax.h", "linux/prefetch.h", "linux/seqlz.h", "linux/stddef.h",
                  "linux/types.h"],
-    "compress": ["linux/errno.h", "linux/export.h", "linux/string.h", "linux/unaligned.h"],
-    "compress_literals": ["linux/math64.h", "linux/minmax.h", "linux/string.h", "linux/unaligned.h"],
-    "decompress": ["linux/errno.h", "linux/export.h", "linux/module.h", "linux/unaligned.h"],
-    "decompress_literals": ["linux/compiler.h", "linux/minmax.h", "linux/unaligned.h"],
+    "compress": ["linux/build_bug.h", "linux/errno.h", "linux/export.h", "linux/string.h",
+                 "linux/unaligned.h"],
+    "compress_literals": ["linux/build_bug.h", "linux/math64.h", "linux/minmax.h", "linux/stddef.h",
+                          "linux/string.h", "linux/swab.h", "linux/unaligned.h"],
+    "decompress": ["linux/build_bug.h", "linux/errno.h", "linux/export.h", "linux/module.h",
+                   "linux/unaligned.h"],
+    "decompress_literals": ["linux/build_bug.h", "linux/compiler.h", "linux/minmax.h", "linux/unaligned.h"],
 }
 
 
@@ -431,9 +437,12 @@ def port_compress():
 def port_decompress():
     t = port_c("decompress")
     # seqlz_decode() of src/ is the interface's seqlz_decompress(), whose kernel-doc is in
-    # include/linux/seqlz.h; the comments get the new name from REWRITES
+    # include/linux/seqlz.h, with its parameter's name there; the comments get the new name from REWRITES
     t = must(t, "int seqlz_decode(const void *src, unsigned int src_len, void *dst,\n\t\t void *scratch)\n",
-             "int seqlz_decompress(const void *src, unsigned int src_len, void *dst,\n\t\t     void *scratch)\n")
+             "int seqlz_decompress(const void *src, unsigned int src_len, void *dst,\n\t\t     void *wrkmem)\n")
+    for deltas in ("true", "false"):
+        t = must(t, f"decode_block(src, src_len, dst, scratch, {deltas});\n",
+                 f"decode_block(src, src_len, dst, wrkmem, {deltas});\n")
     t = t.rstrip("\n") + "\n" + (HERE / "api_decompress.c").read_text()
     return fix_comments(t)
 
