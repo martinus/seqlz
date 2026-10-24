@@ -152,8 +152,8 @@ Commands: `docs/measuring.md`.
 - Public text (commits, PR title/body, GitHub comments, code comments, docs): Martin's voice, read
   `~/gra/martin-voice.md` fresh each time, without being asked. Register from its section 3 (a PR body
   is closest to the work update: numbers and links first, known flaw last), then its section 12
-  self-check. No em dashes, `e.g.`, numbers with axis and hardware, state the loss, caveat last. Chat
-  replies to Martin stay in the normal register.
+  self-check. No em dashes; `e.g.`, never "for example"; numbers with axis and hardware, state the
+  loss, caveat last. Chat replies to Martin stay in the normal register.
 - Never add Claude attribution, footer, `Co-Authored-By` or session link in the repo or on GitHub.
 - Commits: `area: what changed` (`seqlz:`, `docs:`, `tools:`, `test:`); body why/how/measured;
   always `git commit -s`.
