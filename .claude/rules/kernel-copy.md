@@ -11,8 +11,8 @@ follows these rules; open gaps in existing code: issues #151 to #157 (review of 
 
 - Generated, never edited: fix `src/` or `tools/kernel-port/`. To read it: `git archive` the kernel
   tree's `drivers/block/zram lib/Kconfig lib/Kconfig.debug lib/Makefile MAINTAINERS
-  Documentation/admin-guide/blockdev/zram.rst Documentation/staging/index.rst` into a dir, run
-  `port.py <dir>` (it fails without `index.rst`).
+  Documentation/admin-guide/blockdev/zram.rst Documentation/staging/index.rst
+  arch/x86/include/asm/processor.h` into a dir, run `port.py <dir>` (it fails without the last two).
 - Kernel helpers, not own ones: `get_unaligned_le16()`, `sizeof_field()`, `prefetch()`,
   `L1_CACHE_BYTES`, `BIT()`. No inline assembly, not even per architecture: fix a kernel gap with its
   own kernel patch, carried in `tools/kernel-port/` and applied by `port.py` (`x86-prefetcht0.patch`).
