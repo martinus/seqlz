@@ -16,6 +16,8 @@ follows these rules; open gaps in existing code: issues #151 to #157 (review of 
 - Kernel helpers, not own ones: `get_unaligned_le16()`, `sizeof_field()`, `prefetch()`,
   `L1_CACHE_BYTES`, `BIT()`. No inline assembly, not even per architecture: fix a kernel gap with its
   own kernel patch, carried in `tools/kernel-port/` and applied by `port.py` (`x86-prefetcht0.patch`).
+  That file is `git format-patch -1 --stdout` of branch `x86-prefetcht0-tip` (`gra cd moonnova`, on
+  tip/master): change code or changelog there with `git commit --amend`, then write the file again.
   `src/seqlz_compat.h` = kernel headers outside the kernel; may do what such a patch does.
 - Nothing in `lib/` depends on the CPU model; `port.py` fails on `read_cpuid` or `MIDR_` there (#152:
   one decode loop for all cores).
