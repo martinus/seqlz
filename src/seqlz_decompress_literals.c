@@ -105,6 +105,49 @@ static __always_inline bool lit_stream_ends(const u8 *start, unsigned int sz,
 	       (left == 0 || !(start[sz - 1U] & ((1U << left) - 1U)));
 }
 
+/*
+ * The decode table of a block's own literal table into lt, from the bytes of
+ * each code length in bucket, count[l] of them for length l. Each byte's
+ * entries, all the same, so the order of their bytes does not matter: 8 bytes
+ * at a time down to codes of 8 bits, which have 4 entries; codes of 9 bits
+ * have 2, codes of 10 one. A loop per length without a branch per byte read
+ * faster than one loop for all. The caller has checked that the codes fill
+ * the table exactly.
+ */
+static void own_fill(u16 *lt, const u8 *bucket, const unsigned int *count)
+{
+	const unsigned int full = 1U << SEQLZ_LIT_BITS;
+	u16 *o = lt;
+	unsigned int l, k;
+
+	for (l = 1; l <= SEQLZ_LIT_BITS - 2U; l++) {
+		const unsigned int run = full >> l;
+		const u8 *bk = bucket + l * 256U;
+
+		for (k = 0; k < count[l]; k++) {
+			u64 v = (u64)(l | (unsigned int)bk[k] << 8) *
+				0x0001000100010001ULL;
+			u16 *q;
+
+			for (q = o; q < o + run; q += 4)
+				__builtin_memcpy(q, &v, 8);
+			o += run;
+		}
+	}
+	for (k = 0; k < count[SEQLZ_LIT_BITS - 1U]; k++) {
+		u32 v = ((SEQLZ_LIT_BITS - 1U) |
+			 (u32)bucket[(SEQLZ_LIT_BITS - 1U) * 256U + k] << 8) *
+			0x00010001U;
+
+		__builtin_memcpy(o, &v, 4);
+		o += 2;
+	}
+	for (k = 0; k < count[SEQLZ_LIT_BITS]; k++)
+		*o++ = (u16)(SEQLZ_LIT_BITS |
+			     (unsigned int)bucket[SEQLZ_LIT_BITS * 256U + k]
+				     << 8);
+}
+
 /* the most bits a step of read_own_table() takes: a run's code and 8 more */
 #define OWN_STEP_MAX (2U * SEQLZ_OWN_CODE_BITS)
 static_assert(((OWN_QUAD_NONE + 1U) * 256U <= SEQLZ_SCRATCH &&
@@ -137,12 +180,16 @@ static noinline const u8 *read_own_table(const struct own_table *own,
 					 const u8 *p, const u8 *end, u16 *lt,
 					 u8 *bucket)
 {
-	const unsigned int full = 1U << SEQLZ_LIT_BITS,
-			   len = (unsigned int)(end - p);
-	unsigned int at = 0, avail = 0, space = 0, b = 0, l, k, used,
-		     count[OWN_QUAD_NONE + 1] = { 0 };
+	const unsigned int full = 1U << SEQLZ_LIT_BITS;
+	const unsigned int len = (unsigned int)(end - p);
+	/* the bytes of each length, see bucket */
+	unsigned int count[OWN_QUAD_NONE + 1] = { 0 };
+	/* bytes taken from p, bits of them left in bits, code space filled */
+	unsigned int at = 0, avail = 0, space = 0;
+	/* the byte the next length is for */
+	unsigned int b = 0;
+	unsigned int k, used;
 	u64 bits = 0;
-	u16 *o = lt;
 
 	while (space < full) {
 		unsigned int top, e, l1, l2, next, two;
@@ -165,8 +212,8 @@ static noinline const u8 *read_own_table(const struct own_table *own,
 			/*
 			 * a run alone: its code, then nb - 1 bits below its top
 			 */
-			unsigned int d = own->decode[top],
-				     nb = (d & 0xffU) - SEQLZ_OWN_RUN;
+			unsigned int d = own->decode[top];
+			unsigned int nb = (d & 0xffU) - SEQLZ_OWN_RUN;
 
 			bits <<= d >> 8;
 			b += (1U << (nb - 1U)) +
@@ -197,39 +244,63 @@ static noinline const u8 *read_own_table(const struct own_table *own,
 	if (space != full || b > 256U || (used + 7U) / 8U > len ||
 	    ((used & 7U) && bits >> (64U - (8U - (used & 7U)))))
 		return NULL;
-	/*
-	 * Each byte's entries, all the same, so the order of their bytes does
-	 * not matter: 8 bytes at a time down to codes of 8 bits, which have 4
-	 * entries; codes of 9 bits have 2, codes of 10 one. A loop per length
-	 * without a branch per byte read faster than one loop for all.
-	 */
-	for (l = 1; l <= SEQLZ_LIT_BITS - 2U; l++) {
-		const unsigned int run = full >> l;
-		const u8 *bk = bucket + l * 256U;
-
-		for (k = 0; k < count[l]; k++) {
-			u64 v = (u64)(l | (unsigned int)bk[k] << 8) *
-				0x0001000100010001ULL;
-			u16 *q;
-
-			for (q = o; q < o + run; q += 4)
-				__builtin_memcpy(q, &v, 8);
-			o += run;
-		}
-	}
-	for (k = 0; k < count[SEQLZ_LIT_BITS - 1U]; k++) {
-		u32 v = ((SEQLZ_LIT_BITS - 1U) |
-			 (u32)bucket[(SEQLZ_LIT_BITS - 1U) * 256U + k] << 8) *
-			0x00010001U;
-
-		__builtin_memcpy(o, &v, 4);
-		o += 2;
-	}
-	for (k = 0; k < count[SEQLZ_LIT_BITS]; k++)
-		*o++ = (u16)(SEQLZ_LIT_BITS |
-			     (unsigned int)bucket[SEQLZ_LIT_BITS * 256U + k]
-				     << 8);
+	own_fill(lt, bucket, count);
 	return p + (used + 7U) / 8U;
+}
+
+/*
+ * The header of a block's coded literals, see SEQLZ_LIT_HEADER: the width of
+ * the stream sizes into *width, the delta into *delta, 0 for none, and the
+ * decode table into *lt, a fixed one or the block's own, which it builds in
+ * block with bucket as its work. Returns where the stream sizes are, or NULL
+ * if the header is not valid; *q gets where the streams start.
+ */
+static __always_inline const u8 *
+read_lit_header(const u8 *s, unsigned int src_len, u8 *block, u8 *bucket,
+		unsigned int *width, unsigned int *delta, const u16 **lt,
+		const u8 **q)
+{
+	unsigned int deltas = 0;
+	unsigned int code;
+
+	/*
+	 * byte 2: the literals' code in bits 0 to 3,
+	 * width - SEQLZ_SIZE_BITS_MIN in bits 4 to 6, in bit 7 whether they are
+	 * deltas; then byte 3 says which delta
+	 */
+	*width = SEQLZ_SIZE_BITS_MIN;
+	if (src_len > 2U) {
+		*width += (s[2] >> SEQLZ_LIT_WIDTH_AT) &
+			  (SEQLZ_SIZE_BITS_MAX - SEQLZ_SIZE_BITS_MIN);
+		deltas = s[2] >> SEQLZ_LIT_DELTA_AT;
+	}
+	if (src_len < SEQLZ_LIT_HEADER(*width) + deltas)
+		return NULL;
+	code = s[2] & SEQLZ_LIT_CODE_MASK;
+	if (code > SEQLZ_LIT_OWN)
+		return NULL;
+	/* the delta, SEQLZ_DELTA_4 to SEQLZ_DELTA_LAST, in byte 3 */
+	*delta = deltas ? s[SEQLZ_LIT_HEADER(0)] : 0U;
+	if (deltas && *delta - 1U >= SEQLZ_DELTA_LAST)
+		return NULL;
+	*q = s + SEQLZ_LIT_HEADER(*width) + deltas;
+	if (code == SEQLZ_LIT_OWN) {
+		/*
+		 * the block's own table, built in the block itself, from an
+		 * even address: the caller's block may start at an odd one
+		 */
+		u16 *own = (u16 *)(block + ((unsigned long)block & 1U));
+
+		*q = read_own_table(&seqlz_tables.own, *q, s + src_len, own,
+				    bucket);
+		if (!*q)
+			return NULL;
+		*lt = own;
+	} else {
+		*lt = seqlz_tables.lit[code & (SEQLZ_LIT_SETS - 1U)].decode;
+		prefetch_lines(*lt, sizeof(seqlz_tables.lit[0].decode));
+	}
+	return s + SEQLZ_LIT_HEADER(0) + deltas;
 }
 
 /*
@@ -244,57 +315,25 @@ noinline const u8 *seqlz_decode_literals(const u8 *s, unsigned int src_len,
 					 unsigned int *delta)
 {
 	const u8 *const end = s + src_len;
-	/*
-	 * byte 2: the literals' code in bits 0 to 3,
-	 * width - SEQLZ_SIZE_BITS_MIN in bits 4 to 6, in bit 7 whether they are
-	 * deltas; then byte 3 says which delta
-	 */
-	const unsigned int width =
-		SEQLZ_SIZE_BITS_MIN +
-		(src_len > 2U ?
-			 (s[2] >> SEQLZ_LIT_WIDTH_AT) &
-				 (SEQLZ_SIZE_BITS_MAX - SEQLZ_SIZE_BITS_MIN) :
-			 0U);
-	const unsigned int deltas = src_len > 2U ? s[2] >> SEQLZ_LIT_DELTA_AT :
-						   0U;
-	const u8 *q = s + SEQLZ_LIT_HEADER(width) + deltas;
 	const u8 *ip[SEQLZ_LIT_STREAMS];
 	const u8 *start[SEQLZ_LIT_STREAMS];
 	unsigned int sz[SEQLZ_LIT_STREAMS];
 	u64 b[SEQLZ_LIT_STREAMS];
-	unsigned int i, k, j, rest, steps, r;
-	u64 total = 0;
+	unsigned int i, k, j, rest, steps, r, width;
+	const u8 *sizes, *q;
 	const u16 *lt;
+	u64 total;
 
 	/*
 	 * The caller has checked n_lit already. Checked here too, the compiler
 	 * knows its bound, and the loops below took fewer instructions.
 	 */
-	if (src_len < SEQLZ_LIT_HEADER(width) + deltas ||
-	    (s[2] & SEQLZ_LIT_CODE_MASK) > SEQLZ_LIT_OWN ||
-	    n_lit > SEQLZ_BLOCK_SIZE)
+	if (n_lit > SEQLZ_BLOCK_SIZE)
 		return NULL;
-	/* the delta, SEQLZ_DELTA_4 to SEQLZ_DELTA_LAST, in byte 3 */
-	*delta = deltas ? s[SEQLZ_LIT_HEADER(0)] : 0U;
-	if (deltas && *delta - 1U >= SEQLZ_DELTA_LAST)
+	sizes = read_lit_header(s, src_len, block, out, &width, delta, &lt, &q);
+	if (!sizes)
 		return NULL;
-	if ((s[2] & SEQLZ_LIT_CODE_MASK) == SEQLZ_LIT_OWN) {
-		/*
-		 * the block's own table, built in the block itself, from an
-		 * even address: the caller's block may start at an odd one
-		 */
-		u16 *own = (u16 *)(block + ((unsigned long)block & 1U));
-
-		q = read_own_table(&seqlz_tables.own, q, end, own, out);
-		if (!q)
-			return NULL;
-		lt = own;
-	} else {
-		lt = seqlz_tables.lit[s[2] & (SEQLZ_LIT_SETS - 1U)].decode;
-		prefetch_lines(lt, sizeof(seqlz_tables.lit[0].decode));
-	}
-	total = lit_stream_sizes(s + SEQLZ_LIT_HEADER(0) + deltas, width, q, sz,
-				 start);
+	total = lit_stream_sizes(sizes, width, q, sz, start);
 	for (i = 0; i < SEQLZ_LIT_STREAMS; i++) {
 		ip[i] = start[i];
 		b[i] = 1;

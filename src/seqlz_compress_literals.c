@@ -75,24 +75,27 @@ static __always_inline void read_rec(const u8 *p, unsigned int *pos,
 }
 
 /*
- * Picks the delta of the literals from the records before them, see LIT_REC and
- * SEQLZ_LIT_DELTA_AT, and moves the literals down over the records, to right
- * after the u16; *lit_end, their end, moves down with them. With a delta, their
- * deltas are also written to deltas. Returns the delta, 0 for none.
+ * The delta of the literals from d + SEQLZ_HEADER up to end, with the record
+ * before each sequence's literals, see LIT_REC and SEQLZ_LIT_DELTA_AT: the one
+ * whose best fixed table takes the fewest bits, 0 for none.
  *
  * Each delta is priced as code_literals() prices the fixed tables, with the
- * code lengths of seqlz_tables.lit_cost: the delta whose best table takes the
- * fewest bits, where a delta also pays for its byte in the header, 8 bits,
- * scaled as the sums are, 8 / DELTA_STEP, 1 in whole bits. The bits of the
- * fixed tables also tell which delta suits a table of the block's own.
+ * code lengths of seqlz_tables.lit_cost, on every DELTA_STEP-th literal. A
+ * delta also pays for its byte in the header, 8 bits, scaled as the sums are,
+ * 8 / DELTA_STEP, 1 in whole bits. The bits of the fixed tables also tell which
+ * delta suits a table of the block's own.
  */
-unsigned int seqlz_delta_literals(u8 *d, u8 **lit_end, const u8 *block,
-				  u8 *deltas)
+static unsigned int pick_delta(const u8 *d, const u8 *end, const u8 *block)
 {
-	u8 *const end = *lit_end;
-	u64 s[4] = { 0 }, even[4] = { 0 }, odd[4] = { 0 };
-	unsigned int k, x, j = 0, n = 0, pos, ll, last, best = ~0U, pick = 0;
-	u8 *p, *out = d + SEQLZ_HEADER, *to = deltas;
+	u64 s[4] = { 0 };
+	u64 even[4] = { 0 };
+	u64 odd[4] = { 0 };
+	unsigned int best = ~0U;
+	unsigned int pick = 0;
+	unsigned int j = 0;
+	unsigned int n = 0;
+	unsigned int k, x, pos, ll, last;
+	const u8 *p;
 
 	/*
 	 * The sums: each literal's length in all fixed tables, as it is and
@@ -102,10 +105,11 @@ unsigned int seqlz_delta_literals(u8 *d, u8 **lit_end, const u8 *block,
 	for (p = d + SEQLZ_HEADER; p < end; p += LIT_REC + ll) {
 		read_rec(p, &pos, &ll, &last);
 		for (k = j; k < ll; k += DELTA_STEP) {
-			const unsigned int at = pos + k, b = block[at],
-					   b4 = at >= 4U ? block[at - 4] : 0U,
-					   b8 = at >= 8U ? block[at - 8] : 0U,
-					   bl = at >= last ? block[at - last] :
+			const unsigned int at = pos + k;
+			const unsigned int b = block[at];
+			const unsigned int b4 = at >= 4U ? block[at - 4] : 0U;
+			const unsigned int b8 = at >= 8U ? block[at - 8] : 0U;
+			const unsigned int bl = at >= last ? block[at - last] :
 							     0U;
 
 			if (n == LIT_COST_RUN) {
@@ -133,6 +137,25 @@ unsigned int seqlz_delta_literals(u8 *d, u8 **lit_end, const u8 *block,
 				pick = x;
 			}
 		}
+	return pick;
+}
+
+/*
+ * Picks the delta of the literals from the records before them, see LIT_REC and
+ * SEQLZ_LIT_DELTA_AT, and moves the literals down over the records, to right
+ * after the u16; *lit_end, their end, moves down with them. With a delta, their
+ * deltas are also written to deltas. Returns the delta, 0 for none.
+ */
+unsigned int seqlz_delta_literals(u8 *d, u8 **lit_end, const u8 *block,
+				  u8 *deltas)
+{
+	u8 *const end = *lit_end;
+	const unsigned int pick = pick_delta(d, end, block);
+	u8 *out = d + SEQLZ_HEADER;
+	u8 *to = deltas;
+	unsigned int k, x, j, pos, ll, last;
+	u8 *p;
+
 	/*
 	 * The literals down over the records, and their deltas into deltas: the
 	 * ones near the block's start as they are. 8 bytes at a time, also up
@@ -149,8 +172,11 @@ unsigned int seqlz_delta_literals(u8 *d, u8 **lit_end, const u8 *block,
 	if (p < end)
 		read_rec(p, &pos, &ll, &last);
 	while (p < end) {
-		const u8 *in = p + LIT_REC, *pin = block + pos;
-		const unsigned int n_lit = ll, at = pos, dist = last;
+		const u8 *in = p + LIT_REC;
+		const u8 *pin = block + pos;
+		const unsigned int n_lit = ll;
+		const unsigned int at = pos;
+		const unsigned int dist = last;
 
 		p += LIT_REC + n_lit;
 		if (p < end)
@@ -173,8 +199,8 @@ unsigned int seqlz_delta_literals(u8 *d, u8 **lit_end, const u8 *block,
 		 */
 		if (at + n_lit + 8 <= SEQLZ_BLOCK_SIZE) {
 			for (; k < n_lit; k += 8) {
-				u64 a = get_unaligned_le64(pin + k),
-				    r = get_unaligned_le64(pin + k - x);
+				u64 a = get_unaligned_le64(pin + k);
+				u64 r = get_unaligned_le64(pin + k - x);
 
 				put_unaligned_le64(sub_bytes(a, r), to + k);
 			}
@@ -296,12 +322,14 @@ static __always_inline void lit_streams(const u32 *enc, const u8 *literals,
 	unsigned int half, k, j;
 
 	for (half = 0; half < SEQLZ_LIT_STREAMS; half += 4) {
-		u8 *p0 = q[half], *p1 = q[half + 1], *p2 = q[half + 2],
-		   *p3 = q[half + 3];
+		/* each stream's write position, and its end */
+		u8 *p0 = q[half], *p1 = q[half + 1];
+		u8 *p2 = q[half + 2], *p3 = q[half + 3];
 		u8 *e0 = p1, *e1 = p2, *e2 = p3, *e3 = q[half + 4];
+		/* each stream's accumulator, see lit_put() and lit_flush() */
 		u64 a0 = 0, a1 = 0, a2 = 0, a3 = 0;
-		unsigned int c0 = 0, c1 = 0, c2 = 0, c3 = 0, s0 = 0, s1 = 0,
-			     s2 = 0, s3 = 0;
+		unsigned int c0 = 0, c1 = 0, c2 = 0, c3 = 0;
+		unsigned int s0 = 0, s1 = 0, s2 = 0, s3 = 0;
 
 		/*
 		 * A run of literals, then a flush: 4 codes of up to 10 bits fit
@@ -431,8 +459,9 @@ static void own_lengths(struct own_work *w, unsigned int n,
 	unsigned int k, space = 0, at[16 + 1] = { 0 };
 
 	for (k = 0; k < n; k++) {
-		unsigned int b = w->bytes[k & 255U], f = w->freq[0][b],
-			     l = (unsigned int)(__builtin_clz(f) -
+		unsigned int b = w->bytes[k & 255U];
+		unsigned int f = w->freq[0][b];
+		unsigned int l = (unsigned int)(__builtin_clz(f) -
 						__builtin_clz(n_literals));
 		u64 q;
 
@@ -476,10 +505,11 @@ static void own_lengths(struct own_work *w, unsigned int n,
 }
 
 /* log2(1 + (i + 0.5) / 32) in 1/256 bits */
-static const u8 log2_frac[32] = { 6,   17,  28,	 38,  49,  59,	68,  78,
-				  87,  96,  105, 113, 122, 130, 138, 146,
-				  154, 161, 169, 176, 183, 190, 197, 203,
-				  210, 216, 223, 229, 235, 241, 247, 253 };
+static const u8 log2_frac[32] = {
+	0x06, 0x11, 0x1c, 0x26, 0x31, 0x3b, 0x44, 0x4e, 0x57, 0x60, 0x69,
+	0x71, 0x7a, 0x82, 0x8a, 0x92, 0x9a, 0xa1, 0xa9, 0xb0, 0xb7, 0xbe,
+	0xc5, 0xcb, 0xd2, 0xd8, 0xdf, 0xe5, 0xeb, 0xf1, 0xf7, 0xfd,
+};
 
 /* log2(f) in 1/256 bits, to about 1/50 bit, f > 0 */
 static __always_inline unsigned int log2_256(unsigned int f)
@@ -512,6 +542,46 @@ static __always_inline void own_put(struct own_work *w, u64 *acc,
 }
 
 /*
+ * The description of a block's own table into w->desc, see SEQLZ_LIT_OWN: the
+ * code length of each of the n bytes in w->bytes, and before it the run of
+ * bytes without a code since the one before, where that is not 0. Returns its
+ * bytes.
+ */
+static unsigned int own_describe(struct own_work *w, unsigned int n)
+{
+	/* the bits not written yet, and the bytes written */
+	u64 acc = 0;
+	unsigned int cnt = 0;
+	unsigned int out = 0;
+	unsigned int k, prev;
+
+	for (k = 0, prev = ~0U; k < n; k++) {
+		unsigned int b = w->bytes[k & 255U];
+		unsigned int run = b - prev - 1U;
+		unsigned int e;
+
+		if (run) {
+			unsigned int nb =
+				32U - (unsigned int)__builtin_clz(run);
+
+			e = seqlz_tables.own.enc[SEQLZ_OWN_RUN + nb];
+			own_put(w, &acc, &cnt, &out,
+				(e & 0xffU) << (nb - 1U) |
+					(run & ((1U << (nb - 1U)) - 1U)),
+				(e >> 8) + nb - 1U);
+		}
+		e = seqlz_tables.own.enc[(w->len[b] - 1U) & 15U];
+		own_put(w, &acc, &cnt, &out, e & 0xffU, e >> 8);
+		prev = b;
+	}
+	for (; cnt >= 8; cnt -= 8)
+		w->desc[out++ & (OWN_DESC_ROOM - 1U)] = (u8)(acc >> (cnt - 8));
+	if (cnt)
+		w->desc[out++ & (OWN_DESC_ROOM - 1U)] = (u8)(acc << (8 - cnt));
+	return out;
+}
+
+/*
  * The block's own code for its literals, from the counts in w->freq: lengths,
  * the encoder's codes, the description in w->desc. Returns the bytes of the
  * description, or 0 if it does not pay: fewer than 2 different bytes, or the
@@ -524,10 +594,18 @@ static unsigned int own_code(struct own_work *w, unsigned int n_literals,
 {
 	/* the low 15 bits of each lane */
 	const u64 low = 0x7fff7fff7fff7fffULL;
-	unsigned int k, j, n = 0, count[CODE_LENGTHS] = { 0 },
-			   next[CODE_LENGTHS], l, cnt = 0, prev, out = 0, h = 0,
-			   est, bits = 0;
-	u64 acc = 0, present[4] = { 0 };
+	unsigned int count[CODE_LENGTHS] = { 0 };
+	unsigned int next[CODE_LENGTHS];
+	/* the bytes with a code, and the bits of the literals with it */
+	unsigned int n = 0;
+	unsigned int bits = 0;
+	/* the literals' entropy, and the estimate of the coded block */
+	unsigned int h = 0;
+	unsigned int est;
+	/* the bytes of the description */
+	unsigned int out;
+	u64 present[4] = { 0 };
+	unsigned int k, j, l;
 
 	/*
 	 * The two counts added, 4 bytes at a time in 16-bit lanes, which the
@@ -591,28 +669,7 @@ static unsigned int own_code(struct own_work *w, unsigned int n_literals,
 		w->enc[b] = l | next[l]++ << 8;
 	}
 
-	/* the description: each byte's length, a run of those without before */
-	for (k = 0, prev = ~0U; k < n; k++) {
-		unsigned int b = w->bytes[k & 255U], run = b - prev - 1U, e;
-
-		if (run) {
-			unsigned int nb =
-				32U - (unsigned int)__builtin_clz(run);
-
-			e = seqlz_tables.own.enc[SEQLZ_OWN_RUN + nb];
-			own_put(w, &acc, &cnt, &out,
-				(e & 0xffU) << (nb - 1U) |
-					(run & ((1U << (nb - 1U)) - 1U)),
-				(e >> 8) + nb - 1U);
-		}
-		e = seqlz_tables.own.enc[(w->len[b] - 1U) & 15U];
-		own_put(w, &acc, &cnt, &out, e & 0xffU, e >> 8);
-		prev = b;
-	}
-	for (; cnt >= 8; cnt -= 8)
-		w->desc[out++ & (OWN_DESC_ROOM - 1U)] = (u8)(acc >> (cnt - 8));
-	if (cnt)
-		w->desc[out++ & (OWN_DESC_ROOM - 1U)] = (u8)(acc << (8 - cnt));
+	out = own_describe(w, n);
 	/* the streams' sizes are counted only where this leaves room */
 	if (SEQLZ_LIT_HEADER(SEQLZ_SIZE_BITS_MIN) + out + bits / 8U +
 		    OWN_SAVES_MIN >
@@ -630,8 +687,10 @@ static unsigned int own_sizes(struct own_work *w, const u8 *literals,
 {
 	unsigned int *const sizes = w->sizes;
 	const u8 *const len = w->len;
-	unsigned int b0 = 0, b1 = 0, b2 = 0, b3 = 0, b4 = 0, b5 = 0, b6 = 0,
-		     b7 = 0, k, sum = 0;
+	unsigned int b0 = 0, b1 = 0, b2 = 0, b3 = 0;
+	unsigned int b4 = 0, b5 = 0, b6 = 0, b7 = 0;
+	unsigned int sum = 0;
+	unsigned int k;
 
 	for (k = 0; k + SEQLZ_LIT_STREAMS <= n_literals;
 	     k += SEQLZ_LIT_STREAMS) {
@@ -702,8 +761,8 @@ static __always_inline unsigned int code_literals(u8 *d, unsigned int len,
 						  struct own_work *own,
 						  unsigned int delta)
 {
-	const unsigned int n_literals = get_unaligned_le16(d),
-			   bitstream = len - SEQLZ_HEADER - n_literals;
+	const unsigned int n_literals = get_unaligned_le16(d);
+	const unsigned int bitstream = len - SEQLZ_HEADER - n_literals;
 	const u8 *literals = raw ? raw : d + SEQLZ_HEADER;
 	/* with a delta, its byte before the sizes */
 	const unsigned int delta_byte = delta != 0;
@@ -740,8 +799,8 @@ static __always_inline unsigned int code_literals(u8 *d, unsigned int len,
 	header = SEQLZ_LIT_HEADER(width) + delta_byte;
 	enc = seqlz_tables.lit[set].enc;
 	if (own) {
-		unsigned int n = own_code(own, n_literals, header + coded),
-			     own_coded, own_width;
+		unsigned int n = own_code(own, n_literals, header + coded);
+		unsigned int own_coded, own_width;
 
 		if (n) {
 			own_coded = own_sizes(own, literals, n_literals);

@@ -469,7 +469,8 @@ def port_gen():
 # lib/seqlz/Makefile: the module, and its tables, which gen_seqlz_tables, a program for the build host,
 # writes from the code lengths, as lib/crc's gen_crc32table and lib/raid's mktables do
 MAKEFILE = """# SPDX-License-Identifier: GPL-2.0-only OR MIT
-# as lib/lz4: with -O2 seqlz compresses slower, on x86-64 and arm64
+# as lib/lz4: with -O2 seqlz compresses slower, on x86-64 and arm64, and with
+# -Os its stack frames come close to the 1024 bytes of 32-bit FRAME_WARN
 ccflags-y += -O3
 
 obj-$(CONFIG_SEQLZ) += seqlz.o
@@ -656,6 +657,9 @@ def main():
           "\t  KUnit tests for seqlz: its tables against their SHA-256,\n"
           "\t  blocks that are compressed and decompressed again, and\n"
           "\t  blocks that are damaged or invalid by one rule of the format.\n\n"
+          "\t  For more information on KUnit and unit tests in general,\n"
+          "\t  please refer to the KUnit documentation in\n"
+          "\t  Documentation/dev-tools/kunit/.\n\n"
           "\t  If unsure, say N.\n\n"
           "config PRANDOM_KUNIT_TEST\n", "config SEQLZ_KUNIT_TEST\n")
     patch(tree / "Documentation/staging/index.rst", "   rpmsg\n   speculation\n",

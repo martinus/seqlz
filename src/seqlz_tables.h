@@ -168,10 +168,11 @@ static_assert(SEQLZ_TOKEN_SYMBOLS <= 1U << SEQLZ_ESCAPE_BITS,
 
 static inline u32 token_entry(unsigned int s, unsigned int n)
 {
-	unsigned int cls = s >> (SEQLZ_LL_BITS + SEQLZ_ML_BITS),
-		     raw_bits = SEQLZ_RAW_BITS(cls);
-	unsigned int drop = n + raw_bits, ll = s & SEQLZ_LL_CAP,
-		     ml = (s >> SEQLZ_LL_BITS) & SEQLZ_ML_CAP;
+	unsigned int cls = s >> (SEQLZ_LL_BITS + SEQLZ_ML_BITS);
+	unsigned int raw_bits = SEQLZ_RAW_BITS(cls);
+	unsigned int drop = n + raw_bits;
+	unsigned int ll = s & SEQLZ_LL_CAP;
+	unsigned int ml = (s >> SEQLZ_LL_BITS) & SEQLZ_ML_CAP;
 
 	if (s == SEQLZ_ESCAPE)
 		return 1U << TOK_ESCAPE_AT | n << TOK_DROP_AT;

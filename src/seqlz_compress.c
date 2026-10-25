@@ -285,8 +285,9 @@ static unsigned int encoder_finish(struct seqlz_encoder *e, u8 *d,
 {
 	u8 *end = d + dst_cap, *out = e->lit;
 	const u8 *in;
-	unsigned int n_lit = (unsigned int)(e->lit - (d + SEQLZ_HEADER)), bytes,
-		     k = 0;
+	unsigned int n_lit = (unsigned int)(e->lit - (d + SEQLZ_HEADER));
+	unsigned int k = 0;
+	unsigned int bytes;
 
 	if (e->p == e->lit)
 		return 0;

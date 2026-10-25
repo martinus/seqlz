@@ -166,9 +166,10 @@ static int build_own(struct own_table *t)
 			t->decode[k] = (u16)(s | l << 8);
 	}
 	for (k = 0; k < 1U << bits; k++) {
-		unsigned int pos = 0, got = 0, run = 0, end[2],
-			     len[2] = { OWN_QUAD_NONE, OWN_QUAD_NONE },
-			     before[2] = { 0, 0 };
+		unsigned int len[2] = { OWN_QUAD_NONE, OWN_QUAD_NONE };
+		unsigned int before[2] = { 0, 0 };
+		unsigned int pos = 0, got = 0, run = 0;
+		unsigned int end[2];
 
 		while (got < 2) {
 			unsigned int w = k << pos & ((1U << bits) - 1U),
