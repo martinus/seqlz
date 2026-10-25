@@ -469,8 +469,9 @@ def port_gen():
 # lib/seqlz/Makefile: the module, and its tables, which gen_seqlz_tables, a program for the build host,
 # writes from the code lengths, as lib/crc's gen_crc32table and lib/raid's mktables do
 MAKEFILE = """# SPDX-License-Identifier: GPL-2.0-only OR MIT
-# as lib/lz4: with -O2 seqlz compresses slower, on x86-64 and arm64
-ccflags-y += -O3
+# as lib/lz4: with -O2 seqlz compresses slower, on x86-64 and arm64; a kernel
+# built for size keeps -Os
+ccflags-$(CONFIG_CC_OPTIMIZE_FOR_PERFORMANCE) += -O3
 
 obj-$(CONFIG_SEQLZ) += seqlz.o
 seqlz-y := seqlz_compress.o seqlz_compress_literals.o seqlz_decompress.o \\
