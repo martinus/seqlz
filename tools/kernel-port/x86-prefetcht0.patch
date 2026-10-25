@@ -1,4 +1,4 @@
-From 5caa2ed73a93f15d6698b3c869cf640cfe8f4e94 Mon Sep 17 00:00:00 2001
+From d8aba50891d810a9c989117406625131a1cc8230 Mon Sep 17 00:00:00 2001
 From: Martin Leitner-Ankerl <martin.ankerl@gmail.com>
 Date: Wed, 7 Oct 2026 17:11:13 +0200
 Subject: [PATCH] x86/cpu: Use prefetcht0 for prefetch() on 64-bit
@@ -15,11 +15,21 @@ x86-64 CPU has that instruction, so nothing is patched at boot. The
 32-bit prefetch() does not fit: it is an alternative that starts as no
 instruction and becomes prefetchnta on CPUs with SSE. prefetchnta is a
 non-temporal prefetch, for data that is read once, so gcc builds, which
-emit prefetcht0 today, would change. Instead gcc builds keep their
-prefetcht0, and clang builds get the same. ARCH_HAS_PREFETCH, which
-tells <linux/prefetch.h> that the architecture has its own prefetch(),
-is now defined for 32-bit and 64-bit, like ARCH_HAS_PREFETCHW already
-is.
+emit prefetcht0 today, would change. Instead gcc builds keep the
+prefetcht0 they have, and clang builds get the same. ARCH_HAS_PREFETCH,
+which tells <linux/prefetch.h> that the architecture has its own
+prefetch(), is now defined for 32-bit and 64-bit, like
+ARCH_HAS_PREFETCHW already is.
+
+With ARCH_HAS_PREFETCH, prefetch_range() of <linux/prefetch.h> works on
+x86-64 again, with gcc too: it has been empty there since x86-64 lost
+its own prefetch(). Its users are hfi1 and scsi_debug. With gcc 16.2.1,
+hfi1's handle_receive_interrupt() and three more of its receive
+functions get 4 prefetcht0 each, scsi_debug's resp_pre_fetch() gets 8.
+Youling Tang found the empty prefetch_range() as well and proposed to
+define ARCH_HAS_PREFETCH in <linux/prefetch.h> for every architecture
+without one [1]. An x86-64 defconfig has neither driver, so its 62
+prefetcht0 with gcc stay the same.
 
 Afterwards clang's vmlinux has 57 prefetcht0 and gcc's still 62. The 49
 new ones are in 34 functions, e.g. __blk_mq_alloc_requests(),
@@ -45,6 +55,10 @@ and clock_gettime(CLOCK_THREAD_CPUTIME_ID) don't change more than the
 two gcc kernels do. Unfortunately the NIC receive paths need real
 hardware, so they are not measured.
 
+Fixes: ab483570a13b ("x86 & generic: change to __builtin_prefetch()")
+Link: https://lore.kernel.org/20240529032059.899347-1-youling.tang@linux.dev/ # [1]
+Cc: Youling Tang <tangyouling@kylinos.cn>
+Cc: Nikolay Borisov <nik.borisov@suse.com>
 Signed-off-by: Martin Leitner-Ankerl <martin.ankerl@gmail.com>
 ---
  arch/x86/include/asm/processor.h | 13 ++++++++++++-
