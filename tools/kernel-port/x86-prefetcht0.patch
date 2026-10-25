@@ -1,4 +1,4 @@
-From d8aba50891d810a9c989117406625131a1cc8230 Mon Sep 17 00:00:00 2001
+From 6378bcf150c62fab5f445dcc70771c0cd4865d0c Mon Sep 17 00:00:00 2001
 From: Martin Leitner-Ankerl <martin.ankerl@gmail.com>
 Date: Wed, 7 Oct 2026 17:11:13 +0200
 Subject: [PATCH] x86/cpu: Use prefetcht0 for prefetch() on 64-bit
@@ -56,7 +56,7 @@ two gcc kernels do. Unfortunately the NIC receive paths need real
 hardware, so they are not measured.
 
 Fixes: ab483570a13b ("x86 & generic: change to __builtin_prefetch()")
-Link: https://lore.kernel.org/20240529032059.899347-1-youling.tang@linux.dev/ # [1]
+Link: https://lore.kernel.org/20240529032059.899347-2-youling.tang@linux.dev/ # [1]
 Cc: Youling Tang <tangyouling@kylinos.cn>
 Cc: Nikolay Borisov <nik.borisov@suse.com>
 Signed-off-by: Martin Leitner-Ankerl <martin.ankerl@gmail.com>
