@@ -333,7 +333,8 @@ One line per entry, by area, newest first: date measured, verdict, link, result,
 
 **Kernel copy, zram glue, compilers**
 
-- 2026-10-24 **kept in part** [Kernel copy against coding-style.rst](#the-kernel-copy-against-coding-stylerst-shorter-functions-the-same-instructions-kept-decode_block-split-12-slower-swap-ins-not-kept): pick_delta(), own_describe(), own_fill(), read_lit_header() split out, one declaration per line: instructions within 0.12%, VM within control. decode_block() split into three always-inline helpers: +1.6% instructions at level 1, swap-ins 1.1 to 1.9% slower, not kept. -O3 only with CC_OPTIMIZE_FOR_PERFORMANCE: -Os frames up to 976 bytes, not kept. Code: src/seqlz_compress_literals.c, src/seqlz_decompress_literals.c, tools/kernel-port/port.py; branch kernel-review. Now: current.
+- 2026-10-25 **measurement** [Kernel copy on arm, riscv64 and powerpc](#the-kernel-copy-on-arm-riscv64-and-powerpc-with-gcc-and-clang-no-warning-frames-below-1024-bytes--os-no-deeper-on-32-bit-arm): 15 builds with gcc 16.2.0 and clang 22.1.8, W=1 without a warning, no libgcc division, deepest frame 896 bytes (riscv64 gcc). 32-bit arm -Os no deeper than -O3: gcc 472 vs 536, 768 vs 864 with KASAN+UBSan; clang 648 vs 600. The Makefile's -O3 keeps speed as its only reason. Code: tools/kernel-port/port.py MAKEFILE; branch os-frames. Now: current.
+- 2026-10-24 **kept in part** [Kernel copy against coding-style.rst](#the-kernel-copy-against-coding-stylerst-shorter-functions-the-same-instructions-kept-decode_block-split-12-slower-swap-ins-not-kept): pick_delta(), own_describe(), own_fill(), read_lit_header() split out, one declaration per line: instructions within 0.12%, VM within control. decode_block() split into three always-inline helpers: +1.6% instructions at level 1, swap-ins 1.1 to 1.9% slower, not kept. -O3 only with CC_OPTIMIZE_FOR_PERFORMANCE: -Os frames up to 976 bytes, not kept. Code: src/seqlz_compress_literals.c, src/seqlz_decompress_literals.c, tools/kernel-port/port.py; branch kernel-review. Now: -Os is no deeper on 32-bit arm (Kernel copy on arm, riscv64 and powerpc); -O3 stays for speed alone.
 - 2026-10-24 **kept** [Compressor uses no more of dst than SEQLZ_COMPRESS_BOUND](#the-compressor-uses-no-more-of-dst-than-seqlz_compress_bound-the-same-bytes-in-zram-kept-the-internal-names-keep-no-prefix): the bitstream no longer lands at the end of a large dst; the ten samples give the same bytes in 8 KiB and 64 KiB at level 3, the same instructions. Not done: a prefix on the 41 macros of the kernel copy's headers, none clashes and lib/lz4 has unprefixed ones too. Code: `seqlz_compress()`, `seqlz_encode()`; branch kernel-cleanup-2. Now: current.
 - 2026-10-23 **kept** [Kernel copy reviewed again](#the-kernel-copy-reviewed-again-code_literals-once-per-level-20-fewer-instructions-at-level-2-kept-two-simplifications-that-cost-1-and-7-not-kept): `code_literals()` inlined into each entry point, as its comment said: `seqlz-2` compress 2.0% fewer instructions (156.6M to 153.5M per 2000 pages), cycles -1.4%; not kept, as they cost on hot loops: the `n_lit` check only in `decode_block()` with the literal header parsed after a length check (+7.0% to decode `seqlz-2`), the `dst_cap` check once in `seqlz_compress()` (+1.0% at level 1). Userspace, gcc 16.2.1, x86-64. Mi 9T, zram in its kernel, p3: `seqlz-2` writes 0.25 to 0.35 µs faster on the A55 (about 1%), the rest within `main` built twice. Code: `code_literals()`, `seqlz_code_own()`, `seqlz_decode_literals()`, `compress_block()`; branch kernel-cleanup. Now: the header is parsed in read_lit_header() since 24 Oct (Kernel copy against coding-style.rst), the same instructions. Untried: the kernel VM.
 - 2026-10-10 **measurement** [Numbers formerly in source comments](#numbers-that-were-only-in-the-codecs-comments-until-10th-october-2026): Eight choices whose numbers left src/ comments (#156), e.g. copy_match() 8 bytes at a time (byte loop: slowest pages 10 times lz4), 2-byte stream sizes (5.2 and 5.5 bytes larger), token_entry() (unpacking took 18 instructions per sequence). Not re-measured. Code: commits cf5dedb, 34080eb, 21b71c9, 0cc300e, 61299db, 5c769f5; #156. Now: Numbers hold only for the commits named; none re-measured (line 6141).
@@ -7248,9 +7249,47 @@ Instructions per pass over 2000 pages of `zram0-2026-09-24-sample2000`, gcc 16.2
 after: `seqlz-1` 126 429 227 / 126 425 638, `seqlz-2` 153 506 720 / 153 503 404, `seqlz-3`
 250 176 528 / 250 180 308.
 
+## The kernel copy on arm, riscv64 and powerpc with gcc and clang: no warning, frames below 1024 bytes, `-Os` no deeper on 32-bit arm
+
+Status: measurement, 2026-10-25. Now: current.
+
+*Does the kernel copy of `main` (`52df93e`) build without a warning on architectures that CI does not
+build, and how deep are its frames at `-Os`, which the entry of 24 Oct used against `-O3` only for
+`CONFIG_CC_OPTIMIZE_FOR_PERFORMANCE`? 15 builds, arm, riscv64, 64-bit little endian and 32-bit big
+endian powerpc, with gcc 16.2.0 and clang 22.1.8: no warning with W=1, no libgcc 64-bit division,
+every frame below 1024 bytes, the deepest 896 (`seqlz_code_own()`, riscv64, gcc, `FRAME_WARN` 2048).
+On 32-bit arm `-Os` is no deeper than `-O3`: gcc 472 against 536 bytes, with KASAN and UBSan 768
+against 864; clang 648 against 600, 672 against 584. The 976 bytes of 24 Oct were gcc on x86-64,
+where `FRAME_WARN` is 2048, so the stack is no reason to keep `-O3` in a kernel built for size; it
+stays for every build for speed, as in lib/lz4, and the Makefile no longer gives the stack as a
+reason.* Code: `MAKEFILE` in `tools/kernel-port/port.py`; branch `os-frames`.
+
+**Setup.** Kernel `5b0764a53235` with `x86-prefetcht0.patch` and `port.py` of `52df93e`, `ARCH=<arch>`
+and `LLVM=1` or `CROSS_COMPILE` of the kernel.org gcc 16.2.0 toolchains (`nolibc`, checked against
+their `sha256sums.asc`), the defconfig plus `ZRAM`, `ZRAM_BACKEND_SEQLZ`, `KUNIT`, `SEQLZ_KUNIT_TEST=m`;
+riscv's defconfig also needs `RUNTIME_TESTING_MENU`, without it no KUnit test of `lib/` is built.
+`-Os` is `CONFIG_CC_OPTIMIZE_FOR_SIZE` with the Makefile's `-O3` line removed; KASAN is
+`KASAN_GENERIC`, `KASAN_INLINE`, UBSan `UBSAN_BOUNDS`, `UBSAN_SHIFT`, as `tools/kernel-port/stress.sh`
+sets them. `make W=1 KCFLAGS=-fstack-usage lib/seqlz/ drivers/block/zram/`, frames from the `.su`
+files as `check.sh` reads them. Built, not run: KUnit on these architectures is not run.
+
+The three deepest frames in bytes:
+
+| build | defconfig | `FRAME_WARN` | gcc 16.2.0 | clang 22.1.8 |
+| --- | --- | --- | --- | --- |
+| arm `-O3` | `multi_v7_defconfig` | 1280 | `seqlz_code_literals()` 536, `seqlz_code_own()` 520, `seqlz_decode_literals()` 424 | `seqlz_code_own()` 600, `seqlz_code_literals()` 392, `seqlz_decode_literals()` 296 |
+| arm `-Os` | same | 1280 | `seqlz_code_own()` 472, `seqlz_code_literals()` 448, `seqlz_decode_literals()` 256 | `seqlz_code_own()` 648, `seqlz_code_literals()` 440, `seqlz_delta_literals()` 232 |
+| arm `-O3`, KASAN, UBSan | same | 1280 | `seqlz_code_literals()` 864, `seqlz_decode_literals()` 832, `seqlz_code_own()` 808 | `seqlz_code_own()` 584, `seqlz_code_literals()` 536, `own_code()` 328 |
+| arm `-Os`, KASAN, UBSan | same | 1280 | `seqlz_code_own()` 768, `seqlz_code_literals()` 752, `seqlz_decode_literals()` 512 | `seqlz_code_own()` 672, `seqlz_code_literals()` 480, `seqlz_decode_literals()` 248 |
+| riscv64 `-O3` | `defconfig` | 2048 | `seqlz_code_own()` 896, `seqlz_code_literals()` 768, `seqlz_decode_literals()` 432 | `seqlz_code_own()` 720, `seqlz_code_literals()` 496, `seqlz_decode_literals()` 464 |
+| powerpc64le `-O3`, 64 KiB pages, no zram backend | `ppc64le_defconfig` | 2048 | `seqlz_code_literals()` 704, `seqlz_decode_literals()` 640, `seqlz_code_own()` 640 | `seqlz_code_own()` 768, `seqlz_code_literals()` 576, `seqlz_decode_literals()` 496 |
+| powerpc 32-bit big endian `-O3` | `pmac32_defconfig` | 1280 | `seqlz_code_own()` 496, `seqlz_code_literals()` 496, `seqlz_decode_literals()` 432 | `seqlz_code_own()` 576, `seqlz_code_literals()` 384, `seqlz_decompress()` 352 |
+
+Not measured: speed on these architectures; x86-64 at `-Os` with KASAN.
+
 ## The kernel copy against coding-style.rst: shorter functions, the same instructions, kept; decode_block() split, 1.2% slower swap-ins, not kept
 
-Status: kept in part, 2026-10-24. Now: current.
+Status: kept in part, 2026-10-24. Now: the reason against `-O3` only with `CONFIG_CC_OPTIMIZE_FOR_PERFORMANCE` does not hold on 32-bit: on arm `-Os` gives frames as deep as `-O3` or less, 976 bytes was gcc on x86-64, where `FRAME_WARN` is 2048; `seqlz_code_own()` at `-O3` is 600, not 680 ([cross builds](#the-kernel-copy-on-arm-riscv64-and-powerpc-with-gcc-and-clang-no-warning-frames-below-1024-bytes--os-no-deeper-on-32-bit-arm)).
 
 *A review of the kernel copy against `Documentation/process/coding-style.rst` named what a maintainer
 would ask about: functions of 94 to 186 lines with up to 24 locals (§6), declarations with initialisers
