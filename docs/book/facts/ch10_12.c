@@ -413,7 +413,7 @@ static void chapter11(void) {
     str("ch11.odd32", "0x%08llx", (unsigned long long)((x >> 8 & lanes) >> 32));
 
     /* the pricing of the page, the table with the fewest bits, the sizes */
-    lit_cost(page, n_lit, even, odd, NULL);
+    lit_sums(page, n_lit, even, odd, NULL);
     for (k = 0; k < SEQLZ_LIT_SETS; k++) {
         total[k] = 0;
         for (j = 0; j < SEQLZ_LIT_STREAMS; j++)

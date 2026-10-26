@@ -97,7 +97,7 @@ sense given here.
 - **token**: one number for `ll`, `ml − 4` and the offset class, {{const.TOKEN_SYMBOLS}} values, coded by
   the token table. [Chapter 4](#ch-format--token)
 - **trained tables, trainer**: code lengths counted on {{ch17.train_pages|grp}} pages, in
-  `bench/seqlz_counts_*.txt`; `quetschn-seqlz-train` counts and builds them.
+  `bench/seqlz_counts_*.txt`; `seqlz-train` counts and builds them.
   [Chapter 8](#ch-codes--lengths)
 - **wild copy**: a copy of a fixed 16 bytes or more where fewer are needed, the rest written over by the
   next sequence. [Chapter 3](#ch-cpu--wild-copy)
@@ -188,8 +188,8 @@ sense given here.
   zram. [Chapter 1](#ch-zram--codecs)
 - **Mi 9T**: the Xiaomi Mi 9T test phone, a Snapdragon 730 with Cortex-A76 and Cortex-A55 cores,
   Android 11 and Linux 4.14. [Chapter 3](#ch-cpu)
-- **quetschn, seqlz**: quetschn is the project, its binaries and options; seqlz the codec, one format
-  with three levels of the compressor and one decoder. [Preface](#preface)
+- **seqlz**: the codec, one format with three levels of the compressor and one decoder; also the
+  project, its binaries `seqlz-*` and its options `SEQLZ_*`. [Preface](#preface)
 - **`seqlz-1`, `seqlz-2`, `seqlz-3`**: seqlz at levels 1 to 3: raw literals; coded literals where they
   pay; and also a lazy step, a table of the page's own and literals as deltas. [Chapter 10](#ch-encoder),
   [chapter 11](#ch-literals-enc)

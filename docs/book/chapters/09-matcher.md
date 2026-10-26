@@ -8,7 +8,7 @@ sequence before the matcher looks at the next byte. `seqlz_hash5()` turns 5 byte
 hash table, `seqlz_match_len()` counts how long a match is, and `seqlz_match_block()` is the loop over
 the page. That loop alone took about as long as all of `lz4` takes to compress a page, 17 300 to
 17 900 cycles against `lz4`'s 17 203 on x86-64, when it was last measured alone
-([explored-designs.md](https://github.com/martinus/quetschn/blob/main/docs/explored-designs.md#the-compressor-second-round-fewer-instructions)),
+([explored-designs.md](https://github.com/martinus/seqlz/blob/main/docs/explored-designs.md#the-compressor-second-round-fewer-instructions)),
 which is why most lines below have a measurement behind them.
 
 ## A header of inline functions {#ch-matcher--file}
@@ -90,16 +90,17 @@ undone and no two inputs collide before the shift. `zstd` uses the same constant
 ::: why A hash of 5 bytes: fewer, longer matches
 `lz4` and `lzo` hash 4 bytes, the shortest match. seqlz hashes 5, so the table finds a candidate only
 where 5 bytes repeat; matches of exactly 4 bytes still come from the repeat offset, which needs no
-table. When it came, on 24th September 2026, the 5-byte hash took 5% fewer cycles to compress a page
+table, and from the table where two different runs of 5 bytes have the same hash and share their
+first 4. When it came, on 24th September 2026, the 5-byte hash took 5% fewer cycles to compress a page
 (20 425 against 21 440, x86-64, userspace) and cost 0.6 points of memory (27.2% against 26.6% of the
 page). In the kernel it took `seqlz-1`'s write p99 from 11 650 to 10 480 ns, twice what the cycles
 say: the slowest pages have many short matches, and the 5-byte hash finds fewer of them
-([explored-designs.md](https://github.com/martinus/quetschn/blob/main/docs/explored-designs.md#zram-prefetch-the-compressed-data-before-decompression),
+([explored-designs.md](https://github.com/martinus/seqlz/blob/main/docs/explored-designs.md#zram-prefetch-the-compressed-data-before-decompression),
 "A hash of 5 bytes: C3 in the kernel"). With today's tables and coded literals the 4-byte hash is not
 even smaller: `seqlz-2` gets 24 bytes per page larger with it. Most likely a match of 4 bytes at
 a new offset takes more bits than the 4 coded literals it replaces, and the greedy matcher then misses
 the longer match behind it
-([item 5](https://github.com/martinus/quetschn/blob/main/docs/explored-designs.md#5-the-matchers-hash-5-bytes-into-4096-slots-stays)).
+([item 5](https://github.com/martinus/seqlz/blob/main/docs/explored-designs.md#5-the-matchers-hash-5-bytes-into-4096-slots-stays)).
 A hash of 6 bytes went further the same way, fewer cycles for more memory, and was dropped.
 :::
 
@@ -130,11 +131,11 @@ Comparing the first 16 bytes without a branch between the halves took the compre
 21 916 cycles per page, and the mispredictions from 293 to 280 per page, x86-64 at a fixed 4.5 GHz, on
 20 000 pages of a desktop dump. Of the mispredictions before, 29% were the loop of this function: 76%
 of the matches were shorter than 12 bytes and 13% were 20 bytes or longer
-([explored-designs.md](https://github.com/martinus/quetschn/blob/main/docs/explored-designs.md#the-compressor-second-round-fewer-instructions)).
+([explored-designs.md](https://github.com/martinus/seqlz/blob/main/docs/explored-designs.md#the-compressor-second-round-fewer-instructions)).
 One `ctz` of the first differing word, instead of a `ctz` of each word combined, came on 3rd October
 2026 (commit `4186196`): 3% fewer cycles per page on x86-64. A loop that compares 16 bytes per round
 instead of 8 was 1% slower on the Mi 9T's little core
-([explored-designs.md](https://github.com/martinus/quetschn/blob/main/docs/explored-designs.md#the-matcher-on-an-in-order-core-34-fewer-compress-cycles-on-the-a55-same-output-kept)).
+([explored-designs.md](https://github.com/martinus/seqlz/blob/main/docs/explored-designs.md#the-matcher-on-an-in-order-core-34-fewer-compress-cycles-on-the-a55-same-output-kept)).
 :::
 
 ::: warn Why `| 1ULL << 63`
@@ -174,13 +175,13 @@ so the lazy copy, level 3's, is also the one that writes the records for the del
 Matching and encoding are one loop. Two passes, the matcher into an array and the encoder over it, took
 24 257 instead of 22 848 cycles per page, and the mispredictions went from 293 to 319 per page: the
 encoder's branches lost the history of the matcher's branches, which predicted them
-([explored-designs.md](https://github.com/martinus/quetschn/blob/main/docs/explored-designs.md#the-compressor-second-round-fewer-instructions),
+([explored-designs.md](https://github.com/martinus/seqlz/blob/main/docs/explored-designs.md#the-compressor-second-round-fewer-instructions),
 x86-64, 20 000 pages of a desktop dump).
 :::
 
 ## Greedy, two candidates, every position {#ch-matcher--plan}
 
-@listing src/seqlz_match.h 120-147
+@listing src/seqlz_match.h 120-148
 
 **Greedy.** At levels 1 and 2 the matcher takes the first match it finds, counts how long it is and
 jumps over it. A **lazy** matcher checks whether a match one byte later is longer, a hash chain
@@ -192,14 +193,14 @@ step for short matches and extends each match backwards, the paragraph of the co
 One lazy step at every match, taking the next position's candidate if it is longer by 2 bytes or
 more, took 24 808 instead of 20 400 compress cycles per page, 21% more, and `seqlz-1` stayed at 27.0%
 of the page
-([explored-designs.md](https://github.com/martinus/quetschn/blob/main/docs/explored-designs.md#zram-prefetch-the-compressed-data-before-decompression),
+([explored-designs.md](https://github.com/martinus/seqlz/blob/main/docs/explored-designs.md#zram-prefetch-the-compressed-data-before-decompression),
 "A hash of 5 bytes: C3 in the kernel", September 2026). An earlier level 3 and 4, a hash chain priced
 by the tables' code lengths with one or two lazy steps, stored pages 3.3% smaller than level 2 for 1.8
 times the time to write, and were not kept
-([explored-designs.md](https://github.com/martinus/quetschn/blob/main/docs/explored-designs.md#levels-3-and-4-a-hash-chain-priced-by-the-tables-as-small-as-zstd-3-on-two-of-four-dumps-and-faster-to-write-and-read-not-kept)).
+([explored-designs.md](https://github.com/martinus/seqlz/blob/main/docs/explored-designs.md#levels-3-and-4-a-hash-chain-priced-by-the-tables-as-small-as-zstd-3-on-two-of-four-dumps-and-faster-to-write-and-read-not-kept)).
 The level 3 of 15th October 2026 is cheaper: no chain, the lazy step only for matches below 20 bytes,
 and it came together with a literal table of the page's own
-([explored-designs.md](https://github.com/martinus/quetschn/blob/main/docs/explored-designs.md#level-3-a-lazy-matcher-and-a-literal-table-of-the-pages-own-zstd-3s-memory-in-less-than-half-its-time-on-the-phone-kept)).
+([explored-designs.md](https://github.com/martinus/seqlz/blob/main/docs/explored-designs.md#level-3-a-lazy-matcher-and-a-literal-table-of-the-pages-own-zstd-3s-memory-in-less-than-half-its-time-on-the-phone-kept)).
 :::
 
 **Two candidates.** One is the **repeat offset**, which needs no lookup and costs 0 offset bits, e.g.
@@ -219,18 +220,18 @@ Pages that zram stores raw, because they do not compress, take 2.3 µs longer ea
 searched. It is not faster because it visits other positions: a step that starts only after 1024
 literals visits the same positions on almost every page, and it was slower than the old step. The step
 needs `anchor` in the loop for the positions without a match, and the loop has no register to spare
-([explored-designs.md](https://github.com/martinus/quetschn/blob/main/docs/explored-designs.md#the-matcher-without-its-step-writes-1-to-3-faster-kept),
+([explored-designs.md](https://github.com/martinus/seqlz/blob/main/docs/explored-designs.md#the-matcher-without-its-step-writes-1-to-3-faster-kept),
 commit `055e7b5`). The 3% are from boots with only `lzo-rle` next to it; in boots with all four codecs
 the writes gained 0.05 µs.
 :::
 
 ## The state of the loop, and why reading a candidate is always safe {#ch-matcher--state}
 
-@listing src/seqlz_match.h 148-175
+@listing src/seqlz_match.h 149-176
 
 `limit` is {{ch09.limit}}, a constant the compiler puts into the compare, and positions instead of
 pointers took 21 916 to 21 786 cycles per page
-([second round](https://github.com/martinus/quetschn/blob/main/docs/explored-designs.md#the-compressor-second-round-fewer-instructions)).
+([second round](https://github.com/martinus/seqlz/blob/main/docs/explored-designs.md#the-compressor-second-round-fewer-instructions)).
 `anchor` is where the next sequence's literals start. `last` starts at 1, as the format's repeat
 offset does ([chapter 4](#ch-format--offsets)), and `back` is `-last` as a `long`, so that the load at
 the repeat offset is `src + pos + back`, one addressing mode, without a subtraction of its own. `v`,
@@ -247,12 +248,12 @@ now and then, never a wrong result, because every candidate is compared first.
 - **4096 slots.** On the Mi 9T, 2048 slots made pages 939.6 instead of 936.9 bytes and were no faster;
   8192 slots made them 937.1 bytes, cost the in-order A55 1.6 µs more per write, and would take 16 KiB
   per CPU, all of `lz4`'s budget
-  ([item 5](https://github.com/martinus/quetschn/blob/main/docs/explored-designs.md#5-the-matchers-hash-5-bytes-into-4096-slots-stays)).
+  ([item 5](https://github.com/martinus/seqlz/blob/main/docs/explored-designs.md#5-the-matchers-hash-5-bytes-into-4096-slots-stays)).
   With 16 KiB pages `SEQLZ_HASH_BITS` is 13: 8192 slots, 16 KiB.
 - **Cleared for each page.** A `memset()` of {{ch09.table_bytes}} bytes per page took the compressor
   from 25 064 to 23 327 cycles per page, 7% less, against a check at every position whether the entry
   is a position of this page
-  ([second round](https://github.com/martinus/quetschn/blob/main/docs/explored-designs.md#the-compressor-second-round-fewer-instructions)).
+  ([second round](https://github.com/martinus/seqlz/blob/main/docs/explored-designs.md#the-compressor-second-round-fewer-instructions)).
   `lz4` in the kernel clears its 16 KiB for each page too.
 :::
 
@@ -265,10 +266,10 @@ safe the same way: `last` and `pos` start at 1, after a match `last` is at most 
 
 ## One position: two candidates, one branch {#ch-matcher--position}
 
-@listing src/seqlz_match.h 177-202
+@listing src/seqlz_match.h 178-203
 
 This is the path taken most: on the phone's pages a run without a match is 4 positions long on average
-([explored-designs.md](https://github.com/martinus/quetschn/blob/main/docs/explored-designs.md#the-a55-again-the-write-as-on-4-october-the-decoders-code-prefetched-for-cold-reads-not-kept)).
+([explored-designs.md](https://github.com/martinus/seqlz/blob/main/docs/explored-designs.md#the-a55-again-the-write-as-on-4-october-the-decoders-code-prefetched-for-cold-reads-not-kept)).
 The last position tried, {{ch09.limit_last}}, reads up to byte 4095, so the last 8 bytes of a page
 never start a match. `cur` is the first 4 of the 8 bytes in `v`, one load less per position.
 
@@ -280,7 +281,7 @@ mispredicted almost twice as often as `lz4`.
 With three branches per position, the first `seqlz-1` mispredicted 539 times per page. Reading both
 candidates and deciding with one branch took that to 329, and the p99 of the cold compress loop from
 15.4 to 12.6 µs. With the page in the cache, the extra reads cost 7%
-([explored-designs.md](https://github.com/martinus/quetschn/blob/main/docs/explored-designs.md#the-compressor-seqlz-fast),
+([explored-designs.md](https://github.com/martinus/seqlz/blob/main/docs/explored-designs.md#the-compressor-seqlz-fast),
 x86-64, userspace, September 2026, with an older matcher).
 :::
 
@@ -301,20 +302,20 @@ and 39 762 instead of 40 965 instructions; on x86-64 16 148 instead of 16 489 us
 taken from the 8 of the hash and the negative index for the repeat offset made it 15 instead of 17
 instructions per position. Every page's compressed length stayed the same, on 455 239 pages of a
 desktop dump and 81 709 of a phone's
-([explored-designs.md](https://github.com/martinus/quetschn/blob/main/docs/explored-designs.md#the-matcher-on-an-in-order-core-34-fewer-compress-cycles-on-the-a55-same-output-kept),
+([explored-designs.md](https://github.com/martinus/seqlz/blob/main/docs/explored-designs.md#the-matcher-on-an-in-order-core-34-fewer-compress-cycles-on-the-a55-same-output-kept),
 commit `996248b`, 3rd October 2026). Reading the next table entry before the store and choosing the
 right one with a compare was 9% slower: more instructions.
 :::
 
 ## A hit: count, emit {#ch-matcher--hit}
 
-@listing src/seqlz_match.h 203-209
+@listing src/seqlz_match.h 204-210
 
 When both candidates hit, the repeat offset wins, as its offset costs 0 bits; which gives the longer
 match is not checked. Measured offline on 40 000 zram pages of a desktop, always taking the longer of
 the two made pages about 1 byte larger, and taking the table's only when it is longer by more than 2
 bytes saved 0.5 bytes per page, for a second call of `seqlz_match_len()`
-([explored-designs.md](https://github.com/martinus/quetschn/blob/main/docs/explored-designs.md#the-matcher-without-its-step-writes-1-to-3-faster-kept),
+([explored-designs.md](https://github.com/martinus/seqlz/blob/main/docs/explored-designs.md#the-matcher-without-its-step-writes-1-to-3-faster-kept),
 "The longer of the two candidates").
 
 The match is counted from `pos` on, the first 4 bytes are checked already. A match can start before
@@ -330,7 +331,7 @@ match. It also stood between choosing the candidate and counting the match, so e
 for two more loads and a compare. On the Mi 9T, zram in its own kernel, 19 775 pages of a phone,
 `seqlz-2` wrote a page in 11.93 instead of 12.77 µs on the Cortex-A76 and in 33.09 instead
 of 34.10 µs on the A55, reads the same
-([explored-designs.md](https://github.com/martinus/quetschn/blob/main/docs/explored-designs.md#the-matcher-without-its-step-back-writes-66-faster-on-the-a76-and-1-to-2-in-the-vm-kept),
+([explored-designs.md](https://github.com/martinus/seqlz/blob/main/docs/explored-designs.md#the-matcher-without-its-step-back-writes-66-faster-on-the-a76-and-1-to-2-in-the-vm-kept),
 15th October 2026). In the kernel VM it wrote 1.0% to 2.3% faster on four dumps, at 1.6 bytes less to
 3.7 bytes more per page. `seqlz-1` loses more, up to 15 bytes per page: a byte outside a match costs
 it a whole byte.
@@ -338,7 +339,7 @@ it a whole byte.
 
 ## Level 3: one position later, and backwards {#ch-matcher--lazy}
 
-@listing src/seqlz_match.h 210-220
+@listing src/seqlz_match.h 211-221
 
 At levels 1 and 2 `lazy` is a constant `false` in the inlined loop, and these lines are not compiled
 in. At level 3 a match found at `pos` gets two more chances to grow. If it is shorter than
@@ -395,12 +396,12 @@ userspace on the Mi 9T's Cortex-A76 it wrote 2.1% faster and read 3.5% slower. I
 lazy step alone was on no hull; with the literal table of the page's own it was. Level 3 as a whole
 wrote a page in about 16 µs against 12 µs at level 2 on the A76, in the phone's own kernel, on 15th
 October 2026
-([explored-designs.md](https://github.com/martinus/quetschn/blob/main/docs/explored-designs.md#level-3-a-lazy-matcher-and-a-literal-table-of-the-pages-own-zstd-3s-memory-in-less-than-half-its-time-on-the-phone-kept)).
+([explored-designs.md](https://github.com/martinus/seqlz/blob/main/docs/explored-designs.md#level-3-a-lazy-matcher-and-a-literal-table-of-the-pages-own-zstd-3s-memory-in-less-than-half-its-time-on-the-phone-kept)).
 :::
 
 ## One position of a match goes into the table {#ch-matcher--insert}
 
-@listing src/seqlz_match.h 221-243
+@listing src/seqlz_match.h 222-244
 
 `last` and `back` become the new repeat offset, and the sequence goes to `emit`, the encoder in the
 compressor. The positions inside a match were skipped. One of them, 2 bytes before its end, goes into the table,
@@ -412,7 +413,7 @@ match. Then the one-ahead state starts again at the new `pos`; the insert comes 
 Every position of a match would be a hash, a load and a store per byte, where the matcher now does
 nothing at all. Storing the start of each match as well, as `zstd`'s fast mode does, cost 550 cycles
 more per page for 2.1 bytes per page less, and was not kept
-([explored-designs.md](https://github.com/martinus/quetschn/blob/main/docs/explored-designs.md#the-matcher-without-its-step-writes-1-to-3-faster-kept)).
+([explored-designs.md](https://github.com/martinus/seqlz/blob/main/docs/explored-designs.md#the-matcher-without-its-step-writes-1-to-3-faster-kept)).
 :::
 
 After the loop the bytes from `anchor` on are the last sequence, literals only, `ml` 0, possibly no
@@ -530,6 +531,6 @@ Fill `page` with your own bytes to see what the matcher makes of them.
 What the matcher misses is older places, also at level 3. A slot keeps only the newest position, so a
 longer match at an older place is not found. More positions per slot and a hash chain were measured,
 and each cost about as much time as it saved bytes
-([explored-designs.md, "seqlz-fast-lit: one of 8 literal tables per page"](https://github.com/martinus/quetschn/blob/main/docs/explored-designs.md#seqlz-fast-lit-one-of-8-literal-tables-per-page)).
+([explored-designs.md, "seqlz-fast-lit: one of 8 literal tables per page"](https://github.com/martinus/seqlz/blob/main/docs/explored-designs.md#seqlz-fast-lit-one-of-8-literal-tables-per-page)).
 `zstd` 3 searches harder, and that is part of why it stores pages smaller than level 2, at about twice
 the time to write one.

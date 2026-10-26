@@ -226,10 +226,8 @@ TABLES_LOCK = threading.Lock()
 
 def tables_c(flags=()):
     """seqlz_tables.c, the codec's tables, which tools/gen-tables/gen-tables.sh generates, once per build
-    and block size: flags, a program's -D flags, may set QUETSCHN_PAGE_BITS"""
-    # the name the book's commit knows: QUETSCHN_PAGE_BITS before the rename to seqlz of 23 Oct 2026,
-    # SEQLZ_PAGE_BITS once the book is brought up to a commit after it
-    bits = tuple(f for f in flags if f.startswith("-DQUETSCHN_PAGE_BITS="))
+    and block size: flags, a program's -D flags, may set SEQLZ_PAGE_BITS"""
+    bits = tuple(f for f in flags if f.startswith("-DSEQLZ_PAGE_BITS="))
     with TABLES_LOCK:
         if bits not in TABLES:
             tmp = tempfile.mkdtemp()
@@ -371,7 +369,7 @@ def load_facts(pool):
     # keys then start with k16.
     k16 = [c for c in files if "// facts: also 16k" in c.read_text()]
     runs = [(c, "", pool.submit(facts_of, c)) for c in files]
-    runs += [(c, "k16.", pool.submit(facts_of, c, ("-DQUETSCHN_PAGE_BITS=14",))) for c in k16]
+    runs += [(c, "k16.", pool.submit(facts_of, c, ("-DSEQLZ_PAGE_BITS=14",))) for c in k16]
     for c, prefix, fut in runs:
         flatten(fut.result(), prefix, FACTS, f"facts/{c.name}")
     fact_tree()

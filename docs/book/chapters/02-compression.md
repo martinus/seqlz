@@ -94,7 +94,7 @@ match of 3 bytes would save nothing; `lz4` matches are 4 bytes or longer, and th
 about as many bits as its 4 bytes as coded literals, so shorter ones are not worth looking for
 ([chapter 4](#ch-format--token)), while a 5-byte match at a 12-bit offset, about 21 bits, is cheaper
 than its 5 literals, about 35 bits
-([explored-designs.md, "The matcher without its step"](https://github.com/martinus/quetschn/blob/main/docs/explored-designs.md#the-matcher-without-its-step-writes-1-to-3-faster-kept)).
+([explored-designs.md, "The matcher without its step"](https://github.com/martinus/seqlz/blob/main/docs/explored-designs.md#the-matcher-without-its-step-writes-1-to-3-faster-kept)).
 4 bytes are also one 32-bit load and one compare, which is how the matcher checks a candidate.
 
 ## A match may copy what it is writing {#ch-compression--overlap}
@@ -155,7 +155,7 @@ deeper search pays in bytes, `zstd` 3 looks for a long match first and checks on
 searches chains of older positions, and costs time on every write. A seqlz that searched a hash
 chain, picked the match that saves the most bits by the tables and looked one position ahead stored
 pages 3.3% smaller for about twice the time to write; it was not kept, nor a deeper one
-([`docs/plan.md` §1.1](https://github.com/martinus/quetschn/blob/main/docs/plan.md#11-the-score-memory-against-time-not-bars)).
+([`docs/plan.md` §1.1](https://github.com/martinus/seqlz/blob/main/docs/plan.md#11-the-score-memory-against-time-not-bars)).
 seqlz's level 3 of today looks one position ahead only for a match shorter than 20 bytes
 ([chapter 9](#ch-matcher--lazy)).
 
@@ -167,7 +167,7 @@ common. How many bits a number needs depends on how often each value occurs. A s
 numbers: seqlz sorts every offset into one of 6 **offset classes**. These are their shares of the
 sequences on the {{ch02.train_pages|grp}} pages seqlz's tables were trained on
 ([chapter 4](#ch-format--tables) says which pages), summed from the token counts in
-[`bench/seqlz_counts_4k.txt`](https://github.com/martinus/quetschn/blob/main/bench/seqlz_counts_4k.txt):
+[`bench/seqlz_counts_4k.txt`](https://github.com/martinus/seqlz/blob/main/bench/seqlz_counts_4k.txt):
 @assert ch02.OFF_CLASSES == 6
 
 | class | offset | share of the sequences |
@@ -225,7 +225,7 @@ bits, still costs 1. Coders with fractional bits exist, arithmetic coding and AN
 for its sequences as FSE, but their decoders do more work per symbol. On desktop and phone pages,
 Huffman codes fitted to the pages are 2.3 bytes per page above the entropy, 0.3%, so seqlz stays with
 Huffman codes
-([explored-designs.md, "How tight the bits are"](https://github.com/martinus/quetschn/blob/main/docs/explored-designs.md#how-tight-the-bits-are-ans-would-give-03-at-most-the-offsets-have-2-16-literal-tables-01-to-2)).
+([explored-designs.md, "How tight the bits are"](https://github.com/martinus/seqlz/blob/main/docs/explored-designs.md#how-tight-the-bits-are-ans-would-give-03-at-most-the-offsets-have-2-16-literal-tables-01-to-2)).
 
 seqlz does not give the offset class a code of its own: it puts the class into one symbol together
 with `ll` and `ml`, the **token**, which has {{const.TOKEN_SYMBOLS}} values, and the same method
@@ -243,7 +243,7 @@ The tree gave each class some code, but swapping the 0 and the 1 at any node giv
 the same lengths and the same average. Only the lengths matter. So formats store the lengths and
 derive the codes from them by a fixed rule, a **canonical code**. seqlz's tables are a list of code
 lengths, one byte per symbol, and the rule is the one of deflate, RFC 1951 §3.2.2, written in
-[`docs/format.md`](https://github.com/martinus/quetschn/blob/main/docs/format.md#prefix-codes):
+[`docs/format.md`](https://github.com/martinus/seqlz/blob/main/docs/format.md#prefix-codes):
 
 1. `count[l]` is the number of symbols whose code has `l` bits; `count[0]` is taken as 0.
 2. `first[1] = 0`, and for `l >= 2`: `first[l] = (first[l-1] + count[l-1]) * 2`.
@@ -279,7 +279,7 @@ and the sum must be exactly `2^bits` ([chapter 8](#ch-codes--first-codes)).
 That buys a decoder without the check: any bits decode to some symbol, so there is no "invalid code"
 branch from one sequence to the next. When the project made all its codes complete, the decoder ran
 6% fewer instructions
-([`docs/seqlz.md`](https://github.com/martinus/quetschn/blob/main/docs/seqlz.md#the-choices-with-their-numbers)).
+([`docs/seqlz.md`](https://github.com/martinus/seqlz/blob/main/docs/seqlz.md#the-choices-with-their-numbers)).
 A damaged page then decodes to wrong symbols, not to an error, and the checks on lengths, offsets and
 the end of the page catch it ([chapter 14](#ch-decode)).
 
@@ -400,7 +400,7 @@ for the block and stores in front of it, and codes `ll`, `ml` and the offset of 
 symbols with FSE, from tables that are predefined or described in the block. For a large input the
 tables pay for themselves many times. On a page of 4 KiB, the code lengths of a literal table for the
 256 byte values, about 64 bytes packed
-([explored-designs.md](https://github.com/martinus/quetschn/blob/main/docs/explored-designs.md#per-page-its-own-literal-table-and-one-of-4-token-tables-measured-not-kept)),
+([explored-designs.md](https://github.com/martinus/seqlz/blob/main/docs/explored-designs.md#per-page-its-own-literal-table-and-one-of-4-token-tables-measured-not-kept)),
 often cost more than the code saves.
 
 **seqlz writes bits, with fixed tables.** Its tables are trained once, compiled into the code and part
@@ -410,7 +410,7 @@ then the offset in as many plain bits as the class says, then length values only
 decoder does one table lookup per sequence, where `zstd` steps three FSE states. What seqlz gives up
 is tables that fit the page: a literal table of each page's own made writes 14% slower, for 32 bytes
 less per page, 2.4% of the stored size, and was not kept
-([`docs/seqlz.md`](https://github.com/martinus/quetschn/blob/main/docs/seqlz.md#the-choices-with-their-numbers)).
+([`docs/seqlz.md`](https://github.com/martinus/seqlz/blob/main/docs/seqlz.md#the-choices-with-their-numbers)).
 
 The example page, `cat=1,dog=2;cat=3,dog=4;` and zeros after, is {{cat.len}} bytes in seqlz:
 {{ch02.HEADER}} bytes of header, the literal count {{cat.lits}}; the {{cat.lits}} literals as they
@@ -450,12 +450,12 @@ page, with `ll`, `ml` and offsets entropy coded 25.8%, with repeat offsets as in
 entropy coded literals as well 23.6%. The model is trained on the pages it is measured on, so the
 numbers are on the optimistic side. Coding the sequences in bits is the largest step, and that is what
 seqlz is built on
-([explored-designs.md, "Where the ratio of zstd comes from"](https://github.com/martinus/quetschn/blob/main/docs/explored-designs.md#where-the-ratio-of-zstd-comes-from)).
+([explored-designs.md, "Where the ratio of zstd comes from"](https://github.com/martinus/seqlz/blob/main/docs/explored-designs.md#where-the-ratio-of-zstd-comes-from)).
 :::
 
 Fixed tables cost the most on pages unlike the training pages. Against Huffman codes fitted to the
 pages themselves, an upper bound, seqlz's tables lose 25.3 bytes per page on average over desktop and
 phone pages, most of it on desktop pages whose literals and tokens fit the tables badly
-([explored-designs.md, "How tight the bits are"](https://github.com/martinus/quetschn/blob/main/docs/explored-designs.md#how-tight-the-bits-are-ans-would-give-03-at-most-the-offsets-have-2-16-literal-tables-01-to-2)).
+([explored-designs.md, "How tight the bits are"](https://github.com/martinus/seqlz/blob/main/docs/explored-designs.md#how-tight-the-bits-are-ans-would-give-03-at-most-the-offsets-have-2-16-literal-tables-01-to-2)).
 How well a fixed table fits pages from devices and programs nobody trained on is the open question of
 this design.

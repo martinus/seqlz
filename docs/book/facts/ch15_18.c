@@ -160,7 +160,7 @@ static void kernel_port(void) {
 
     load("bench/kernel_codecs/zram_codec.h");
     {
-        unsigned int a = find_line("static inline void quetschn_prefetch_page(const void* src, unsigned int src_len, "
+        unsigned int a = find_line("static inline void bench_prefetch_page(const void* src, unsigned int src_len, "
                                    "void* dst, unsigned int dst_len) {",
                                    1);
 
@@ -190,7 +190,7 @@ static void kernel_port(void) {
     }
 
     /* the pages the tables were trained on, from the head of the counts they are built from */
-    load(QUETSCHN_PAGE_BITS == 12 ? "bench/seqlz_counts_4k.txt" : "bench/seqlz_counts_16k.txt");
+    load(SEQLZ_PAGE_BITS == 12 ? "bench/seqlz_counts_4k.txt" : "bench/seqlz_counts_16k.txt");
     {
         const char* p = strstr(file_buf, " pages, ");
         unsigned int pages;
@@ -280,7 +280,7 @@ int main(void) {
     fact_num("ch17.lit_lines", sizeof_field(struct lit_table, decode) / 64);
     fact_num("ch17.prefetch_lines", PREFETCH_STEP / 64);
     fact_num("ch17.lit_cost_run", LIT_COST_RUN);
-    fact_num("ch17.refill_below", SEQLZ_TOKEN_BITS + QUETSCHN_PAGE_BITS);
+    fact_num("ch17.refill_below", SEQLZ_TOKEN_BITS + SEQLZ_PAGE_BITS);
     fact_num("ch17.width_min", SEQLZ_SIZE_BITS_MIN);
     fact_num("ch17.width_max", SEQLZ_SIZE_BITS_MAX);
     fact_num("ch17.hash_slots", 1U << SEQLZ_HASH_BITS);

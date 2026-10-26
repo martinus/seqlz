@@ -15,7 +15,7 @@ are in [chapter 1](#ch-zram--zcomp). The harness has a copy of that interface in
 `bench/kernel_codecs/zram_codec.h`, shortened:
 
 ```c
-struct quetschn_params {  /* struct zcomp_params: one per device */
+struct bench_params {  /* struct zcomp_params: one per device */
 	const void *dict;
 	size_t dict_size;
 	int level;
@@ -24,23 +24,23 @@ struct quetschn_params {  /* struct zcomp_params: one per device */
 	size_t allocated;     /* what the codec allocated, as the allocator hands it out */
 };
 
-struct quetschn_stream {  /* struct zcomp_ctx: one per CPU and direction */
+struct bench_stream {  /* struct zcomp_ctx: one per CPU and direction */
 	void *context;
 	size_t allocated;
 };
 
-struct quetschn_codec {   /* struct zcomp_ops */
+struct bench_codec {   /* struct zcomp_ops */
 	const char *name;
-	int (*setup_params)(struct quetschn_params *p);
-	void (*release_params)(struct quetschn_params *p);
-	int (*create_cctx)(struct quetschn_params *p, struct quetschn_stream *s);
-	void (*destroy_cctx)(struct quetschn_stream *s);
-	int (*create_dctx)(struct quetschn_params *p, struct quetschn_stream *s);
-	void (*destroy_dctx)(struct quetschn_stream *s);
-	int (*compress)(struct quetschn_params *p, struct quetschn_stream *s,
+	int (*setup_params)(struct bench_params *p);
+	void (*release_params)(struct bench_params *p);
+	int (*create_cctx)(struct bench_params *p, struct bench_stream *s);
+	void (*destroy_cctx)(struct bench_stream *s);
+	int (*create_dctx)(struct bench_params *p, struct bench_stream *s);
+	void (*destroy_dctx)(struct bench_stream *s);
+	int (*compress)(struct bench_params *p, struct bench_stream *s,
 			const void *src, unsigned int src_len, void *dst,
 			unsigned int *dst_len);
-	int (*decompress)(struct quetschn_params *p, struct quetschn_stream *s,
+	int (*decompress)(struct bench_params *p, struct bench_stream *s,
 			  const void *src, unsigned int src_len, void *dst,
 			  unsigned int *dst_len);
 };
@@ -48,7 +48,7 @@ struct quetschn_codec {   /* struct zcomp_ops */
 
 The two context functions are those of Sergey Senozhatsky's series of October 2026, which splits a
 stream into one for writing and one for reading
-([explored-designs.md](https://github.com/martinus/quetschn/blob/main/docs/explored-designs.md#zrams-contexts-split-into-compression-and-decompression-the-same-time-in-the-vm-the-same-memory-for-seqlz)).
+([explored-designs.md](https://github.com/martinus/seqlz/blob/main/docs/explored-designs.md#zrams-contexts-split-into-compression-and-decompression-the-same-time-in-the-vm-the-same-memory-for-seqlz)).
 A codec without `create_dctx` gets the compression context in `decompress()`, as every backend did before
 the split; the harness's `lz4`, `lzo` and `zstd` are copies of the kernel's glue from before it.
 
@@ -138,10 +138,10 @@ decoder's read of the header at about the same moment.
 In the kernel VM, with the compressed data flushed from the cache, the prefetch of it took `lz4`'s p99
 read latency from 5600 to 3891 ns, and seqlz's from 5450 to 4410 ns; the destination's prefetch helped
 nothing there
-([explored-designs.md](https://github.com/martinus/quetschn/blob/main/docs/explored-designs.md#zram-prefetch-the-compressed-data-before-decompression)).
+([explored-designs.md](https://github.com/martinus/seqlz/blob/main/docs/explored-designs.md#zram-prefetch-the-compressed-data-before-decompression)).
 On the Mi 9T, the prefetch of the compressed data made the A55's warm reads 2.3 µs faster, and the
 destination's as well cost the A76 2 µs on cold reads
-([explored-designs.md](https://github.com/martinus/quetschn/blob/main/docs/explored-designs.md#7-the-phones-module-did-not-prefetch-the-compressed-data-23-µs-faster-warm-reads-on-the-a55)).
+([explored-designs.md](https://github.com/martinus/seqlz/blob/main/docs/explored-designs.md#7-the-phones-module-did-not-prefetch-the-compressed-data-23-µs-faster-warm-reads-on-the-a55)).
 The harness still prefetches the destination for every codec that calls it, `lz4-prefetch` and both seqlz
 codecs, so its decode times include a prefetch the kernel's backend does not do. The kernel's numbers,
 from the VM and the phone, are the ones the project trusts for decode times.
@@ -210,8 +210,13 @@ The diff between `src/seqlz_decompress.c` and its copy, on the tree CI uses, `98
 
 ```text
 -// SPDX-License-Identifier: MIT OR GPL-2.0-only
-+// SPDX-License-Identifier: GPL-2.0-only OR MIT
+-/*
+- * The decompressor: seqlz_decode().
+- */
 -#include "seqlz.h"
++// SPDX-License-Identifier: GPL-2.0-only OR MIT
++/* The decompressor: seqlz_decompress(). */
++#include <linux/build_bug.h>
 +#include <linux/errno.h>
 +#include <linux/export.h>
 +#include <linux/module.h>
@@ -224,38 +229,39 @@ The diff between `src/seqlz_decompress.c` and its copy, on the tree CI uses, `98
 + * SEQLZ_MAX_BITS + SEQLZ_BLOCK_BITS bits, 20; the caller refills before.
 -int seqlz_decode(const void *src, unsigned int src_len, void *dst,
 -		 void *scratch)
-+/* seqlz_decompress(), see include/linux/seqlz.h */
-+static int seqlz_decode(const void *src, unsigned int src_len, void *dst,
-+			void *scratch)
++int seqlz_decompress(const void *src, unsigned int src_len, void *dst,
++		     void *wrkmem)
+-		return decode_block(src, src_len, dst, scratch, true);
+-	return decode_block(src, src_len, dst, scratch, false);
++		return decode_block(src, src_len, dst, wrkmem, true);
++	return decode_block(src, src_len, dst, wrkmem, false);
+ }
++EXPORT_SYMBOL_GPL(seqlz_decompress);
++
 +/* the interface's work memory is the buffer of coded literals */
 +static_assert(SEQLZ_MEM_DECOMPRESS == SEQLZ_SCRATCH);
 +static_assert(SEQLZ_BLOCK_SIZE == 1U << SEQLZ_BLOCK_BITS);
-+
-+int seqlz_decompress(const void *src, unsigned int src_len, void *dst,
-+		     void *wrkmem)
-+{
-+	return seqlz_decode(src, src_len, dst, wrkmem);
-+}
-+EXPORT_SYMBOL_GPL(seqlz_decompress);
 +
 +MODULE_LICENSE("Dual MIT/GPL");
 ```
 
 - **The kernel's headers**, from a list in `port.py`. `seqlz_compat.h` would pull them in anyway
   ([chapter 5](#ch-compat--kernel)), but a reviewer expects a file's includes in the file.
-- **`#define SEQLZ_BLOCK_BITS 12U`** in place of `QUETSCHN_PAGE_BITS`, whatever the kernel's
+- **`#define SEQLZ_BLOCK_BITS 12U`** in place of `SEQLZ_PAGE_BITS`, whatever the kernel's
   `PAGE_SIZE` is: the library compresses blocks of 4 KiB, `SEQLZ_BLOCK_SIZE` of the interface, and
   builds with 16 KiB and 64 KiB pages too. The values for 16 KiB blocks are cut, e.g.
   `SEQLZ_HASH_BITS` becomes `12U`, and so are the numbers for them in the comments, as in the diff
   above. The format for 16 KiB blocks is not fixed yet, and with them `seqlz-2` asks for twice `lz4`'s
-  work memory per CPU ([format.md](https://github.com/martinus/quetschn/blob/main/docs/format.md#status)).
+  work memory per CPU ([format.md](https://github.com/martinus/seqlz/blob/main/docs/format.md#status)).
   A library in `lib/` that built only with 4 KiB pages would fail the first build bot with 64 KiB pages
   on arm64.
-- **`static`.** `seqlz_decode()` and `seqlz_compress()` of `src/` are called from one file in the
-  kernel, so they become `static`, and their kernel-doc is the interface's, in `include/linux/seqlz.h`;
-  a one-line comment points there.
+- **`seqlz_decompress()`.** `seqlz_decode()` of `src/` becomes the interface's `seqlz_decompress()`
+  itself, its scratch named `wrkmem` as in the prototype, and its kernel-doc is the interface's, in
+  `include/linux/seqlz.h`. Until 23rd October 2026 it was a `static` function behind a
+  `seqlz_decompress()` that only passed its arguments on (commit `3ae2e09`).
 - **`seqlz_compress_block()`.** The interface takes the name `seqlz_compress()`, and the codec's
-  function is renamed, without its test of the level, which the interface does.
+  function is renamed and `static`, without its test of the level, which the interface does; a
+  one-line comment says that it is for the interface below, which checked the level.
 - **`seqlz_codes.c` as a program for the build machine**, `gen_seqlz_tables.c`
   ([chapter 8](#ch-codes--kernel)), the one that writes the tables of `src/` too, with
   `seqlz_tables_build()` `static`.
@@ -264,8 +270,8 @@ The diff between `src/seqlz_decompress.c` and its copy, on the tree CI uses, `98
   level 3's, is the one with the records for the deltas, so the wrappers `encode_emit()` and
   `encode_emit_rec()` are cut ([chapter 10](#ch-encoder--wrappers)). In `src/` the matcher has one
   more user, `seqlz_find()`.
-- **What only the harness uses is cut**: all of `src/seqlz.h`; `seqlz_find()`, `seqlz_encode()` and
-  `encode_raw()`. The `raw` parameter of `code_literals()` stays: at level 3 it carries the deltas
+- **What only the harness uses is cut**: all of `src/seqlz.h`; `seqlz_find()`, `seqlz_encode()`,
+  `encode_raw()` and `seqlz_code_raw_literals()`. The `raw` parameter of `code_literals()` stays: at level 3 it carries the deltas
   ([chapter 11](#ch-literals-enc--code-own)).
 
 Every textual replacement goes through `must()` or `cut()`, which assert that the text occurs exactly as
@@ -284,7 +290,7 @@ Before writing anything to disk, `port.py` checks every line it produced:
 
 `CPU_MODEL` applies to `lib/` only. The decoder once had a loop of its own for in-order cores, chosen by
 the arm64 MIDR register; the review of the kernel copy
-([#152](https://github.com/martinus/quetschn/issues/152)) replaced the two loops with one, and this check
+([#152](https://github.com/martinus/seqlz/issues/152)) replaced the two loops with one, and this check
 keeps it that way. `FORBIDDEN` catches what a kernel reader cannot follow: the repository's documents
 and tools, issue numbers, the project's names, and reasons that hold only for the project's machines,
 such as the Mi 9T's 4.14 kernel. Since commit `6bff3de` the comments of `src/` give their reasons in plain
@@ -373,7 +379,7 @@ hash table and the scratch side by side was {{size.state}} + {{const.SCRATCH}} =
 {{ch15.state_plus_scratch|grp}} bytes, above `KMALLOC_MAX_CACHE_SIZE`, and `kvzalloc()` took 16 KiB for it.
 As a union it is {{size.state}} bytes from `kmalloc-8k`. `lz4` asks `vmalloc()` for 16 416 bytes, which is
 5 pages, 20 480
-([plan.md](https://github.com/martinus/quetschn/blob/main/docs/plan.md#33-per-cpu-workspace-is-real-memory-on-a-phone)):
+([plan.md](https://github.com/martinus/seqlz/blob/main/docs/plan.md#33-per-cpu-workspace-is-real-memory-on-a-phone)):
 12 KiB less per CPU, on the Mi 9T's 8 cores 96 KiB, resident whether the phone swaps or not.
 `kzalloc_obj(*c)` is a newer typed spelling of `kzalloc(sizeof(*c), GFP_KERNEL)`, as zram's other
 backends allocate their contexts; `GFP_KERNEL` may sleep, which is fine when a CPU comes up. Two
@@ -383,7 +389,7 @@ allocator, which can fail under fragmentation when a CPU comes up.
 @assert const.SCRATCH <= size.state <= 8192 < ch15.state_plus_scratch <= 16384
 
 ::: why The union is safe because of zram's mutex
-Commit `6063362` ([#154](https://github.com/martinus/quetschn/issues/154)) gives two reasons. zram holds
+Commit `6063362` ([#154](https://github.com/martinus/seqlz/issues/154)) gives two reasons. zram holds
 the stream's mutex for either operation, so they never run at the same time on one context. And neither
 keeps anything from one page to the next: the matcher clears its table for every page, the decoder
 writes its scratch before it reads it. The commit ran the kernel copy under KASAN, lockdep and UBSan: the corpus written and read back at the
@@ -458,8 +464,10 @@ runs `port.py`, and then:
 CI runs it for x86-64 with gcc, and with clang for arm64, the phones' architecture, 32-bit arm, whose
 32-bit `long` and pointers show a computation that assumes 64 bits, and s390, which is big-endian. The
 32-bit kernel warns about stack frames above 1280 bytes, against 2048 on 64-bit. With gcc 16.2.1, x86-64
-`defconfig` and the Makefile's `-O3`, the deepest frames are `seqlz_decode_literals()`, 640 bytes, and
-`code_literals()`, 600, on 22nd October 2026, near 1000 with KASAN and UBSan. Since 11th October 2026 `check.sh` prints the
+`defconfig` and the Makefile's `-O3`, the deepest frames were `seqlz_decode_literals()`, 640 bytes, and
+`code_literals()`, 600, on 22nd October 2026, near 1000 with KASAN and UBSan. Since 23rd October
+`code_literals()` is inlined into its callers, and on 24th October `seqlz_code_own()`, which has it
+inside, had the 600 bytes (commit `8993922`). Since 11th October 2026 `check.sh` prints the
 three deepest frames of each build and fails at 1024 bytes, the limit of older kernels' 32-bit
 `FRAME_WARN`.
 
@@ -498,7 +506,7 @@ only for the repository and text only for the kernel.
 
 ## Testing outside the kernel {#ch-zram-glue--tests}
 
-`test/` has the doctest unit tests, one binary, `quetschn_test`. Two of them check this chapter's file.
+`test/` has the doctest unit tests, one binary, `seqlz_test`. Two of them check this chapter's file.
 `seqlz takes no dictionary, its tables are part of the format` gives the codecs a dictionary of the size
 of `struct seqlz_lengths`, which once replaced the code lengths, and checks that a page compresses to the
 same bytes as without. `seqlz compresses with the hash table, seqlz-2 decompresses with the
@@ -514,7 +522,7 @@ scratch` checks the context sizes, and that `seqlz-1` decodes with a stream with
 - `seqlz_roundtrip_fuzz.c`: any page through `seqlz_compress()` and `seqlz_decode()`, at every level. It must come back, fit into 2 pages, and be the bytes `seqlz_encode()` writes for
   `seqlz_find()`'s sequences at that level.
 - `seqlz_encode_fuzz.c`: any list of sequences through `seqlz_encode()`, also lists that make no page,
-  added after an encoder overflow ([#121](https://github.com/martinus/quetschn/issues/121)) that the other
+  added after an encoder overflow ([#121](https://github.com/martinus/seqlz/issues/121)) that the other
   targets could not reach, since the matcher's sequences are always valid.
 - `seqlz_diff_fuzz.c`: the decoder against `tools/seqlz-ref/seqlz_ref.c`, a second decoder written from
   `docs/format.md` alone, "so that a misreading in src/ is not shared". It reads every bit on its own and
@@ -526,7 +534,7 @@ CI runs it for 4 KiB and 16 KiB pages and once with MemorySanitizer, which repor
 codec did not write for this input. On the diff target, `docs/format.md` records two long AFL++ runs: on
 6th October 2026, 10 instances for 2 hours, 1.7 billion inputs, and on 9th October, with the code of commit
 `5342a9b`, 12 instances for 2 hours, 1.94 billion, no difference found in either
-([format.md](https://github.com/martinus/quetschn/blob/main/docs/format.md#how-this-file-was-checked)).
+([format.md](https://github.com/martinus/seqlz/blob/main/docs/format.md#how-this-file-was-checked)).
 ClusterFuzzLite runs the targets daily, an hour each with AddressSanitizer, UndefinedBehaviorSanitizer and
 MemorySanitizer.
 
@@ -552,7 +560,7 @@ coded literals, `own table {{ch15.endian.own}}` those among them with a table of
 | job | what it runs |
 | --- | --- |
 | `format` | `clang-format` 21.1.8 on every `.c`, `.h` and `.cpp` |
-| `test` | `quetschn_test` built 4 ways: gcc debug with sanitizers, clang release, gcc release on arm64, gcc release with sanitizers for 16 KiB pages |
+| `test` | `seqlz_test` built 4 ways: gcc debug with sanitizers, clang release, gcc release on arm64, gcc release with sanitizers for 16 KiB pages |
 | `fuzz` | `fuzz/smoke.sh 60` for 4 KiB, 16 KiB and MSan |
 | `same-bytes` | `test/seqlz_endian.c` on x86-64, 32-bit x86 and s390x, outputs diffed |
 | `docs` | `tools/seqlz-ref/check.sh` and `tools/check-links.py` |

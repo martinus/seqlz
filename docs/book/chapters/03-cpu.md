@@ -18,7 +18,7 @@ how much of that parallel work a piece of code allows.
 ::: measured seqlz against lz4, the decoder alone
 A loop over 2000 pages a desktop swapped into zram, the pages in the cache, on the Ryzen 9 7950X of
 the development machine, per page, as of 5th October 2026
-([explored-designs.md](https://github.com/martinus/quetschn/blob/main/docs/explored-designs.md#the-numbers-again-with-the-format-as-it-is-now-reads-03-µs-faster-than-on-29th-september)):
+([explored-designs.md](https://github.com/martinus/seqlz/blob/main/docs/explored-designs.md#the-numbers-again-with-the-format-as-it-is-now-reads-03-µs-faster-than-on-29th-september)):
 
 | codec | instructions | cycles | instructions per cycle |
 | --- | ---: | ---: | ---: |
@@ -28,7 +28,7 @@ the development machine, per page, as of 5th October 2026
 This loop decodes every page several times, which flatters seqlz, see
 [the branches](#ch-cpu--branches). In a swap-in in the kernel, in a VM on the same CPU,
 `zcomp_decompress()` takes 2.0 µs for seqlz and 1.4 µs for `lz4`
-([The decoder in a fault, found](https://github.com/martinus/quetschn/blob/main/docs/explored-designs.md#the-decoder-in-a-fault-found-110-branch-mispredictions-per-page-that-a-decode-of-the-same-page-before-hides)).
+([The decoder in a fault, found](https://github.com/martinus/seqlz/blob/main/docs/explored-designs.md#the-decoder-in-a-fault-found-110-branch-mispredictions-per-page-that-a-decode-of-the-same-page-before-hides)).
 :::
 
 seqlz gets more instructions per cycle because more of its work is independent: 8 streams of
@@ -70,7 +70,7 @@ table of 8 KiB of 2-byte entries. With it, the slowest 1% of cold reads were 650
 the 256-symbol token before it. Limiting the same 512 symbols to codes of up to 11 bits, a table of 4
 KiB, took the p99 of cold reads from 5070 to 4350 ns. Measured in the userspace harness on the Ryzen 9
 7950X
-([explored-designs.md](https://github.com/martinus/quetschn/blob/main/docs/explored-designs.md#second-round-branches-tails-and-table-sizes)).
+([explored-designs.md](https://github.com/martinus/seqlz/blob/main/docs/explored-designs.md#second-round-branches-tails-and-table-sizes)).
 :::
 
 ## Prefetching: many misses at once {#ch-cpu--prefetch}
@@ -96,13 +96,13 @@ line misses its last line: the literal tables always do.
 On the Mi 9T's little core, a Cortex-A55, in the phone's own kernel: without any table prefetch, cold
 reads were 14.5 µs slower on average and 30 µs slower at p99, 77.28 against 62.76 µs and 120.45
 against 90.26
-([explored-designs.md](https://github.com/martinus/quetschn/blob/main/docs/explored-designs.md#4-prefetching-the-tables-the-a55-needs-it-the-a76-is-faster-without)).
+([explored-designs.md](https://github.com/martinus/seqlz/blob/main/docs/explored-designs.md#4-prefetching-the-tables-the-a55-needs-it-the-a76-is-faster-without)).
 On the PC the prefetches cover the tables so well that, in a swap-in in the kernel VM, reading every
 line of them before the decode made it only 6 to 25 ns faster
-([explored-designs.md](https://github.com/martinus/quetschn/blob/main/docs/explored-designs.md#the-decoder-in-a-fault-028-µs-slower-than-in-zrams-read-benchmark-warm-caches-give-back-012)).
+([explored-designs.md](https://github.com/martinus/seqlz/blob/main/docs/explored-designs.md#the-decoder-in-a-fault-028-µs-slower-than-in-zrams-read-benchmark-warm-caches-give-back-012)).
 The same idea for the compressed data, in zram before the decoder runs, took `lz4`'s p99 of cold
 reads from 5600 to 3891 ns in the kernel VM
-([explored-designs.md](https://github.com/martinus/quetschn/blob/main/docs/explored-designs.md#zram-prefetch-the-compressed-data-before-decompression)).
+([explored-designs.md](https://github.com/martinus/seqlz/blob/main/docs/explored-designs.md#zram-prefetch-the-compressed-data-before-decompression)).
 :::
 
 Two traps around prefetches are handled in `src/seqlz_compat.h` ([chapter 5](#ch-compat--prefetch)):
@@ -172,7 +172,7 @@ The lookup reads one entry, and which one depends on the bits after the code too
 bit first, the frequent short codes keep coming back to the same few lines. Counted on 20 000 pages, a
 page touches 42.5 of the token table's 128 lines most significant bit first, and 55.3 least
 significant bit first, with the same bytes of the pages
-([explored-designs.md](https://github.com/martinus/quetschn/blob/main/docs/explored-designs.md#six-choices-made-on-the-pc-measured-on-the-phone-the-token-table-and-the-prefetches-matter-the-rest-does-not)).
+([explored-designs.md](https://github.com/martinus/seqlz/blob/main/docs/explored-designs.md#six-choices-made-on-the-pc-measured-on-the-phone-the-token-table-and-the-prefetches-matter-the-rest-does-not)).
 The same count for the {{slab.tokens}} token lookups of [chapter 16](#ch-trace)'s page, one for each
 sequence but the last, which has no token:
 
@@ -184,7 +184,7 @@ then: with the codes in one range, cold reads were 9.57 to 9.73 µs in every run
 spread, one build of the same decoder read in 9.39 µs and another in 10.50, depending on where the
 tables of the kernel module landed in memory. On the PC the change cost nothing: 7370 against 7410
 cycles per page in the decode loop
-([explored-designs.md](https://github.com/martinus/quetschn/blob/main/docs/explored-designs.md#the-sequences-bitstream-most-significant-bit-first-the-token-tables-codes-in-one-range-on-every-cpu-kept)).
+([explored-designs.md](https://github.com/martinus/seqlz/blob/main/docs/explored-designs.md#the-sequences-bitstream-most-significant-bit-first-the-token-tables-codes-in-one-range-on-every-cpu-kept)).
 :::
 
 The price of most significant bit first is a byte swap on every refill of the bit register, not on
@@ -203,7 +203,7 @@ In the kernel VM on the Ryzen 9 7950X at 4.5 GHz, `seqlz-2`'s decoder in a swap-
 200.9 branches per page. When the same page was decoded once right before, it mispredicted 89.5, and
 took 1867 cycles less, with the same instructions and the same L1 misses: about 17 cycles for each of
 the 111 mispredictions
-([explored-designs.md](https://github.com/martinus/quetschn/blob/main/docs/explored-designs.md#the-decoder-in-a-fault-found-110-branch-mispredictions-per-page-that-a-decode-of-the-same-page-before-hides)).
+([explored-designs.md](https://github.com/martinus/seqlz/blob/main/docs/explored-designs.md#the-decoder-in-a-fault-found-110-branch-mispredictions-per-page-that-a-decode-of-the-same-page-before-hides)).
 :::
 
 The surprise is the second number: a branch predictor learns a page of 4 KiB after one decode. In
@@ -218,7 +218,7 @@ Three branches of the sequence loop made 58% of the mispredictions of a page see
 bit register needs a refill, 32 per page; whether the sequence takes the **fast path**, the common
 case of a short sequence away from the end of the page ([chapter 14](#ch-decode)), 24; and whether
 the match's offset is below 8, 20 to 22
-([explored-designs.md](https://github.com/martinus/quetschn/blob/main/docs/explored-designs.md#which-branches-three-in-the-sequence-loop-are-58-of-the-130-misses-of-a-page-seen-once)).
+([explored-designs.md](https://github.com/martinus/seqlz/blob/main/docs/explored-designs.md#which-branches-three-in-the-sequence-loop-are-58-of-the-130-misses-of-a-page-seen-once)).
 The first one is gone. Whether {{ch03.refill_at}} bits are left depends on the lengths of the codes
 before, which no predictor knows for a new page. But a refill leaves at least 56 bits, and two fast
 sequences take at most {{ch03.two_fast}} of them on 4 KiB pages, {{k16.ch03.two_fast}} on 16 KiB, so
@@ -234,10 +234,10 @@ the work of both outcomes, and a branch the predictor gets right costs almost no
 version of the decoder that replaced its branches with masks mispredicted 68 instead of 155 times per
 page, ran 15 000 more instructions, and took 12 000 instead of 9400 cycles. "At 3.4 to 3.9
 instructions per cycle, instructions are as expensive as mispredictions here"
-([explored-designs.md](https://github.com/martinus/quetschn/blob/main/docs/explored-designs.md#second-round-branches-tails-and-table-sizes)).
+([explored-designs.md](https://github.com/martinus/seqlz/blob/main/docs/explored-designs.md#second-round-branches-tails-and-table-sizes)).
 The fast path's copies, measured again on pages seen once: fixed copies of 32 or 40 bytes instead of
 copies behind two branches had 14 fewer mispredictions per page and took more cycles
-([explored-designs.md](https://github.com/martinus/quetschn/blob/main/docs/explored-designs.md#a-branch-or-more-work-again-in-a-swap-in-the-old-choices-hold-and-loops-over-2000-pages-were-never-trained)).
+([explored-designs.md](https://github.com/martinus/seqlz/blob/main/docs/explored-designs.md#a-branch-or-more-work-again-in-a-swap-in-the-old-choices-hold-and-loops-over-2000-pages-were-never-trained)).
 And a `?:` is no promise of code without a branch: the same early measurement found two `?:` of the
 decoder compiled to branches that made 30% and 28% of all mispredictions.
 
@@ -248,7 +248,7 @@ and whether they match at the candidate from the hash table. Both answers are cl
 computes both first and decides with one branch on `rep_hit | cand_hit`
 ([chapter 9](#ch-matcher--position)). With three branches per position the matcher mispredicted 539
 times per page, with one 329, and the p99 of compressing a cold page went from 15.4 to 12.6 µs
-([explored-designs.md](https://github.com/martinus/quetschn/blob/main/docs/explored-designs.md#the-compressor-seqlz-fast)).
+([explored-designs.md](https://github.com/martinus/seqlz/blob/main/docs/explored-designs.md#the-compressor-seqlz-fast)).
 
 ## Chains of dependent steps {#ch-cpu--chains}
 
@@ -356,7 +356,7 @@ its way, the next one's can start.
 With 4 streams a literal took about 2.9 cycles to decode, and 8 streams made a page decode faster
 for a few bytes more header ([chapter 13](#ch-literals-dec--cost)). Measured again in October 2026,
 4 streams made reads 0.7% to 1.8% slower in the kernel VM, for 0.1% to 0.2% less memory, so 8 stayed
-([explored-designs.md](https://github.com/martinus/quetschn/blob/main/docs/explored-designs.md#five-simplifications-measured-in-the-vm-and-on-the-phone-the-literal-streams-as-arrays-kept-four-not)).
+([explored-designs.md](https://github.com/martinus/seqlz/blob/main/docs/explored-designs.md#five-simplifications-measured-in-the-vm-and-on-the-phone-the-literal-streams-as-arrays-kept-four-not)).
 The encoder has the same chain the other way round, a shift and an or on a stream's accumulator per
 code, and `lit_streams()` writes 4 streams at a time, each with its own accumulator
 ([chapter 11](#ch-literals-enc)); one stream after the other took about 3.5 cycles per literal.
@@ -366,7 +366,7 @@ token start where this sequence's bits end, which is known only from the token's
 shift, lookup. Every step added to that chain costs on every sequence. Putting the offset class into
 the token, instead of a symbol of its own after it, took a second lookup off the chain: 8168 instead
 of 8758 cycles per page
-([explored-designs.md](https://github.com/martinus/quetschn/blob/main/docs/explored-designs.md#seqlz-third-decoder-round-one-repeat-offset-offset-class-in-the-token-and-why-cold-is-slow)).
+([explored-designs.md](https://github.com/martinus/seqlz/blob/main/docs/explored-designs.md#seqlz-third-decoder-round-one-repeat-offset-offset-class-in-the-token-and-why-cold-is-slow)).
 The copies of the literals and the match hang off this chain but are not on it.
 
 ## In-order cores wait at every load {#ch-cpu--in-order}
@@ -385,7 +385,7 @@ with every field ready to use ([chapter 7](#ch-internal)): taking the token apar
 of about 60 instructions per sequence. The entries of 4 bytes, with a flag for "a length value
 follows", took the decoder from 16 547 to 15 129 instructions per page on the A55, and with three
 smaller changes from 17 842
-([explored-designs.md](https://github.com/martinus/quetschn/blob/main/docs/explored-designs.md#seqlzs-decoder-for-an-in-order-core-15-fewer-instructions-07-to-08-µs-less-at-cold-p99-on-the-a55-kept)).
+([explored-designs.md](https://github.com/martinus/seqlz/blob/main/docs/explored-designs.md#seqlzs-decoder-for-an-in-order-core-15-fewer-instructions-07-to-08-µs-less-at-cold-p99-on-the-a55-kept)).
 
 **A load has to start early.** Loaded right before it is used, a value costs an in-order core the
 whole latency of the load; issued a few instructions earlier, the instructions in between fill the
@@ -393,18 +393,18 @@ wait. The matcher loads the next position's 8 bytes, hash, table entry and candi
 compares the current one, **software pipelining** ([chapter 9](#ch-matcher--position)). On the A55
 that, with two smaller changes to the same loop, took compression from 43 841 to 42 349 cycles per
 page, 3.4%, with the same output; on the PC from 16 489 to 16 148
-([explored-designs.md](https://github.com/martinus/quetschn/blob/main/docs/explored-designs.md#the-matcher-on-an-in-order-core-34-fewer-compress-cycles-on-the-a55-same-output-kept)).
+([explored-designs.md](https://github.com/martinus/seqlz/blob/main/docs/explored-designs.md#the-matcher-on-an-in-order-core-34-fewer-compress-cycles-on-the-a55-same-output-kept)).
 The decoder's fast path does the same: `next_token_fast()` looks up the next token before the copies
 of the current sequence, which fill the time the load takes. On the phone that made cold reads at the
 median 162 ns closer to `lz4` on the little core and 126 ns on the big one
-([explored-designs.md](https://github.com/martinus/quetschn/blob/main/docs/explored-designs.md#the-next-token-before-the-copies-reads-faster-on-both-phone-cores-kept)).
+([explored-designs.md](https://github.com/martinus/seqlz/blob/main/docs/explored-designs.md#the-next-token-before-the-copies-reads-faster-on-both-phone-cores-kept)).
 
 **A miss it did not see coming stops it.** An out-of-order core finds the table lookups of the next
 sequences in its window and starts their misses early; an in-order core reaches each one only when it
 gets there. So the table prefetches matter far more on the A55, 14.5 µs per cold read, than on the PC,
 where prefetching the tables once made about 100 ns of difference, within the scatter of that
 measurement
-([explored-designs.md](https://github.com/martinus/quetschn/blob/main/docs/explored-designs.md#seqlz-third-decoder-round-one-repeat-offset-offset-class-in-the-token-and-why-cold-is-slow)).
+([explored-designs.md](https://github.com/martinus/seqlz/blob/main/docs/explored-designs.md#seqlz-third-decoder-round-one-repeat-offset-offset-class-in-the-token-and-why-cold-is-slow)).
 The [model of 8 misses](#anim-misses) shows the two kinds of core side by side.
 
 Until 10th October 2026 the arm64 decoder had a second loop, written for in-order cores; now one loop
@@ -430,7 +430,7 @@ Registers also decided a choice in the matcher. Like `lz4`, it once moved on fas
 found no match for a while. That step needs one more value in the loop, which has no register to
 spare. Without it, the pages that compress are written 5% faster, and in the kernel VM
 `seqlz-2` writes a page 0.23 µs faster, 3%
-([explored-designs.md](https://github.com/martinus/quetschn/blob/main/docs/explored-designs.md#the-matcher-without-its-step-writes-1-to-3-faster-kept)).
+([explored-designs.md](https://github.com/martinus/seqlz/blob/main/docs/explored-designs.md#the-matcher-without-its-step-writes-1-to-3-faster-kept)).
 
 ## Byte order, and loads at any address {#ch-cpu--endian}
 
@@ -507,7 +507,7 @@ Copying 32 bytes of every match made the mean faster and the p99 slower, because
 have many short matches and each paid for 32 bytes ([chapter 12](#ch-dec-basics--copy-match)). Copying
 byte by byte up to the end of the page made the slowest pages 10 times slower than `lz4`: with offset
 1 every byte waited for the store before it
-([explored-designs.md](https://github.com/martinus/quetschn/blob/main/docs/explored-designs.md#numbers-that-were-only-in-the-codecs-comments-until-10th-october-2026)).
+([explored-designs.md](https://github.com/martinus/seqlz/blob/main/docs/explored-designs.md#numbers-that-were-only-in-the-codecs-comments-until-10th-october-2026)).
 :::
 
 When the offset is below 16, the bytes a copy of 16 reads overlap the bytes it writes, and an 8-byte
@@ -557,7 +557,7 @@ written `<< (n & 63U)` even where `n` is never 64, and why `enc[]` in `struct va
 power of 2, so that `s & (ENC_LEN_SYMBOLS - 1U)` proves every index in range
 ([chapter 7](#ch-internal), [chapter 10](#ch-encoder)). Masked shifts and indices took the compressor
 from 25 225 to 25 064 cycles per page, with 4.7% fewer instructions
-([explored-designs.md](https://github.com/martinus/quetschn/blob/main/docs/explored-designs.md#the-compressor-second-round-fewer-instructions)).
+([explored-designs.md](https://github.com/martinus/seqlz/blob/main/docs/explored-designs.md#the-compressor-second-round-fewer-instructions)).
 The decoder had 65 such checks in an early version, `lz4`'s 18, but not in its hot path: without them,
 the instructions per page were the same
-([explored-designs.md](https://github.com/martinus/quetschn/blob/main/docs/explored-designs.md#seqlz-lz4s-matches-huffman-coded-sequences-with-static-tables)).
+([explored-designs.md](https://github.com/martinus/seqlz/blob/main/docs/explored-designs.md#seqlz-lz4s-matches-huffman-coded-sequences-with-static-tables)).
