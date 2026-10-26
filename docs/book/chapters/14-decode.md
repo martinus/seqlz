@@ -11,7 +11,7 @@ end of the page, of the literals and of the input: fixed copies without loops an
 room, and the next token's lookup before the copies. The **slow path** takes everything else, with every
 check. On 7th October 2026, with the tables and offset classes of then, 178.5 of the 207 sequences of an
 average desktop zram page took the fast path
-([explored-designs.md](https://github.com/martinus/quetschn/blob/main/docs/explored-designs.md#the-fast-paths-condition-its-22-misses-per-page-are-the-length-values-four-ways-around-them-slower-not-kept)).
+([explored-designs.md](https://github.com/martinus/seqlz/blob/main/docs/explored-designs.md#the-fast-paths-condition-its-22-misses-per-page-are-the-length-values-four-ways-around-them-slower-not-kept)).
 
 The loop is in `decode_block()`, and `seqlz_decode()` calls it with `deltas` the constant `true` or
 `false`: two inlined copies, one of which turns level 3's deltas back into literals after each copy of
@@ -43,7 +43,7 @@ next token, and the room the fast path needs. The slow path's helpers are in
 
 ## copy_match_fast(): the match without loops {#ch-decode--copy-match-fast}
 
-@listing src/seqlz_decompress.c 302-325
+@listing src/seqlz_decompress.c 303-326
 
 On the fast path a match has at most {{ch14.fast_len}} bytes, since the token's longest `ml` means that a
 length value follows. The caller guarantees {{ch14.cmf.room}} bytes of room at `d`. From offset 8 on the
@@ -52,20 +52,20 @@ copies are 16, 32 or 40 bytes, always at least `len`, and each `copy8()` loads b
 ([chapter 12](#ch-dec-basics--copies)). `m = d - off` once, because clang computed `d + 8 - off` anew
 for every load: on the Mi 9T's little Cortex-A55 that took the decoder from 17 842 to 17 542
 instructions per page
-([explored-designs.md](https://github.com/martinus/quetschn/blob/main/docs/explored-designs.md#seqlzs-decoder-for-an-in-order-core-15-fewer-instructions-07-to-08-µs-less-at-cold-p99-on-the-a55-kept)).
+([explored-designs.md](https://github.com/martinus/seqlz/blob/main/docs/explored-designs.md#seqlzs-decoder-for-an-in-order-core-15-fewer-instructions-07-to-08-µs-less-at-cold-p99-on-the-a55-kept)).
 
 ::: measured Branches on len, not always 40 bytes
 On the Mi 9T, 32 bytes always and 40 bytes always both read slower than the code as it is: warm reads
 by 0.1 µs on the A76 and 0.5 to 0.8 µs on the A55, cold reads by 1.1 and 1.2 µs on the A76
-([explored-designs.md](https://github.com/martinus/quetschn/blob/main/docs/explored-designs.md#6-the-fast-paths-copies-as-they-are)).
+([explored-designs.md](https://github.com/martinus/seqlz/blob/main/docs/explored-designs.md#6-the-fast-paths-copies-as-they-are)).
 Measured again in a swap-in in the kernel VM, where the predictor has not seen the page, the copies
 without branches took out 14 mispredictions per page and were still about 30 ns slower per decode, 250
 ns at the swap-in's p99, most likely because the added loads read bytes the stores just before them
 wrote
-([explored-designs.md](https://github.com/martinus/quetschn/blob/main/docs/explored-designs.md#a-branch-or-more-work-again-in-a-swap-in-the-old-choices-hold-and-loops-over-2000-pages-were-never-trained)).
+([explored-designs.md](https://github.com/martinus/seqlz/blob/main/docs/explored-designs.md#a-branch-or-more-work-again-in-a-swap-in-the-old-choices-hold-and-loops-over-2000-pages-were-never-trained)).
 :::
 
-@listing src/seqlz_decompress.c 326-342
+@listing src/seqlz_decompress.c 327-343
 
 Below offset 8, the pattern register of `repeat_pattern()` ([chapter 12](#ch-dec-basics--pattern)) is
 stored 5 times without a loop. The smallest step is {{ch14.cmf.min_step}}, for
@@ -78,12 +78,12 @@ written is `d + {{ch14.cmf.max_byte}}`: that is the {{ch14.cmf.room}} bytes of r
 rejected offset 0, so `repeat_step[off]` needs no `& 7U` here. A loop instead of the 5 stores, tried
 again for simpler code before 10th October 2026, was 0.5 to 0.7% slower in the kernel VM with gcc and
 clang
-([explored-designs.md](https://github.com/martinus/quetschn/blob/main/docs/explored-designs.md#five-simplifications-measured-in-the-vm-and-on-the-phone-the-literal-streams-as-arrays-kept-four-not)).
+([explored-designs.md](https://github.com/martinus/seqlz/blob/main/docs/explored-designs.md#five-simplifications-measured-in-the-vm-and-on-the-phone-the-literal-streams-as-arrays-kept-four-not)).
 @assert ch14.cmf.min_step == 5 and ch14.cmf.min_step_off == 5 and ch14.cmf.step1 == ch14.cmf.step2 == ch14.cmf.step4 == 8 and ch14.cmf.room == 40
 
 ## The next token: refill only when the bits might run out {#ch-decode--next-token}
 
-@listing src/seqlz_decompress.c 344-357
+@listing src/seqlz_decompress.c 345-358
 
 The slow path and the first sequence get their token here. It refills only below an 11-bit code plus the
 longest offset, {{ch14.need}} bits with 4 KiB pages and {{k16.ch14.need}} with 16 KiB pages. The index
@@ -98,25 +98,25 @@ September 2026, `seqlz-1` in the kernel VM, Ryzen 9 7950X at 4.5 GHz: cold reads
 read first, went from 2811 / 4501 to 2610 / 4300 ns at p50 / p99. A hot loop over 2000 pages got slower,
 6883 to 7115 cycles per page, with 39 more mispredictions: the check is a branch on data. The kernel's
 numbers decided
-([explored-designs.md](https://github.com/martinus/quetschn/blob/main/docs/explored-designs.md#zram-prefetch-the-compressed-data-before-decompression)).
+([explored-designs.md](https://github.com/martinus/seqlz/blob/main/docs/explored-designs.md#zram-prefetch-the-compressed-data-before-decompression)).
 The format of then had other tables and another bit order.
 :::
 
 ### next_token_fast(): the next token before the copies
 
-@listing src/seqlz_decompress.c 359-380
+@listing src/seqlz_decompress.c 360-381
 
 **The next token before the copies.** No length value follows on the fast path, so the next token's code
 starts right after the offset bits, and its entry can be loaded before the copies. An out-of-order core
 would overlap the two anyway; an in-order core such as the A55 would wait for the lookup at the top of the
 next round ([chapter 3](#ch-cpu--in-order)). On 3rd October 2026, phone pages in the userspace harness,
 the little core's cold p50 against `lz4` went from 2169 to 2007 ns more, the big core's from 456 to 330
-([explored-designs.md](https://github.com/martinus/quetschn/blob/main/docs/explored-designs.md#the-next-token-before-the-copies-reads-faster-on-both-phone-cores-kept)).
+([explored-designs.md](https://github.com/martinus/seqlz/blob/main/docs/explored-designs.md#the-next-token-before-the-copies-reads-faster-on-both-phone-cores-kept)).
 
 **The refill every second fast sequence, without a check.** Whether 23 bits are left depends on the code
 lengths before, which the predictor learns only for a page it has seen, and a swap-in decodes a page
 once. In a page seen once that branch was the largest single source of mispredictions in the decoder
-([explored-designs.md](https://github.com/martinus/quetschn/blob/main/docs/explored-designs.md#which-branches-three-in-the-sequence-loop-are-58-of-the-130-misses-of-a-page-seen-once)).
+([explored-designs.md](https://github.com/martinus/seqlz/blob/main/docs/explored-designs.md#which-branches-three-in-the-sequence-loop-are-58-of-the-130-misses-of-a-page-seen-once)).
 So the fast path refills on a schedule: `*skip` alternates, and a branch that alternates is one every
 predictor gets right. The refill is `seqlz_br_refill_8()`, the fast half of `seqlz_br_refill()`
 ([chapter 12](#ch-dec-basics--bit-reader)), without the check of bytes left.
@@ -144,12 +144,12 @@ to 1941 ns instead of 2010 to 2011 with gcc, 1976 to 1983 instead of 2020 to 204
 the Mi 9T the A76 decoded a page seen once in 3241 to 3272 ns instead of 3309 to 3340; the A55 got
 slower and kept a loop of its own until 10th October 2026, when every core got this one loop
 ([chapter 17](#ch-decisions--one-loop-for-all-cores),
-[explored-designs.md](https://github.com/martinus/quetschn/blob/main/docs/explored-designs.md#the-refill-without-its-branch-every-second-fast-sequence-63-ns-less-per-swap-in-on-x86-64-and-the-a76-kept)).
+[explored-designs.md](https://github.com/martinus/seqlz/blob/main/docs/explored-designs.md#the-refill-without-its-branch-every-second-fast-sequence-63-ns-less-per-swap-in-on-x86-64-and-the-a76-kept)).
 :::
 
 ## The fast path's three rooms {#ch-decode--rooms}
 
-@listing src/seqlz_decompress.c 382-389
+@listing src/seqlz_decompress.c 383-390
 
 A fast sequence writes the 16 bytes of `copy16()` at `d`, moves on by at most {{ch14.fast_nl}}
 literals and writes at most {{ch14.cmf.room}} bytes of match, {{ch14.cmf.max_write}} bytes in all, below
@@ -197,13 +197,13 @@ the {{ch14.room.page}} of `FAST_BLOCK_ROOM`. One `copy16()` reads 16 bytes of li
 
 ## Two copies of the loop: decode_block() {#ch-decode--deltas}
 
-@listing src/seqlz_decompress.c 391-399
+@listing src/seqlz_decompress.c 392-400
 
 `decode_block()` is the whole decoder, with one parameter more than `seqlz_decode()`: `deltas`, whether
 the page's literals are deltas ([chapter 6](#ch-header--literals)). `seqlz_decode()` comes last in the
 file, and is the only caller:
 
-@listing src/seqlz_decompress.c 583-594
+@listing src/seqlz_decompress.c 588-599
 
 It reads byte 2 only for a page with coded literals, and only if there is a byte 2, `src_len > 2`; a
 page with raw literals never has deltas, and bit 7 of its byte 2 is a literal. Each call passes a
@@ -221,14 +221,14 @@ the one loop, and of the records in the encoder's, made levels 1 and 2 slower to
 slower to write on the Mi 9T's Cortex-A76, userspace, 21st October 2026. With the two copies they read
 as fast as before, within the run's spread, and level 3 read 0.37 µs slower per page on the A76 and
 1.0 µs on the A55 than without the XOR, the mean of two phone dumps
-([explored-designs.md](https://github.com/martinus/quetschn/blob/main/docs/explored-designs.md#level-3-xors-its-literals-with-an-earlier-byte-of-the-page-38-fewer-bytes-than-seqlz-3-of-15-october-kept));
+([explored-designs.md](https://github.com/martinus/seqlz/blob/main/docs/explored-designs.md#level-3-xors-its-literals-with-an-earlier-byte-of-the-page-38-fewer-bytes-than-seqlz-3-of-15-october-kept));
 the deltas read another 0.13 to 0.24 µs slower on the A76 and 0.34 to 0.46 µs on the A55
 ([chapter 13](#ch-literals-dec--undelta)). The cost is code size: the loop is in the decoder twice.
 :::
 
 ## Setup: the header, the tables, and where the literals are {#ch-decode--setup}
 
-@listing src/seqlz_decompress.c 400-411
+@listing src/seqlz_decompress.c 401-412
 
 The parameters and the return values, 0 or `-EINVAL`, are those of `seqlz.h`
 ([chapter 6](#ch-header--encode-decode)). `delta` is which delta the page's literals are, which
@@ -236,15 +236,20 @@ The parameters and the return values, 0 or `-EINVAL`, are those of `seqlz.h`
 the literals are, which is more than `lit_end`. `last`, the repeat offset, starts at 1, as the format
 says ([chapter 4](#ch-format--offsets)), and `skip = 0` has the first fast sequence refill.
 
-@listing src/seqlz_decompress.c 412-420
+@listing src/seqlz_decompress.c 413-423
 
 The tables are prefetched before the header is read, {{ch14.pf.token}} prefetches for the token table
 and {{ch14.pf.len}} for each length table ([chapter 12](#ch-dec-basics--prefetch)), so that the header
 and the literals run while the lines are on their way. `get_unaligned_le16()` replaced a helper of
 seqlz's own on 10th October 2026, within the noise in the kernel VM and on the phone
-([explored-designs.md](https://github.com/martinus/quetschn/blob/main/docs/explored-designs.md#the-kernel-copys-choices-measured-in-one-boot-and-on-the-phone--o3-kept-one-decode-loop-prefetch-no-__aligned64-no-load16)).
+([explored-designs.md](https://github.com/martinus/seqlz/blob/main/docs/explored-designs.md#the-kernel-copys-choices-measured-in-one-boot-and-on-the-phone--o3-kept-one-decode-loop-prefetch-no-__aligned64-no-load16)).
+`n_lit` is the count without the `SEQLZ_LIT_CODED` bit, and a page cannot have more literals than
+bytes, raw or coded. Until 23rd October 2026 only `seqlz_decode_literals()` checked that, for coded
+literals; a raw page with more was rejected too, but only because the loop never found its end
+(commit `3ae2e09`). `seqlz_decode_literals()` still checks it, for the compiler's sake
+([chapter 13](#ch-literals-dec--main)).
 
-@listing src/seqlz_decompress.c 421-444
+@listing src/seqlz_decompress.c 424-446
 
 `SEQLZ_LIT_CODED` picks the layout ([chapter 4](#ch-format--layout)). A page with coded literals needs a
 scratch; zram at level 1 writes only raw literals and may call the decoder without one
@@ -256,15 +261,15 @@ the end of the scratch, 16 bytes more, for the 16-byte copies. Raw literals are 
 is not literals. The `u64` sum cannot wrap; with 15 bits of `n_lit` neither could a 32-bit one, but then
 the reader would have to know that.
 
-A raw page with more than `SEQLZ_BLOCK_SIZE` literals is not rejected here. It needs no check: its literals left
-are always more than the bytes left, the loop never finds its end, and a check of room rejects it.
-
-@listing src/seqlz_decompress.c 446-469
+@listing src/seqlz_decompress.c 448-471
 
 `lit_fast` and `in_fast` are numbers because with a short input `lit_bound - 16` would be a pointer
 before the buffer, which C does not allow even unused; `unsigned long` has the size of a pointer on every
-architecture the kernel has. An input shorter than 8 bytes gets `in_fast = 0`, so the fast path, whose
-refill loads 8 bytes unchecked, is never taken.
+architecture the kernel has. As numbers they are then below `lit` and `br.p`, which never point before
+byte 2 of the input, so the fast path, whose refill loads 8 bytes unchecked, is not taken: in a page of
+9 bytes `in_fast` is `s + 1`, and `br.p` is at least `s + 2`. The scratch of coded literals always
+has its 16 bytes of room. Until 23rd October 2026 a `?:` set `in_fast` to 0 for an input shorter than
+8 bytes, which the compare already covered (commit `3ae2e09`).
 
 The end comes when the bytes the page still needs, `d_end - d`, are the literals left, `lit_end - lit`:
 no match fits then, since every match has at least 4 bytes, and the literals left are the last sequence
@@ -276,7 +281,7 @@ it can be smaller than a page. The first `next_token()` finds `count = 0` and re
 
 ## The loop: escape, then the offset without a branch {#ch-decode--offset}
 
-@listing src/seqlz_decompress.c 470-485
+@listing src/seqlz_decompress.c 472-487
 
 The loop ends with the `break` when the literals left fill the page, or with `return -EINVAL`. Only
 {{ch14.tokens_coded}} of the {{const.TOKEN_SYMBOLS}} tokens have a code of their own in the 4 KiB tables;
@@ -291,7 +296,7 @@ like any other. E.g. token 513, {{ch14.t513.ll}} literal and a match of {{ch14.t
 {{ch14.t513.raw_bits}} offset bit; `token_entry(513, 0)` is `{{ch14.t513.entry}}`.
 @assert tok.len[513] == 0 and ch14.t513.N == 0
 
-@listing src/seqlz_decompress.c 486-497
+@listing src/seqlz_decompress.c 488-499
 
 This is what [chapter 7](#ch-internal--token-entry) built the entry for: the offset in three shifts and a
 select. `<< TOK_N` shifts the code out, `>> back`, with `back = 64 - raw_bits`, brings the offset bits to
@@ -318,17 +323,17 @@ bits of a shift count. Before 3rd October 2026 the entry had 2 bytes, and the de
 the offset bits and the shift at run time: 18 of about 60 instructions per sequence on the A55. The
 entries of 4 bytes took the decoder there from 16 547 to 15 539 instructions per page, the length value
 flag in bit 30 to 15 129
-([explored-designs.md](https://github.com/martinus/quetschn/blob/main/docs/explored-designs.md#seqlzs-decoder-for-an-in-order-core-15-fewer-instructions-07-to-08-µs-less-at-cold-p99-on-the-a55-kept)).
+([explored-designs.md](https://github.com/martinus/seqlz/blob/main/docs/explored-designs.md#seqlzs-decoder-for-an-in-order-core-15-fewer-instructions-07-to-08-µs-less-at-cold-p99-on-the-a55-kept)).
 `TOK_ML` is `ml` itself, 4 to 35.
 
 ## The fast path {#ch-decode--fast}
 
-@listing src/seqlz_decompress.c 498-529
+@listing src/seqlz_decompress.c 500-533
 
 Each part of the condition lets the body skip a check. Bit 30 of the entry, `TOK_VALUE_AT`, says that no
 length value follows, so `nl` is at most 14 and `len` at most 34; one test instead of two compares, and
 without it the A55 read raw pages 0.2 µs slower
-([explored-designs.md](https://github.com/martinus/quetschn/blob/main/docs/explored-designs.md#five-simplifications-measured-in-the-vm-and-on-the-phone-the-literal-streams-as-arrays-kept-four-not)).
+([explored-designs.md](https://github.com/martinus/seqlz/blob/main/docs/explored-designs.md#five-simplifications-measured-in-the-vm-and-on-the-phone-the-literal-streams-as-arrays-kept-four-not)).
 The other three are the rooms above.
 
 The page's last match never takes the fast path: after it fewer than 8 bits are left, and the fast path
@@ -352,15 +357,15 @@ checks `lit > lit_end` first, and only the slow path ends the loop, so the page 
 The first fast path, in September 2026, needed a check of `nl` that no test covered: without it `lit`
 ran past the literals, the slow path computed `lit_end - lit` as a negative number, cast to unsigned, so
 every `nl` passed, and `copy_literals()` read behind the input. A test builds such a page since then
-([explored-designs.md](https://github.com/martinus/quetschn/blob/main/docs/explored-designs.md#zram-prefetch-the-compressed-data-before-decompression)).
+([explored-designs.md](https://github.com/martinus/seqlz/blob/main/docs/explored-designs.md#zram-prefetch-the-compressed-data-before-decompression)).
 When the check left the fast path on purpose, the `lit > lit_end` of the slow path came with it; without
 it, AddressSanitizer reported a heap overflow in that test
-([explored-designs.md](https://github.com/martinus/quetschn/blob/main/docs/explored-designs.md#seqlzs-decoder-for-an-in-order-core-15-fewer-instructions-07-to-08-µs-less-at-cold-p99-on-the-a55-kept)).
+([explored-designs.md](https://github.com/martinus/seqlz/blob/main/docs/explored-designs.md#seqlzs-decoder-for-an-in-order-core-15-fewer-instructions-07-to-08-µs-less-at-cold-p99-on-the-a55-kept)).
 :::
 
 ## The slow path: length values, and every check {#ch-decode--slow}
 
-@listing src/seqlz_decompress.c 530-541
+@listing src/seqlz_decompress.c 534-545
 
 An `ll` of 15 means a literal length value follows the offset bits
 ([chapter 4](#ch-format--length-values)); the refill makes sure of the 20 or 22 bits `seqlz_br_value()`
@@ -370,9 +375,9 @@ With `deltas`, `undelta_literals()` restores exactly the `nl` literals, again be
 changes.
 Until 11th October 2026 the last sequence had a token too, with a match of nothing, and the decoder checked
 for it here; it said what the decoder knew already and cost about 1.2 bytes per page
-([explored-designs.md](https://github.com/martinus/quetschn/blob/main/docs/explored-designs.md#the-last-sequence-without-a-token-12-bytes-per-page-less-kept)).
+([explored-designs.md](https://github.com/martinus/seqlz/blob/main/docs/explored-designs.md#the-last-sequence-without-a-token-12-bytes-per-page-less-kept)).
 
-@listing src/seqlz_decompress.c 542-563
+@listing src/seqlz_decompress.c 546-567
 
 With 4 KiB pages a match length value is at most {{ch14.max_value}}, so `len` can be {{ch14.max_len}},
 more than a page, which the check of room catches. `last` is set before the checks; if they fail, it does
@@ -382,7 +387,7 @@ left.
 
 ## The end: a page must end where its bits end {#ch-decode--end}
 
-@listing src/seqlz_decompress.c 564-581
+@listing src/seqlz_decompress.c 568-586
 
 When the loop is left, the literals left are exactly the bytes the page still needs, so the copy fills the
 page and uses every literal. A page with deltas restores them as any sequence's literals, the last
@@ -394,15 +399,18 @@ most `lit_end`. A page of literals only jumps there with `d` at `dst` and `lit_e
 it moved `lit` on by `nl`. Until 22nd October 2026 the call had a guard `lit <= lit_end` and the
 `min()` of the two counts, which changed nothing on either way (commit `753a707`). A `memcpy()`
 here, a call instead of a second inlined copy loop, made the swap-in 0.02 µs slower in the kernel VM, at the edge of what the boots differ by
-([explored-designs.md](https://github.com/martinus/quetschn/blob/main/docs/explored-designs.md#the-last-sequence-without-a-token-12-bytes-per-page-less-kept)).
+([explored-designs.md](https://github.com/martinus/seqlz/blob/main/docs/explored-designs.md#the-last-sequence-without-a-token-12-bytes-per-page-less-kept)).
 The checks then make sure the input has nothing else to say:
 
 | check | rejects |
 | --- | --- |
-| `br.count < 0` | a page cut short: the reader filled in zeros |
+| `(unsigned int)br.count >= 8U`, `count` negative | a page cut short: the reader filled in zeros |
+| `(unsigned int)br.count >= 8U`, `count` 8 or more | a whole byte after the last code, also a zero byte |
 | `br.p != br.end` | bytes of the bitstream never read |
-| `br.count >= 8` | a whole byte after the last code, also a zero byte |
-| `br.count > 0 && (br.end[-1] & ...)` | a bit 1 in the padding of the last byte |
+| `br.end[-1] & ((1U << br.count) - 1U)` | a bit 1 in the padding of the last byte |
+
+A negative `count` wraps to more than 8 as an `unsigned int`, so one compare covers both, and for
+`count` 0 the mask is 0; until 23rd October 2026 these were three compares of `count` (commit `3ae2e09`).
 
 A header with more literals than the sequences use fails before, in a check of room. The padding is read
 from `br.end[-1]` and not from the register, which would be a shift by `64 - count`, 64 for
@@ -413,13 +421,13 @@ on 8th October 2026; the compressor always wrote pages that pass.
 
 Constraint C6 of the project is a decoder that is safe and bounded in time for any input; a decoder that
 was not was one of the reasons a compressor for zram was not merged before
-([plan.md](https://github.com/martinus/quetschn/blob/main/docs/plan.md#1-goal-and-success-criteria)).
+([plan.md](https://github.com/martinus/seqlz/blob/main/docs/plan.md#1-goal-and-success-criteria)).
 For any bytes and any `src_len`:
 
 - **The input.** The header after `src_len >= 2`, raw literals after `2 + n_lit <= src_len`, coded ones
   in `seqlz_decode_literals()`. The bitstream's 8-byte loads run only with 8 bytes left, by the check in
   `seqlz_br_refill()` or by `br.p <= in_fast`, and move `br.p` by at most 7; the byte loop checks every
-  byte. `br.end[-1]` only after a byte was read.
+  byte. `br.end[-1]` is a byte of the input, which has at least 2.
 - **The literals.** The fast path reads 16 bytes only at `lit <= lit_bound - 16` and moves `lit` by at most
   14; the slow path checks `lit` and `nl` first, and `copy_literals()` stays below `lit_bound`.
 - **The tables.** 11 bits index 2048 token entries, 8 bits 256 length entries; an escaped token's number
@@ -437,18 +445,20 @@ For any bytes and any `src_len`:
   the limits that could fall before one are numbers, and counts that may go negative are `int`.
 - **Time.** Every round writes a match of at least 4 bytes inside the page, so after at most
   {{ch14.max_rounds}} rounds the page is full, and each round's work is bounded by the bytes it writes.
+  A page's own table takes at most 1024 + 257 steps of `read_own_table()`, whatever `src_len` is
+  ([chapter 13](#ch-literals-dec--own)).
 @assert ch14.max_rounds == 1024
 
 The slowest valid page found is made up: a match of 4 bytes at an offset below 8 in every sequence, every
 token escaped, 1022 sequences. It takes 107 099 instructions on arm64 and 71 468 cycles on the A55, about
 40 µs at 1.8 GHz. Counted in instructions, the costliest valid pages found take 1.59 times the p99 of real
 pages with `seqlz-2`, against 2.58 times for `lz4`; timed on the A55, 1.33 against 1.57
-([explored-designs.md](https://github.com/martinus/quetschn/blob/main/docs/explored-designs.md#the-worst-case-the-slowest-pages-found-cost-13-times-the-p99-of-real-ones-as-for-lz4)).
+([explored-designs.md](https://github.com/martinus/seqlz/blob/main/docs/explored-designs.md#the-worst-case-the-slowest-pages-found-cost-13-times-the-p99-of-real-ones-as-for-lz4)).
 The argument is checked by fuzz targets under the sanitizers and a second decoder written from
 `docs/format.md` alone ([chapter 15](#ch-zram-glue--fuzzing)). On 9th October 2026, 12 instances of AFL++
 ran for 2 hours: 1.42 billion inputs on the decoder, 1.94 billion on the decoder against the reference,
 nothing found
-([plan.md](https://github.com/martinus/quetschn/blob/main/docs/plan.md#phase-4-reference-implementation-format-spec-fuzzing-20-weeks)).
+([plan.md](https://github.com/martinus/seqlz/blob/main/docs/plan.md#phase-4-reference-implementation-format-spec-fuzzing-20-weeks)).
 
 ## The example page, sequence by sequence {#ch-decode--example}
 
@@ -499,17 +509,17 @@ value, or come in the last 8 bytes of the input.
 ## What is left {#ch-decode--limits}
 
 In a swap-in in the kernel VM, decompression is 2.0 µs of `seqlz-2`'s cold swap-in, against
-1.4 µs for `lz4` ([plan.md](https://github.com/martinus/quetschn/blob/main/docs/plan.md#11-the-score-memory-against-time-not-bars)),
+1.4 µs for `lz4` ([plan.md](https://github.com/martinus/seqlz/blob/main/docs/plan.md#11-the-score-memory-against-time-not-bars)),
 and most of the difference is branch mispredictions on a page the CPU has not seen: about 110 more per page
 than when the same page was decoded just before
-([explored-designs.md](https://github.com/martinus/quetschn/blob/main/docs/explored-designs.md#the-decoder-in-a-fault-found-110-branch-mispredictions-per-page-that-a-decode-of-the-same-page-before-hides)).
+([explored-designs.md](https://github.com/martinus/seqlz/blob/main/docs/explored-designs.md#the-decoder-in-a-fault-found-110-branch-mispredictions-per-page-that-a-decode-of-the-same-page-before-hides)).
 The refill's branch is gone from the fast path. The next largest are the fast path's condition, about 23
 misses per page, and the test `off >= 8`, 19. The condition misses once for every sequence with a length
 value, which is data, and four ways around it were slower
-([explored-designs.md](https://github.com/martinus/quetschn/blob/main/docs/explored-designs.md#the-fast-paths-condition-its-22-misses-per-page-are-the-length-values-four-ways-around-them-slower-not-kept)).
+([explored-designs.md](https://github.com/martinus/seqlz/blob/main/docs/explored-designs.md#the-fast-paths-condition-its-22-misses-per-page-are-the-length-values-four-ways-around-them-slower-not-kept)).
 One copy for every offset instead of the test took out 12 misses per page and cost 10 to 19 instructions
 per fast sequence, which was more
-([explored-designs.md](https://github.com/martinus/quetschn/blob/main/docs/explored-designs.md#the-offset-below-8-one-copy-for-every-offset-saves-12-misses-per-page-and-costs-more-not-kept)).
+([explored-designs.md](https://github.com/martinus/seqlz/blob/main/docs/explored-designs.md#the-offset-below-8-one-copy-for-every-offset-saves-12-misses-per-page-and-costs-more-not-kept)).
 Fewer length values would need a wider token, a change of the format that was not tried. And the one loop
 for all cores costs the in-order A55 up to about 0.3 µs per warm read, the price of not asking the CPU
 which core it is.

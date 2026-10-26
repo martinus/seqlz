@@ -6,17 +6,17 @@ On the pages a desktop swapped into zram, `seqlz-2` stores a page in 24% fewer b
 one. `zstd` stores pages 4% smaller still, for twice the time to write and about twice the time to
 read. Measured in the real kernel in a virtual machine on a Ryzen 9 7950X fixed at 4.5 GHz, on 14th
 October 2026; the setup is in
-[`docs/seqlz.md`](https://github.com/martinus/quetschn/blob/main/docs/seqlz.md#the-result-lz4s-time-zstds-size-almost).
+[`docs/seqlz.md`](https://github.com/martinus/seqlz/blob/main/docs/seqlz.md#the-result-lz4s-time-zstds-size-almost).
 Level 3, `seqlz-3`, searches a little longer and gives a page a literal table of its own where that
 pays: on the Mi 9T's Cortex-A76, in the phone's own kernel on 15th October 2026, it stored pages in
 952.0 bytes of zsmalloc memory against 951.4 for `zstd` 3, and wrote one in about 16 µs against
 `zstd` 3's 36 µs
-([explored-designs.md](https://github.com/martinus/quetschn/blob/main/docs/explored-designs.md#level-3-a-lazy-matcher-and-a-literal-table-of-the-pages-own-zstd-3s-memory-in-less-than-half-its-time-on-the-phone-kept)).
+([explored-designs.md](https://github.com/martinus/seqlz/blob/main/docs/explored-designs.md#level-3-a-lazy-matcher-and-a-literal-table-of-the-pages-own-zstd-3s-memory-in-less-than-half-its-time-on-the-phone-kept)).
 Since 21st October 2026 level 3 also stores each literal as its delta to an earlier byte of the page,
 the literal minus that byte, before it codes them: 869.7 instead of 915.6 bytes per page on ten samples
 of 20 000 pages, 5.0% fewer, for about 4 µs more to write a page on the Mi 9T's A76, in userspace
-([explored-designs.md](https://github.com/martinus/quetschn/blob/main/docs/explored-designs.md#level-3-stores-its-literals-as-deltas-not-xors-084-fewer-bytes-than-the-xor-kept),
-[one rule](https://github.com/martinus/quetschn/blob/main/docs/explored-designs.md#one-rule-for-which-literals-are-deltas-045-fewer-bytes-a-simpler-spec-kept)).
+([explored-designs.md](https://github.com/martinus/seqlz/blob/main/docs/explored-designs.md#level-3-stores-its-literals-as-deltas-not-xors-084-fewer-bytes-than-the-xor-kept),
+[one rule](https://github.com/martinus/seqlz/blob/main/docs/explored-designs.md#one-rule-for-which-literals-are-deltas-045-fewer-bytes-a-simpler-spec-kept)).
 
 All of that is {{ch00.src_lines|grp}} lines of C in one directory, `src/`, plus the trained code
 lengths in four `.inc` files, two for each page size.
@@ -24,7 +24,7 @@ lengths in four `.inc` files, two for each page size.
 This book goes through every one of those lines, in pieces as they are in the repository, and after
 each piece says what it does that is not plain from the C, and why it is written this way. The "why"
 is mostly a measurement: the repository logs every design it tried, also the ones that lost, in
-[`docs/explored-designs.md`](https://github.com/martinus/quetschn/blob/main/docs/explored-designs.md),
+[`docs/explored-designs.md`](https://github.com/martinus/seqlz/blob/main/docs/explored-designs.md),
 and the book links to it wherever a line has a number behind it.
 
 ## Who this is for {#preface--who}
@@ -101,7 +101,7 @@ name `a2d57dd` of 10th October 2026, an older commit, for a count or a layout ta
 in the kernel's style: tabs of 8 columns, lines within 80 columns.
 
 **4 KiB pages unless said otherwise.** seqlz compresses one block at a time, for zram one page. In
-`src/` a block is 4 KiB or 16 KiB, as `QUETSCHN_PAGE_BITS` is 12 or 14. Linux on x86-64 and on most
+`src/` a block is 4 KiB or 16 KiB, as `SEQLZ_PAGE_BITS` is 12 or 14. Linux on x86-64 and on most
 phones has 4 KiB pages, and the kernel's copy of seqlz compresses blocks of 4 KiB only, whatever the
 page size. The book says page where the block is zram's page, which is almost everywhere, and where
 16 KiB pages change something, the text says so.
@@ -120,7 +120,7 @@ are from the day they were made; the code and the tables changed since, so a num
 or a phone had in zram, and a number is the mean over the dumps it was measured on. A **point** is 1%
 of a page, 41 bytes on 4 KiB pages. "0.3% smaller" is a share of the stored size, the bytes zram
 spends on the pages ([chapter 1](#ch-zram--size-classes)). A number like
-[#153](https://github.com/martinus/quetschn/issues/153) is an issue of the project on GitHub.
+[#153](https://github.com/martinus/seqlz/issues/153) is an issue of the project on GitHub.
 
 **`src/` is not exactly what the kernel gets.** A script, `tools/kernel-port/port.py`, generates the
 kernel's copy from `src/`: it replaces the compatibility header with the kernel's own headers, drops

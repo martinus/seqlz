@@ -1,8 +1,8 @@
 /*
- * lit_cost() of chapter 11 on stream 0 of chapter 16's page: one 64-bit add per literal sums its code
+ * lit_sums() of chapter 11 on stream 0 of chapter 16's page: one 64-bit add per literal sums its code
  * lengths in all 8 tables, in 8 lanes of 8 bits; after 25 literals the lanes move into 16-bit lanes
  * before they can overflow. As a choice, the same adds without that move, until a lane overflows.
- * Data: anim/pricing.c, the real tables and lit_cost().
+ * Data: anim/pricing.c, the real tables and lit_sums().
  */
 BookAnim.define('pricing', function (ctx) {
   var D = ctx.data, LIT = D.lit, N = LIT.length, RUN = D.run, S = 8, T = 8;

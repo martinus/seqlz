@@ -196,7 +196,7 @@ The zero byte has a 2-bit code in tables 1 and 4, which are for pages with many 
 
 `lit_cost` is one word of 8 lanes per byte value, as byte 2 of the format holds the number of fixed
 tables at 8. `LIT_COST_RUN` is `255 / 10 = 25`: 25 codes of at most 10 bits sum
-to at most 250, 26 could carry into the next lane. So `lit_cost()` ([chapter 11](#ch-literals-enc))
+to at most 250, 26 could carry into the next lane. So `lit_sums()` ([chapter 11](#ch-literals-enc))
 adds 25 literals per stream into 8-bit lanes, then spreads them into two words of 16-bit lanes with
 the mask `0x00ff00ff00ff00ff` and starts again, every 200 literals of the page.
 
@@ -332,7 +332,7 @@ decode loop went from 16 547 to 15 539 instructions per page and from 16 247 to 
 phone pages. The bit for "a length value follows" saved another 410 instructions and no cycles: there
 the chain from one token's lookup to the next was the limit. The table grew from 4 KiB to 8 KiB, which
 did not make cold reads slower. That was 3rd October 2026, commit `5c769f5`
-([explored-designs.md](https://github.com/martinus/quetschn/blob/main/docs/explored-designs.md#seqlzs-decoder-for-an-in-order-core-15-fewer-instructions-07-to-08-µs-less-at-cold-p99-on-the-a55-kept)).
+([explored-designs.md](https://github.com/martinus/seqlz/blob/main/docs/explored-designs.md#seqlzs-decoder-for-an-in-order-core-15-fewer-instructions-07-to-08-µs-less-at-cold-p99-on-the-a55-kept)).
 :::
 
 The entry, bit 31 on the left, for token 2098 with its {{tok.len.2098}}-bit code and for the escape
@@ -417,7 +417,7 @@ register, and their mask of 63 is again a proof for the compiler that the shift 
 
 ## token_entry(): the fields from a token's number {#ch-internal--token-entry-code}
 
-@listing src/seqlz_tables.h 169-184
+@listing src/seqlz_tables.h 169-185
 
 `token_entry(s, n)` is the entry for token `s` with a code of `n` bits. It is in the header because
 two files call it: `build_token()` ([chapter 8](#ch-codes--build-token)) fills the table with it, and
@@ -475,7 +475,7 @@ ${{tok.len.2098}} + 5 = {{ch07.tok.2098.DROP}}$, `LL` {{ch07.tok.2098.LL}}, `ML`
 {{ch07.tok.2098.ML}}. The decoder uses it on these lines of `decode_block()`, the body of `seqlz_decode()`
 ([chapter 14](#ch-decode)):
 
-@listing src/seqlz_decompress.c 491-495
+@listing src/seqlz_decompress.c 493-497
 
 Say the register holds the code, then `{{ch07.reg_raw_bits}}`, then whatever follows:
 `{{ch07.reg}}`, the first bit of the stream as bit 63. The top 11 bits are `{{ch07.reg_index_bits}}`,
@@ -512,7 +512,7 @@ The escape's {{tok.len.3072}}-bit code `{{tok.code.3072}}` fills the indices {{c
 to {{ch07.tok.3072.last}} with `1U << 31 | {{tok.len.3072}} << 14 = {{ch07.tok.3072.entry}}`, the
 lower row of the diagram. The decoder handles it before everything else:
 
-@listing src/seqlz_decompress.c 473-485
+@listing src/seqlz_decompress.c 475-487
 
 Token 1797, 5 literals and a match of 20 at a class 3 offset, has no code. The encoder writes the
 escape's `{{tok.code.3072}}`, 1797 in 12 bits, `{{ch07.esc1797.bits}}`, and then the offset, say 1000,

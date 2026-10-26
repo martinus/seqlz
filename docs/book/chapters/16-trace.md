@@ -169,7 +169,7 @@ matcher emits {{ch16.s.98.ml}} bytes at offset {{ch16.s.98.off}} and then {{ch16
 {{ch16.s.99.off}}, {{ch16.s.98_99_bits}} bits. A table with the 2 newest positions per hash in the same
 8 KiB saved 11 bytes per page in the zsmalloc model, for 4400 to 4700 more compression cycles, about
 1 µs per page written: at the edge of what the score accepts, and dropped without a run in the kernel VM
-([explored-designs.md](https://github.com/martinus/quetschn/blob/main/docs/explored-designs.md#seqlz-fast-lit-by-the-score-no-budget-offsets-in-steps-of-8)).
+([explored-designs.md](https://github.com/martinus/seqlz/blob/main/docs/explored-designs.md#seqlz-fast-lit-by-the-score-no-budget-offsets-in-steps-of-8)).
 :::
 @assert ch16.s[24].ll == 0 and ch16.s[24].ml == 16 and ch16.s[24].off == 192 and ch16.s[98].pos == 1040 and ch16.s[98].off == 64 and ch16.s[99].off == 192
 
@@ -602,7 +602,7 @@ it can be linked next to the original. `sed` makes it. From the root of the repo
 and gcc, `trace.c` in the current directory:
 
 ```text
-R=/path/to/quetschn
+R=/path/to/seqlz
 sed -e 's/^#include "seqlz.h"$/&\nunsigned int n_fast, n_slow;\n#define seqlz_decode seqlz_decode_counted/' \
     -e 's/^\t\t\ttok = next_token_fast(/\t\t\tn_fast++;\n&/' \
     -e 's|^\t\t/\* the slow path: length values, and every check \*/$|&\n\t\tn_slow++;|' \
@@ -623,7 +623,7 @@ The page was built for the walk and is not typical. On a desktop's zram pages, i
 tables of 7th October 2026, `seqlz-2` stored a page in 1161.0 bytes of zsmalloc memory on average
 and `seqlz-1` in 1298.1, so coded literals saved 137 bytes per page, against {{ch16.zs.saved}} on this
 page
-([explored-designs.md](https://github.com/martinus/quetschn/blob/main/docs/explored-designs.md#the-score-with-the-swap-times-seqlz-fast-lits-range-ends-at-155-and-211-bytes-per-µs-instead-of-200-and-279)).
+([explored-designs.md](https://github.com/martinus/seqlz/blob/main/docs/explored-designs.md#the-score-with-the-swap-times-seqlz-fast-lits-range-ends-at-155-and-211-bytes-per-µs-instead-of-200-and-279)).
 Without the text, this page gains nothing.
 
 At level 3, `seqlz-3`, the same page is {{slab.l3.len}} bytes, {{slab.coded.len}} at level 2. The

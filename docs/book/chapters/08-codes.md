@@ -41,7 +41,7 @@ symbol {{k16.ch08.le_last_symbol}} has {{k16.ch08.le_last_extra}}, which still f
 
 `first_codes()` is the rule of [chapter 2](#ch-compression--canonical-codes), the one of deflate
 (RFC 1951, section 3.2.2) that
-[`docs/format.md`](https://github.com/martinus/quetschn/blob/main/docs/format.md#prefix-codes)
+[`docs/format.md`](https://github.com/martinus/seqlz/blob/main/docs/format.md#prefix-codes)
 specifies: `next[l]` is the first code of length `l`, and the builders hand out `next[l]`,
 `next[l] + 1`, ... to the symbols of that length, in symbol order. `c = (c + of_len[l - 1]) << 1` is
 `first[l] = (first[l-1] + count[l-1]) * 2`; `of_len[0]` counted the symbols without a code and is set
@@ -106,7 +106,7 @@ the table; [chapter 3](#ch-cpu--msb-first) has the cache lines and the measureme
 belongs here: on the Mi 9T's A76, leaving the token table out of the prefetches, as the decoder then
 did on that core, made cold reads 1.3 to 2.6 µs faster in every run once the codes were ranges, and
 only in some builds before
-([explored-designs.md](https://github.com/martinus/quetschn/blob/main/docs/explored-designs.md#the-sequences-bitstream-most-significant-bit-first-the-token-tables-codes-in-one-range-on-every-cpu-kept)).
+([explored-designs.md](https://github.com/martinus/seqlz/blob/main/docs/explored-designs.md#the-sequences-bitstream-most-significant-bit-first-the-token-tables-codes-in-one-range-on-every-cpu-kept)).
 
 ## build_values(): the same, for length values {#ch-codes--build-values}
 
@@ -146,7 +146,7 @@ table 7 is undefined. For byte `0x65` the 8 lanes are `{{ch08.lit101_row}}`, whi
 
 ## build_own(): the code of OWN, and quad[] by decoding every byte {#ch-codes--own}
 
-@listing src/seqlz_codes.c 142-166
+@listing src/seqlz_codes.c 142-167
 
 `OWN` is the fixed code a page's own literal table is written in ([chapter 4](#ch-format--own)), and
 its lengths are not in `struct seqlz_lengths` either: `seqlz_own_lengths` is generated into the same
@@ -157,7 +157,7 @@ broken, and then `seqlz_tables_build()` fails as for any table. Unlike the other
 `-EINVAL` too: the encoder may write any symbol of `OWN`, so each needs a code, and the loop would read
 `next[0]`, which `first_codes()` never sets.
 
-@listing src/seqlz_codes.c 167-210
+@listing src/seqlz_codes.c 168-212
 
 `quad[k]` is filled by decoding the 8 bits `k` with the `decode[]` just built, symbol after symbol, as
 far as the 8 bits go. `w` is what is left of `k` after `pos` bits, moved to the top, with zeros below;
@@ -186,7 +186,7 @@ also where the entry has no second length, and then it must move by the first's 
 
 ## has_all_symbols(): can the encoder write every page {#ch-codes--all-symbols}
 
-@listing src/seqlz_codes.c 212-230
+@listing src/seqlz_codes.c 214-232
 
 The decoder can use any complete prefix code: a symbol left out cannot be in a valid page. The encoder
 gets whatever page zram hands it and needs a code for every symbol that page might need: each token a
@@ -200,7 +200,7 @@ complete `ml` table whose last symbol has no code: the decoder could use it, and
 
 ## seqlz_tables_build(): all of it, from a clean slate {#ch-codes--init}
 
-@listing src/seqlz_codes.c 232-251
+@listing src/seqlz_codes.c 234-253
 
 The `memset()` does more than the comment says: tokens without a code need `enc[]` 0, the encoder's
 masked index could reach the entries behind the last length symbol, `lit_cost` is built with `|=`,
@@ -275,9 +275,9 @@ and for each literal table how many pages it codes:
 
 `tools/seqlz-ref/check.sh`, in CI, generates all four `.inc` files again and fails if one differs by a
 byte. `seqlz_ref.py`, the decoder written from the spec, checks the SHA-256 of every table against
-[`docs/format.md`](https://github.com/martinus/quetschn/blob/main/docs/format.md#where-the-tables-come-from),
+[`docs/format.md`](https://github.com/martinus/seqlz/blob/main/docs/format.md#where-the-tables-come-from),
 e.g. `{{ch08.tok4k_sha}}...` for the 4 KiB token table, and the test `seqlz_train` checks that
-`quetschn-seqlz-train --from-counts` in C++ gives the same tables.
+`seqlz-train --from-counts` in C++ gives the same tables.
 
 ::: try Check a table's hash yourself
 From the repository's root:
@@ -298,7 +298,7 @@ Xiaomi Mi 9T under memory pressure, the resident pages of a desktop and 200 000 
 of 28th September ([chapter 4](#ch-format--tables)). On two test sessions of the phone, with web sites
 none of the training sessions loaded, `seqlz-2` stores up to 1.7% less than with the tables
 before, and the phone dump of 3rd October, which the tables before were trained on, 1.8% more
-([explored-designs.md](https://github.com/martinus/quetschn/blob/main/docs/explored-designs.md#the-tables-trained-on-phone-sessions-up-to-17-smaller-on-them-an-old-phone-dump-18-larger)).
+([explored-designs.md](https://github.com/martinus/seqlz/blob/main/docs/explored-designs.md#the-tables-trained-on-phone-sessions-up-to-17-smaller-on-them-an-old-phone-dump-18-larger)).
 Nearly all of it is in the literal tables. The counts cannot give a page back: the token and length
 counts are sums over all pages, each literal table's over at least
 {{ch08.counts4k.lit_min_pages|grp}} pages, and a count says nothing about which symbol came after which.
@@ -354,10 +354,10 @@ generator makes from the line `own` of the counts ([chapter 4](#ch-format--table
 k-means trained on the resident pages of a desktop and priced on its zram pages, as the share of
 `seqlz-1`'s output saved: 1 table 6.8%, 4 tables 9.2%, 8 tables of 10 bits 11.4%, 16 tables
 11.9%, 64 tables 12.9%
-([explored-designs.md](https://github.com/martinus/quetschn/blob/main/docs/explored-designs.md#seqlz-fast-lit-one-of-8-literal-tables-per-page)).
+([explored-designs.md](https://github.com/martinus/seqlz/blob/main/docs/explored-designs.md#seqlz-fast-lit-one-of-8-literal-tables-per-page)).
 16 tables were built and measured in the kernel VM: 5 bytes per page less, and twice the decode
 tables made cold reads 0.27 µs slower, so they were dropped
-([explored-designs.md](https://github.com/martinus/quetschn/blob/main/docs/explored-designs.md#seqlz-fast-lit-by-the-score-no-budget-offsets-in-steps-of-8)).
+([explored-designs.md](https://github.com/martinus/seqlz/blob/main/docs/explored-designs.md#seqlz-fast-lit-by-the-score-no-budget-offsets-in-steps-of-8)).
 :::
 
 ## Fixed tables, part of the format {#ch-codes--fixed}
@@ -374,6 +374,6 @@ emulator with 16 KiB pages. They give {{k16.ch08.tok.coded}} tokens a code, with
 {{k16.tok.len.3072}}-bit escape, below that page size's limit of $31 - 14 - 12 = 5$ bits. On pages of
 the emulator that were not in the training, they made `seqlz-2` 2.6% smaller than the 16 KiB
 tables before them, which were trained on desktop pages
-([explored-designs.md](https://github.com/martinus/quetschn/blob/main/docs/explored-designs.md#android-17-in-the-emulator-the-4-kib-tables-fit-the-16-kib-ones-trained-again-26-smaller)).
+([explored-designs.md](https://github.com/martinus/seqlz/blob/main/docs/explored-designs.md#android-17-in-the-emulator-the-4-kib-tables-fit-the-16-kib-ones-trained-again-26-smaller)).
 That is one emulator and no real phone, and the format for 16 KiB pages is not fixed yet
-([format.md](https://github.com/martinus/quetschn/blob/main/docs/format.md#status)).
+([format.md](https://github.com/martinus/seqlz/blob/main/docs/format.md#status)).

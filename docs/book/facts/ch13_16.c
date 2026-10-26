@@ -108,7 +108,7 @@ static void ch14_constants(void) {
     fact_num("ch13.k.rounds", SEQLZ_LIT_ROUNDS);
     fact_num("ch13.k.streams", SEQLZ_LIT_STREAMS);
     fact_num("ch13.k.lit_bits", SEQLZ_LIT_BITS);
-    fact_num("ch14.need", SEQLZ_TOKEN_BITS + QUETSCHN_PAGE_BITS);
+    fact_num("ch14.need", SEQLZ_TOKEN_BITS + SEQLZ_PAGE_BITS);
     fact_num("ch14.class3_bits", SEQLZ_RAW_BITS(3));
     for (s = 0, off = 0; s < SEQLZ_OFF_CLASSES; s++)
         if (SEQLZ_RAW_BITS(s) > off)
@@ -213,7 +213,7 @@ static void ch14_slow(void) {
     ch14_recs[ch14_n - 1].slow = 1;
 }
 
-#if QUETSCHN_PAGE_BITS == 12
+#if SEQLZ_PAGE_BITS == 12
 
 /* ---- chapter 13: the literal streams of chapter 11's page */
 
@@ -1228,7 +1228,7 @@ static void ch16(void) {
 
 int main(void) {
     ch14_constants();
-#if QUETSCHN_PAGE_BITS == 12
+#if SEQLZ_PAGE_BITS == 12
     ch13();
     ch14();
     ch16();

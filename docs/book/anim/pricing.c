@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT OR GPL-2.0-only
 /*
  * pricing.c: the data of the animation "pricing" in chapter 11. Compresses chapter 16's page with raw
- * literals, prices its literals with the encoder's own lit_cost(), and prints as JSON: the literals,
+ * literals, prices its literals with the encoder's own lit_sums(), and prints as JSON: the literals,
  * the code lengths in all 8 tables of each byte value they use (from seqlz_tables.lit_cost), each stream's bits
  * in each table (lit_bits()), and the table seqlz_compress() picked for the page.
  */
@@ -26,7 +26,7 @@ int main(void) {
         return 1;
     n_lit = get_unaligned_le16(raw);
     lit = raw + SEQLZ_HEADER;
-    lit_cost(lit, n_lit, even, odd, NULL);
+    lit_sums(lit, n_lit, even, odd, NULL);
     /* each table's lane must be the sum of the code lengths of the stream's literals */
     for (j = 0; j < SEQLZ_LIT_STREAMS; j++)
         for (k = 0; k < SEQLZ_LIT_SETS; k++) {
@@ -35,7 +35,7 @@ int main(void) {
             for (i = j; i < n_lit; i += SEQLZ_LIT_STREAMS)
                 b += seqlz_tables.lit[k].enc[lit[i]] & 63U;
             if (b != lit_bits(even, odd, j, k)) {
-                fprintf(stderr, "pricing.c: lit_cost() disagrees with the tables\n");
+                fprintf(stderr, "pricing.c: lit_sums() disagrees with the tables\n");
                 return 1;
             }
         }

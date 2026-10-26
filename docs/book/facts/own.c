@@ -285,7 +285,7 @@ static void encoder_facts(const struct seqlz_tables* t) {
     lits = dst + SEQLZ_HEADER;
     /* seqlz_code_literals()' first steps, with the counts for the page's own table */
     memset(w->freq, 0, sizeof w->freq);
-    lit_cost(lits, n_lit, even, odd, w->freq);
+    lit_sums(lits, n_lit, even, odd, w->freq);
     for (k = 0; k < SEQLZ_LIT_SETS; k++) {
         unsigned int b = 0;
 

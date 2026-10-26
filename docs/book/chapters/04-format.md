@@ -2,7 +2,7 @@
 
 A page compressed by seqlz is a string of bytes, and zram stores it together with its length. This
 chapter is about those bytes, as
-[`docs/format.md`](https://github.com/martinus/quetschn/blob/main/docs/format.md) specifies them, and
+[`docs/format.md`](https://github.com/martinus/seqlz/blob/main/docs/format.md) specifies them, and
 it is the map for Part II: when `seqlz_decode()` in [chapter 14](#ch-decode) checks the top bit of the
 first two bytes, or [chapter 13](#ch-literals-dec) reads 8 streams of literals, this is where the
 bytes they read are described as a whole.
@@ -192,7 +192,7 @@ A stream holds every 8th literal, and a literal code has at most 10 bits: on a 4
 bytes, 10 bits, on a 16 KiB page 2560 bytes, 12 bits. The largest stream of most pages is below 128
 bytes, 7 bits. With 2 bytes per size, as until 5th October 2026, the header was 19 bytes, and pages
 were 5.3 bytes larger on average
-([explored-designs.md](https://github.com/martinus/quetschn/blob/main/docs/explored-designs.md#stream-sizes-in-as-many-bits-as-the-largest-needs-kept)).
+([explored-designs.md](https://github.com/martinus/seqlz/blob/main/docs/explored-designs.md#stream-sizes-in-as-many-bits-as-the-largest-needs-kept)).
 Widths of 3 and 4 bits are left out: few pages would use them.
 :::
 
@@ -337,11 +337,11 @@ The lengths that pages' own tables have most, 7 to 10 bits, get the shortest cod
 description is in the order of the byte values, so a byte value costs no bits of its own, only its
 length does; `docs/format.md` gives about 0.45 bytes per byte value with a code, 60 to 120 bytes on
 most pages that have a table of their own
-([format.md](https://github.com/martinus/quetschn/blob/main/docs/format.md#a-blocks-own-literal-table)).
+([format.md](https://github.com/martinus/seqlz/blob/main/docs/format.md#a-blocks-own-literal-table)).
 A run of 256 to 511 can never be valid, as a table has only 256 byte values; it is there so that `OWN`
 is complete too. Sent in byte order, with runs, the descriptions made pages 0.5% smaller than the ones
 of 9th October, which listed the bytes by code length, each as its distance to the one before
-([explored-designs.md](https://github.com/martinus/quetschn/blob/main/docs/explored-designs.md#a-pages-own-literal-table-in-the-order-of-the-bytes-decoded-two-lengths-at-a-time-05-smaller-than-by-code-length-reads-29-slower-on-the-a76-kept)). Where its counts come from is [below](#ch-format--tables).
+([explored-designs.md](https://github.com/martinus/seqlz/blob/main/docs/explored-designs.md#a-pages-own-literal-table-in-the-order-of-the-bytes-decoded-two-lengths-at-a-time-05-smaller-than-by-code-length-reads-29-slower-on-the-a76-kept)). Where its counts come from is [below](#ch-format--tables).
 
 The text page above, at level 3, is {{own.text.len}} bytes. Its byte 2 is `{{own.text.t}}`,
 `0b{{own.text.t_bin}}`: code {{own.text.lcode}} and `w = 5 + {{own.text.w5}} = {{own.text.w}}`. The
@@ -411,7 +411,7 @@ full of 4- and 8-byte fields, whose bytes are often those of the field before or
 little, as counters, sizes and addresses of objects in a row do, and the byte after a match often
 differs only a little from the byte the match would have copied next. As deltas, such literals become a
 few small values, which a literal table codes in fewer bits
-([`docs/format.md`](https://github.com/martinus/quetschn/blob/main/docs/format.md#literals-as-deltas)).
+([`docs/format.md`](https://github.com/martinus/seqlz/blob/main/docs/format.md#literals-as-deltas)).
 A delta, not a XOR: a field that grows by 1 from `0x0f` to `0x10` has a delta of 1, but `0x0f` XOR
 `0x10` is `0x1f`, every bit the carry flipped. The first form of `e`, on 21st October 2026, XORed the
 literals; the subtraction replaced it the same day, before it was merged ([chapter 17](#ch-decisions--deltas)).
@@ -547,7 +547,7 @@ Class 0 is the **repeat offset**, the offset of the sequence before, in 0 bits; 
 page it is 1, so class 0 also works for a first match that is a run of one byte. Class 1 is the
 single offset 2, an array of 16-bit values: of the offsets that are not the repeat offset, about 8%
 are 2 on phone and desktop pages, more than any other single offset
-([explored-designs.md](https://github.com/martinus/quetschn/blob/main/docs/explored-designs.md#offset-2-in-1-bit-multiples-of-8-below-2048-in-8-03-to-08-smaller-at-the-same-speed-kept)).
+([explored-designs.md](https://github.com/martinus/seqlz/blob/main/docs/explored-designs.md#offset-2-in-1-bit-multiples-of-8-below-2048-in-8-03-to-08-smaller-at-the-same-speed-kept)).
 Classes 4 and 5 store the offset divided by 8, for the pointers and 8-byte fields of memory: class 4
 in 3 bits less than class 2, class 5 in 4 bits less than class 3 on 4 KiB pages and 6 less on 16 KiB
 pages. A multiple of 8 from 2048 on goes to class 3. An offset must be 1 to the number of bytes
@@ -574,15 +574,15 @@ the class with the fewest offset bits that holds it, chosen in `seqlz_off_class(
 Offsets were once a Huffman-coded symbol for their number of bits, followed by the bits. Moving the
 class into the token, with plain bits after it, cost 0.4 points of memory and took the decoder from
 8758 to 8168 cycles per page: one table lookup on the chain from one token to the next, not two
-([explored-designs.md](https://github.com/martinus/quetschn/blob/main/docs/explored-designs.md#seqlz-third-decoder-round-one-repeat-offset-offset-class-in-the-token-and-why-cold-is-slow)).
+([explored-designs.md](https://github.com/martinus/seqlz/blob/main/docs/explored-designs.md#seqlz-third-decoder-round-one-repeat-offset-offset-class-in-the-token-and-why-cold-is-slow)).
 The classes for multiples of 8 came later and saved 13 bytes per page in the kernel, for about 0.2 µs
 more per page written
-([explored-designs.md](https://github.com/martinus/quetschn/blob/main/docs/explored-designs.md#seqlz-fast-lit-by-the-score-no-budget-offsets-in-steps-of-8)).
+([explored-designs.md](https://github.com/martinus/seqlz/blob/main/docs/explored-designs.md#seqlz-fast-lit-by-the-score-no-budget-offsets-in-steps-of-8)).
 On 14th October 2026 class 1 became offset 2 in 1 bit, instead of the offsets below 16 in 4 bits, and
 class 5 the multiples of 8 below 2048 in 8 bits, instead of all of them from 256 on in 9. With the
 token tables trained again, `seqlz-2` stores 0.6% less on the 4 KiB dumps, on average, and
 1.4% less on the 16 KiB ones, at the same speed on the Mi 9T and in the kernel VM
-([explored-designs.md](https://github.com/martinus/quetschn/blob/main/docs/explored-designs.md#offset-2-in-1-bit-multiples-of-8-below-2048-in-8-03-to-08-smaller-at-the-same-speed-kept)).
+([explored-designs.md](https://github.com/martinus/seqlz/blob/main/docs/explored-designs.md#offset-2-in-1-bit-multiples-of-8-below-2048-in-8-03-to-08-smaller-at-the-same-speed-kept)).
 :::
 
 ## Length values {#ch-format--length-values}
@@ -607,14 +607,14 @@ symbol is 18, and `read(6)` is $100 - 64 = 36$; symbol 18 has the code `{{ll.cod
 A code of a length value has at most {{ch06.MAX_BITS}} bits, a decode table of 256 entries. A match
 length value follows 8.5% of the matches, which is why `ml` has 5 bits in the token and not 4: with 4,
 a value followed 18.7% of them
-([explored-designs.md](https://github.com/martinus/quetschn/blob/main/docs/explored-designs.md#second-round-branches-tails-and-table-sizes)).
+([explored-designs.md](https://github.com/martinus/seqlz/blob/main/docs/explored-designs.md#second-round-branches-tails-and-table-sizes)).
 
 ::: why Why two trained tables and not 5 plain bits
 The symbol of a length value could be 5 plain bits, which would take two tables out of the format.
 Measured twice, the 5 bits made pages 3 bytes larger
-([explored-designs.md](https://github.com/martinus/quetschn/blob/main/docs/explored-designs.md#length-values-in-5-plain-bits-instead-of-their-tables-3-bytes-per-page-more-not-kept)),
+([explored-designs.md](https://github.com/martinus/seqlz/blob/main/docs/explored-designs.md#length-values-in-5-plain-bits-instead-of-their-tables-3-bytes-per-page-more-not-kept)),
 and on the decoder of 10th October 2026, timed, 0.2% or 2.2 bytes larger, with no read faster
-([explored-designs.md](https://github.com/martinus/quetschn/blob/main/docs/explored-designs.md#length-values-in-5-plain-bits-again-02-to-03-more-memory-no-read-faster-not-kept)).
+([explored-designs.md](https://github.com/martinus/seqlz/blob/main/docs/explored-designs.md#length-values-in-5-plain-bits-again-02-to-03-more-memory-no-read-faster-not-kept)).
 :::
 
 ## How a page ends {#ch-format--end}
@@ -628,14 +628,14 @@ A page says neither how many sequences it has nor how long its bitstream is:
   `n = PAGE`, has an empty `B`. Until 11th October 2026 the last sequence had a token, which told the
   decoder only what it knew already, in 9.0 bits per page, about 1.2 bytes, on the zram pages of a
   desktop and a phone
-  ([explored-designs.md](https://github.com/martinus/quetschn/blob/main/docs/explored-designs.md#the-last-sequence-without-a-token-12-bytes-per-page-less-kept)).
+  ([explored-designs.md](https://github.com/martinus/seqlz/blob/main/docs/explored-designs.md#the-last-sequence-without-a-token-12-bytes-per-page-less-kept)).
 - **The bitstream ends where its bits end.** After the last bit the decoder needs, fewer than 8 bits
   of `B` are left, all in its last byte, all 0. The same holds for each literal stream. A page with a
   byte too many, or a bit 1 in the padding, is invalid. zram stores no checksum, so a page damaged in
   memory has to be caught by the decoder, and the strict end catches most damage with one compare per
   page, at no cost in bytes. It costs a warm read 0.07 to 0.10 µs on the phone's little core and
   nothing in the kernel VM on the PC
-  ([explored-designs.md](https://github.com/martinus/quetschn/blob/main/docs/explored-designs.md#a-page-ends-where-its-bits-end-no-damaged-page-with-bytes-or-bits-too-many-decodes-01-µs-on-the-a55-kept)).
+  ([explored-designs.md](https://github.com/martinus/seqlz/blob/main/docs/explored-designs.md#a-page-ends-where-its-bits-end-no-damaged-page-with-bytes-or-bits-too-many-decodes-01-µs-on-the-a55-kept)).
 
 Every sequence but the last writes at least 4 bytes, so a decoder stops after at most `PAGE / 4 + 1`
 sequences, {{const.MAX_SEQUENCES}} on a 4 KiB page, also on a page that is not valid. Two facts follow
@@ -827,7 +827,7 @@ table codes best; k-means put pages whose literals look alike into one group for
 pages that level 3 gave a table of their own; the lengths 7 to 10 are {{own.counts.share_7_10}}% of them.
 `tools/kernel-port/gen-seqlz-lengths.py` turns the counts into length-limited Huffman code lengths and
 writes `src/seqlz_default_tables_4k.inc` and `src/seqlz_lit_sets_4k.inc`; CI checks that the files in
-`src/` are its output, byte for byte, and `quetschn-seqlz-train --from-counts` does the same in C++.
+`src/` are its output, byte for byte, and `seqlz-train --from-counts` does the same in C++.
 The kernel's copy gets the generator, as `scripts/gen-seqlz-lengths.py`, and the 4 KiB counts.
 
 The 4 KiB tables of 13th October 2026 are counted on {{ch02.train_pages|grp}} pages: three sessions
@@ -836,7 +836,7 @@ dump of 28th September 2026. The 16 KiB tables are counted on 26 933 pages of a 
 Android 17 emulator with 16 KiB pages. The pages are not published, because memory pages hold keys
 and passwords. The counts cannot give a page back: they are sums over many pages, each literal
 table's over 10 590 pages or more for 4 KiB, and say nothing about which symbol came after which
-([`docs/format.md`](https://github.com/martinus/quetschn/blob/main/docs/format.md#where-the-tables-come-from)).
+([`docs/format.md`](https://github.com/martinus/seqlz/blob/main/docs/format.md#where-the-tables-come-from)).
 
 A decoder has to have exactly the right tables. `docs/format.md` lists the SHA-256 of each table's
 code lengths, as bytes in symbol order, and `seqlz_ref.py` refuses to run when they do not match. For
@@ -853,14 +853,14 @@ code lengths, as bytes in symbol order, and `seqlz_ref.py` refuses to run when t
 Fixed tables cost bytes, since a table fitted to each page codes it tighter. For the tokens and the
 lengths no way of fitting them that was measured paid for its time, and tables trained on a phone's own
 pages saved 0.6% on pages of that phone they were not trained on
-([The format written down](https://github.com/martinus/quetschn/blob/main/docs/explored-designs.md#the-format-written-down-one-set-of-tables-and-stream-sizes-that-hold)).
+([The format written down](https://github.com/martinus/seqlz/blob/main/docs/explored-designs.md#the-format-written-down-one-set-of-tables-and-stream-sizes-that-hold)).
 For the literals the first try was no better: a literal table of each page's own made writes 14% slower
 for 32 bytes less per page, 2.4% of the stored size
-([Per page: its own literal table](https://github.com/martinus/quetschn/blob/main/docs/explored-designs.md#per-page-its-own-literal-table-and-one-of-4-token-tables-measured-not-kept)).
+([Per page: its own literal table](https://github.com/martinus/seqlz/blob/main/docs/explored-designs.md#per-page-its-own-literal-table-and-one-of-4-token-tables-measured-not-kept)).
 The one of level 3, from 15th October 2026, is built only where the page's literals promise to save
 enough, and on the Mi 9T's Cortex-A76 it got zram's pages to the size of `zstd` 3's in less than half
 its time to write a page
-([explored-designs.md](https://github.com/martinus/quetschn/blob/main/docs/explored-designs.md#level-3-a-lazy-matcher-and-a-literal-table-of-the-pages-own-zstd-3s-memory-in-less-than-half-its-time-on-the-phone-kept)),
+([explored-designs.md](https://github.com/martinus/seqlz/blob/main/docs/explored-designs.md#level-3-a-lazy-matcher-and-a-literal-table-of-the-pages-own-zstd-3s-memory-in-less-than-half-its-time-on-the-phone-kept)),
 [chapter 17](#ch-decisions--level3) has the numbers.
 How the code lengths become the encoder's codes and the decoder's tables at run time is
 [chapter 8](#ch-codes).

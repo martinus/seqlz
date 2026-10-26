@@ -15,7 +15,7 @@ import sys
 # The hook is STEP_IN() inside the loop over the sequences, where its variables exist, else STEP_OUT().
 # Never the body of an if without braces: the hook would become the body; the script fails on one.
 DECODE_STOPS = [
-    "n_lit = get_unaligned_le16(s);",
+    "n_lit = get_unaligned_le16(s) & (SEQLZ_LIT_CODED - 1U);",
     "q = seqlz_decode_literals(s, src_len, n_lit, scratch, d,",
     "lit = scratch;",
     "lit = s + SEQLZ_HEADER;",
@@ -53,7 +53,7 @@ DECODE_STOPS = [
     "copy_match(d, d_end, off, len);",
     "if ((unsigned long)d - (unsigned long)lit == end_gap)",
     "skip = 0;",
-    "if (br.count < 0 || br.p != br.end || br.count >= 8 ||",
+    "if ((unsigned int)br.count >= 8U || br.p != br.end ||",
     "return 0;",
 ]
 

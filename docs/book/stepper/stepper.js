@@ -189,7 +189,7 @@
       if (t.indexOf('if (off - 1U >= (unsigned int)(d - (u8 *)dst) ||') === 0) return 'The offset must point into the page so far, 1 ≤ ' + off + ' ≤ ' + d + ', and the match must fit: ' + len + ' ≤ ' + (C.PAGE - d) + '.';
       if (t.indexOf('copy_match(') === 0) return 'Copies ' + len + ' bytes from ' + off + ' back, checked, ' + (off < 8 ? 'as a pattern of ' + off + ' bytes.' : '8 bytes at a time.');
       if (t.indexOf('skip = 0') === 0) return 'After a slow sequence the next fast one refills again.';
-      if (t.indexOf('if (br.count < 0') === 0) return 'The page must end where its bits end: every byte read, ' + cnt + ' bits left in the last byte, and those 0.';
+      if (t.indexOf('if ((unsigned int)br.count >= 8U') === 0) return 'The page must end where its bits end: every byte read, ' + cnt + ' bits left in the last byte, and those 0.';
       if (t.indexOf('return 0') === 0) return 'A valid page: seqlz_decode() returns 0.';
       return '';
     }

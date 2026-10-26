@@ -122,14 +122,14 @@ when the fault comes, nor is the page the codec writes into. Each access goes to
 a desktop and more on a phone. A benchmark that decodes the same page in a loop measures something no
 swap-in sees, so the project measures **cold reads**, with the compressed bytes flushed from the
 cache first, and in the end the whole page fault in a virtual machine and on the phone
-([`docs/plan.md` §3.2](https://github.com/martinus/quetschn/blob/main/docs/plan.md#32-decompression-is-a-tail-latency-problem-not-a-throughput-problem)).
+([`docs/plan.md` §3.2](https://github.com/martinus/seqlz/blob/main/docs/plan.md#32-decompression-is-a-tail-latency-problem-not-a-throughput-problem)).
 
 ::: measured How much of a swap-in is the codec
 In a virtual machine on the Ryzen 9 7950X, with pages the desktop swapped into zram, a cold swap-in
 with `lz4` takes 3.51 µs, of which 1.43 µs are `zcomp_decompress()`; with `seqlz-2` 4.13 µs, of
 which 2.04 µs are the codec. The kernel's part, the fault, the swap entry and zram's slot, is about
 1.9 to 2.0 µs for every codec, so a codec 43% slower than `lz4` makes a swap-in 18% slower
-([explored-designs.md, "The whole page fault"](https://github.com/martinus/quetschn/blob/main/docs/explored-designs.md#the-whole-page-fault-the-kernels-part-is-the-same-for-every-codec-the-gap-to-lz4-about-halves)).
+([explored-designs.md, "The whole page fault"](https://github.com/martinus/seqlz/blob/main/docs/explored-designs.md#the-whole-page-fault-the-kernels-part-is-the-same-for-every-codec-the-gap-to-lz4-about-halves)).
 :::
 
 ## zsmalloc: bytes saved count only across a size class {#ch-zram--size-classes}
@@ -141,7 +141,7 @@ class that holds $n + 8$, for the handle (`ZS_HANDLE_SIZE`). Each class packs it
 packing are merged into the larger one. The project's C++ port of that setup,
 `bench/zsmalloc_cost.cpp`, reproduces the kernel's classes: after merging, 255 nominal classes are
 119 different ones
-([`docs/plan.md` §3.1](https://github.com/martinus/quetschn/blob/main/docs/plan.md#31-zram-does-not-pay-for-bytes-it-pays-for-zsmalloc-size-classes)).
+([`docs/plan.md` §3.1](https://github.com/martinus/seqlz/blob/main/docs/plan.md#31-zram-does-not-pay-for-bytes-it-pays-for-zsmalloc-size-classes)).
 
 So what a page costs is a step function of its compressed length. Around 1 KiB the classes are 32
 bytes apart:
@@ -204,10 +204,10 @@ Three things follow, and the book comes back to each:
 - **The measure of size is not the mean ratio.** The project counts the **stored size**, the sum of
   what zsmalloc spends on the pages, "Σ zsmalloc cost". On a new zram device that model equals zram's
   own `mem_used_total` to the byte
-  ([explored-designs.md](https://github.com/martinus/quetschn/blob/main/docs/explored-designs.md#zrams-memory-against-the-model-exact-on-a-new-device-σ-zsmalloc-cost-035-to-047-below-it)).
+  ([explored-designs.md](https://github.com/martinus/seqlz/blob/main/docs/explored-designs.md#zrams-memory-against-the-model-exact-on-a-new-device-σ-zsmalloc-cost-035-to-047-below-it)).
 
 The project's metrics leave out same-filled pages
-([`docs/plan.md` §5.2](https://github.com/martinus/quetschn/blob/main/docs/plan.md#52-metrics)): they
+([`docs/plan.md` §5.2](https://github.com/martinus/seqlz/blob/main/docs/plan.md#52-metrics)): they
 cost every codec the same and would make all codecs look better without telling them apart. A few
 measurements quoted later, the swap times in the kernel VM among them, include them; where that
 matters, the text says so.
@@ -253,14 +253,14 @@ zram holds the stream's mutex for the whole call, so one context is never used b
 A series of Sergey Senozhatsky of 5th October 2026, not merged yet, splits the stream into one for
 writing and one for reading, with `create_cctx()` and an optional `create_dctx()`. The project's
 kernel backend is written for both forms
-([`docs/plan.md` §3.3](https://github.com/martinus/quetschn/blob/main/docs/plan.md#33-per-cpu-workspace-is-real-memory-on-a-phone)).
+([`docs/plan.md` §3.3](https://github.com/martinus/seqlz/blob/main/docs/plan.md#33-per-cpu-workspace-is-real-memory-on-a-phone)).
 
 The benchmarks call seqlz through a copy of this interface in C, `src/zram_seqlz.c`
 ([chapter 15](#ch-zram-glue)). Its decompress function is the whole contract:
 
 @listing src/zram_seqlz.c 114-124
 
-`quetschn_prefetch_page()` asks the CPU to start loading the compressed bytes and the output page
+`bench_prefetch_page()` asks the CPU to start loading the compressed bytes and the output page
 before the decoder needs them ([chapter 3](#ch-cpu--prefetch)); it stands for what the project's
 experiments let zram do before every decompression. `s->context` is this CPU's buffer for the decoded
 literals; the tables are compiled in, one set for every device.
@@ -294,7 +294,7 @@ The plan calls this memory **C5**, and it is a cost: on the test phone, with 8 c
 work memory per CPU is 32 KiB of RAM that is never free, on the device where RAM is shortest. The score
 counts it, spread over the pages in zram: with 1 GiB in zram those 32 KiB are 0.1 bytes per page, with
 64 MiB 2 bytes
-([`docs/plan.md` §3.3](https://github.com/martinus/quetschn/blob/main/docs/plan.md#33-per-cpu-workspace-is-real-memory-on-a-phone)).
+([`docs/plan.md` §3.3](https://github.com/martinus/seqlz/blob/main/docs/plan.md#33-per-cpu-workspace-is-real-memory-on-a-phone)).
 seqlz needs {{size.state}} bytes for the matcher's table while it compresses and {{const.SCRATCH}}
 bytes for the decoded literals while it decompresses. zram holds the stream's mutex for either, and
 neither keeps anything from one page to the next, so the kernel backend puts both into one union of {{ch01.union}} bytes, which `kmalloc()` hands out as
@@ -320,14 +320,14 @@ then fails the read; one page is lost, the kernel is not.
 The reason C6 is a hard limit is history. The last new codec proposed for zram, zBeWalgo in 2018,
 reached version 7 of its patch series and was never merged. One objection on the mailing list, in
 Eric Biggers's words: *"You cannot just ignore fuzz-safety in the decompressor either"*
-([`docs/plan.md` §2.2](https://github.com/martinus/quetschn/blob/main/docs/plan.md#22-the-failure-zbewalgo-benjamin-warnke-2018-reached-v7-never-merged)).
+([`docs/plan.md` §2.2](https://github.com/martinus/seqlz/blob/main/docs/plan.md#22-the-failure-zbewalgo-benjamin-warnke-2018-reached-v7-never-merged)).
 seqlz's decoder checks every length and offset against the room left before it uses them, stops
 after at most `PAGE / 4 + 1` sequences, and requires that a page ends exactly where its bits end
 ([chapter 14](#ch-decode)). Fuzzers, programs that feed a function random and damaged inputs and
 report every crash and every access out of bounds ([chapter 15](#ch-zram-glue--fuzzing)), fed it
 billions of pages. On the Mi 9T's small core, a Cortex-A55, the slowest page the project built to
 be slow decodes in 1.33 times the p99 time of real pages; for `lz4` the same is 1.57
-([explored-designs.md, "The worst case"](https://github.com/martinus/quetschn/blob/main/docs/explored-designs.md#the-worst-case-the-slowest-pages-found-cost-13-times-the-p99-of-real-ones-as-for-lz4)).
+([explored-designs.md, "The worst case"](https://github.com/martinus/seqlz/blob/main/docs/explored-designs.md#the-worst-case-the-slowest-pages-found-cost-13-times-the-p99-of-real-ones-as-for-lz4)).
 
 ## What kernel code cannot do {#ch-zram--kernel-rules}
 
@@ -340,12 +340,12 @@ be slow decodes in 1.33 times the p99 time of real pages; for `lz4` the same is 
 - **A small stack.** A kernel thread has 16 KiB of stack on x86-64 and arm64. The build warns about a
   frame above `CONFIG_FRAME_WARN`, 2048 bytes on 64-bit and 1280 on most 32-bit builds in the kernel
   of September 2026, 1024 in older ones. Every frame of seqlz's kernel copy stays below 1024; the
-  deepest, `seqlz_decode_literals()` and `code_literals()`, are 640 and 600 bytes with gcc for x86-64
+  deepest, `seqlz_decode_literals()` and `seqlz_code_own()`, are 640 and 600 bytes with gcc for x86-64
   ([chapter 15](#ch-zram-glue--check)).
 - **No sleeping in compress and decompress.** zram called the codec with preemption disabled, older
   kernels such as the phone's 4.14 still do, and a fix proposed in August 2026 would bring that back
   for backends like seqlz. So no allocation, no lock, no page fault in the codec
-  ([`docs/plan.md` §3.2](https://github.com/martinus/quetschn/blob/main/docs/plan.md#32-decompression-is-a-tail-latency-problem-not-a-throughput-problem)).
+  ([`docs/plan.md` §3.2](https://github.com/martinus/seqlz/blob/main/docs/plan.md#32-decompression-is-a-tail-latency-problem-not-a-throughput-problem)).
 - **Every architecture.** The same source runs on little-endian x86-64 and arm64, on big-endian s390
   and on 32-bit arm, and CI checks that x86-64, 32-bit x86 and s390x write the same compressed bytes
   for the same pages ([chapter 5](#ch-compat--endian)).
@@ -362,7 +362,7 @@ No codec stores pages smallest and handles them fastest. The project's first pla
 p99 time no worse than `lz4`'s, and bars turned out to be cliffs: a design that saved 4% of memory
 failed because its p99 was 1 µs over the bar, without asking what 1 µs is worth. So designs are
 judged by a **score**
-([`docs/plan.md` §1.1](https://github.com/martinus/quetschn/blob/main/docs/plan.md#11-the-score-memory-against-time-not-bars)):
+([`docs/plan.md` §1.1](https://github.com/martinus/seqlz/blob/main/docs/plan.md#11-the-score-memory-against-time-not-bars)):
 
 - **bytes**: the stored size per page, what zsmalloc spends.
 - **time**: per page written to zram, $\text{write} + r \times \text{read}$, each the **mean** over all pages, in µs.
@@ -382,7 +382,7 @@ often never, because it is freed first.
 phone short of RAM a byte is worth more than on a server with memory to spare, so the project does not
 pick one. It plots each codec at (time, bytes) and draws the lower left convex hull, the codecs that
 have the lowest score for some lambda; the slope between two neighbours on the hull is the exchange
-rate at which the faster one starts to win. `quetschn-score` computes it from the benchmark logs.
+rate at which the faster one starts to win. `seqlz-score` computes it from the benchmark logs.
 
 <figure class="diagram">
 <div class="scroll">
@@ -440,7 +440,7 @@ With the times of a real swap-out and swap-in in the virtual machine, all three 
 boots, the means over four zram dumps of a phone and a desktop, 16th October 2026, the hull is `lz4`,
 `seqlz-1`, `seqlz-2`, `seqlz-3` and `zstd` 3, at 597, 145, 21 and 0.2 bytes per µs: `seqlz-2` has the
 lowest score from 21 to 145 bytes per µs. `lzo-rle` is not on it, its swap-ins are slower than `lz4`'s
-([explored-designs.md, "The numbers again on 16th October"](https://github.com/martinus/quetschn/blob/main/docs/explored-designs.md#the-numbers-again-on-16th-october-all-three-levels-with-lzo-rle-the-readmes-chart)).
+([explored-designs.md, "The numbers again on 16th October"](https://github.com/martinus/seqlz/blob/main/docs/explored-designs.md#the-numbers-again-on-16th-october-all-three-levels-with-lzo-rle-the-readmes-chart)).
 Whoever runs `lz4` instead of `zstd` 3 says, by that choice, that a µs is worth more than about 43
 bytes to them, 457 bytes per page for 10.6 µs.
 
@@ -456,7 +456,7 @@ Measured in the real kernel in a virtual machine (`tools/zram-vm/run.sh`), on on
 the VM writes each page with `pwrite()` and reads it back with `pread()`, so each time is the whole
 system call, zram and zsmalloc included, the median of 3 runs; for a cold read the compressed page is
 flushed from the CPU caches first. Means over the pages and over 3 boots, 14th October 2026
-([`docs/seqlz.md`](https://github.com/martinus/quetschn/blob/main/docs/seqlz.md#the-result-lz4s-time-zstds-size-almost)):
+([`docs/seqlz.md`](https://github.com/martinus/seqlz/blob/main/docs/seqlz.md#the-result-lz4s-time-zstds-size-almost)):
 
 | codec | stored bytes per page | write, µs | cold read, µs | time per page written, µs |
 | --- | --- | --- | --- | --- |
@@ -473,11 +473,11 @@ The read benchmark reads every page several times in a row, warm and cold, and t
 branch predictor on the page ([chapter 3](#ch-cpu--branches)). In a real swap-in, which decodes a page
 once, `seqlz-2` mispredicts about 110 branches per page more, and its reads are 0.62 µs slower
 than `lz4`'s instead of the 0.25 µs above
-([explored-designs.md, "The decoder in a fault, found"](https://github.com/martinus/quetschn/blob/main/docs/explored-designs.md#the-decoder-in-a-fault-found-110-branch-mispredictions-per-page-that-a-decode-of-the-same-page-before-hides)).
+([explored-designs.md, "The decoder in a fault, found"](https://github.com/martinus/seqlz/blob/main/docs/explored-designs.md#the-decoder-in-a-fault-found-110-branch-mispredictions-per-page-that-a-decode-of-the-same-page-before-hides)).
 The hull of the swap times above has this in it. On the phone, in its own Linux 4.14 kernel,
 `seqlz-2` stores pages 28% smaller than `lz4` and swaps them in 11% to 13% slower warm and 17%
 to 25% slower cold
-([`docs/plan.md`](https://github.com/martinus/quetschn/blob/main/docs/plan.md), 9th October 2026).
+([`docs/plan.md`](https://github.com/martinus/seqlz/blob/main/docs/plan.md), 9th October 2026).
 :::
 
 ## The goal, its costs and its one limit {#ch-zram--goal}
@@ -487,12 +487,12 @@ than what is there. No small scalar codec without allocation beats `zstd`'s entr
 ([chapter 2](#ch-compression--entropy)), so the target is the fast corner: as close as possible to
 `lz4`'s speed and to `zstd`'s size. It
 might be unreachable; a design is judged by how much closer it gets
-([`docs/plan.md` §1](https://github.com/martinus/quetschn/blob/main/docs/plan.md#1-goal-and-success-criteria)).
+([`docs/plan.md` §1](https://github.com/martinus/seqlz/blob/main/docs/plan.md#1-goal-and-success-criteria)).
 
 The plan writes the merge argument as six criteria. Their status on 9th October 2026, means over the
 dumps:
 
-| | criterion | status, as in [`docs/plan.md` §1](https://github.com/martinus/quetschn/blob/main/docs/plan.md#1-goal-and-success-criteria) |
+| | criterion | status, as in [`docs/plan.md` §1](https://github.com/martinus/seqlz/blob/main/docs/plan.md#1-goal-and-success-criteria) |
 | --- | --- | --- |
 | C1 | at least 8% less Σ zsmalloc cost than the better of `lzo-rle` and `lz4` | met: 22% less than `lzo-rle` on the desktop, 28% less than `lz4` on the phone |
 | C2 | the p99 cold read time against `lz4`, on x86-64 and on an arm64 little core | slower |
@@ -513,7 +513,7 @@ measured that with `zstd` 3 and with an optimal parser for seqlz's format, and d
 
 $r = 0.73$ is one phone's, in one week of one person's use. Its swap-ins come in bursts: in 15 minutes
 of use on 16th October 2026, 92% of the pages came in bursts of 1024 pages and more, and 114 of 366 241
-came alone ([explored-designs.md](https://github.com/martinus/quetschn/blob/main/docs/explored-designs.md#swap-ins-on-a-pixel-9a-in-use-92-of-the-pages-in-bursts-of-1024-or-more-073-reads-per-write-again)). So a slower read costs a user thousands of times
+came alone ([explored-designs.md](https://github.com/martinus/seqlz/blob/main/docs/explored-designs.md#swap-ins-on-a-pixel-9a-in-use-92-of-the-pages-in-bursts-of-1024-or-more-073-reads-per-write-again)). So a slower read costs a user thousands of times
 the difference per page, which is what the mean counts; how long a burst takes, and on which core, is not
 measured. With 16 KiB pages, which Android is moving to and which the project
 has only from the Android 17 emulator, seqlz needs more work memory than `lz4` once the streams are
