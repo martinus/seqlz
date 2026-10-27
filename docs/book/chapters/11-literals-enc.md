@@ -414,6 +414,13 @@ would not leave those {{own.enc.nu_diff}} bits; the buckets save the sort. The c
 second loop is about a byte that just got shorter and is then among the longest: the room left is
 always a multiple of the longest code's, so another round of the `while` fills it.
 
+The animation puts each byte's share of the literals, $f / n$, next to the share of the code space
+its code takes, $2^{-l}$: the first loop keeps the second at or below the first, and the gain is how
+far below. As a choice it runs on the base64 page of [chapter 13](#ch-literals-dec--own), where the
+second loop has more to do.
+
+@anim ownlens wide own_lengths() on the counts of the text page or the base64 page: the first lengths, the gains and their buckets, the counting sort, and each bucket where a loop changes a length. The counts come from lit_sums() and own_code() at level 3, the steps from a replay checked against own_lengths().
+
 ### Canonical codes, and the description
 
 @listing src/seqlz_compress_literals.c 659-670
