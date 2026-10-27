@@ -16,6 +16,10 @@ this chapter says what `seqlz_compress()` writes, it says so.
 
 ## Two layouts {#ch-format--layout}
 
+This chapter uses the spec's names for three numbers: `PAGE` is the size of a page, 4096 bytes, or
+16384 for 16 KiB pages, `P` is its log2, 12 or 14, and `len` is the length of the compressed page, in
+bytes. The spec says `BLOCK` for `PAGE`, as seqlz compresses blocks of that size, one page each in zram.
+
 A compressed page starts with a 2-byte number `h`, little endian. The top bit, `h & 0x8000`, says
 which of the two layouts follows; the other 15 bits, `n = h & 0x7fff`, are the number of literals of
 the whole page, and `n > PAGE` makes the page invalid.
@@ -622,7 +626,9 @@ and on the decoder of 10th October 2026, timed, 0.2% or 2.2 bytes larger, with n
 
 ## How a page ends {#ch-format--end}
 
-A page says neither how many sequences it has nor how long its bitstream is:
+A page says neither how many sequences it has nor how long its bitstream is. A decoder knows two
+things on the way: `used`, the number of literals it has copied so far, and `out`, the page as far as
+it is written, `|out|` bytes:
 
 - **The last sequence has no token.** Every match is at least 4 bytes, so once the literals left,
   `n - used`, are as many as the bytes the page still needs, `PAGE - |out|`, no match fits any more:
@@ -674,8 +680,8 @@ decodes to.
 
 ## Decoding, as the spec writes it {#ch-format--decode}
 
-`lits` are the `n` literals, decoded first if they are coded, `used` is how many of them are copied,
-`out` is the page being written, `last` is 1. `copy(k)` appends the next `k` literals to `out` and adds
+`lits` are the `n` literals, decoded first if they are coded, `used` starts at 0 and `out` empty, as
+[above](#ch-format--end), and `last` is 1. `copy(k)` appends the next `k` literals to `out` and adds
 `k` to `used`: as they are, or with `e = 1` each plus the byte of `out` that
 [literals as deltas](#ch-format--deltas) names, modulo 256.
 

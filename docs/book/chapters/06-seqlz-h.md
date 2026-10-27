@@ -169,7 +169,7 @@ the tables were trained again ([#182](https://github.com/martinus/seqlz/issues/1
 
 `SEQLZ_LIT_CODED` can be the top bit of the `u16` because the count never reaches it: at most 4096
 literals on 4 KiB pages and 16384 on 16 KiB pages, 15 bits. The decoder takes the count as
-`n & (SEQLZ_LIT_CODED - 1U)` ([chapter 14](#ch-decode)). In the kernel's copy the comment says "at
+`get_unaligned_le16(s) & (SEQLZ_LIT_CODED - 1U)`, the `u16` without that bit ([chapter 14](#ch-decode)). In the kernel's copy the comment says "at
 most 4 KiB of literals".
 
 ## The tables as code lengths {#ch-header--lengths}
