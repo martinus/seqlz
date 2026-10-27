@@ -283,6 +283,43 @@ bytes of compressed size and {{ch16.zs.saved}} bytes of memory. The page could g
 bytes and stay in its class, and would have to shrink by {{ch16.zs.shrink}} to reach the next smaller
 one, {{ch16.zs.lower}}.
 
+## Level 3: {{ch16.l3.len}} bytes, without a table of its own {#ch-trace--level3}
+
+At level 3, `seqlz-3`, `seqlz_compress()` takes `compress_own()` instead of `compress_block()`: the
+matcher with its lazy step and the step back ([chapter 9](#ch-matcher--lazy)), and a record in front of
+each sequence's literals for the deltas ([chapter 10](#ch-encoder--records)). On this page it finds
+{{ch16.l3.seqs}} sequences instead of {{ch16.l2.seqs}}, with {{ch16.l3.lits}} literals instead of
+{{ch16.lits}}; with raw literals that would be {{ch16.l3.raw_len}} bytes instead of {{ch16.raw.len}}.
+
+Then the literals. `pick_delta()` prices them as they are and as each of the three deltas, and keeps
+them as they are: no delta prices lower on this page. The best fixed table is table {{ch16.l3.set}}
+again, {{ch16.l3.fixed}} bytes of streams, {{ch16.l3.fixed_total}} with the header.
+
+A literal table of the page's own would code the same literals in {{ch16.l3.own_coded}} bytes,
+{{ch16.l3.own_less}} fewer, {{ch16.l3.own_less_pct}}%, as it fits this page's bytes and not those of
+many pages. But the page has to carry it: its description takes {{ch16.l3.own_desc}} bytes, and with
+the header the literals would take {{ch16.l3.own_total}} bytes, {{ch16.l3.own_more}} more than with
+table {{ch16.l3.set}}, where they would have to fit in {{ch16.l3.own_needs}}, {{own.enc.saves_min}}
+bytes less. `own_code()` does not even build that table: its estimate from the counts already says it
+cannot save enough ([chapter 11](#ch-literals-enc--own)). The numbers here come from building it
+anyway. {{ch16.l3.lits}} literals are not many more than the {{own.enc.min_lits}} below which level 3
+does not try a table of its own: the fewer the literals, the more the description weighs.
+
+So level 3 stores the page in {{ch16.l3.len}} bytes, {{ch16.l3.saved}} fewer than level 2, in class
+{{ch16.l3.zs_class}}:
+
+| level | compressed bytes | literals | memory in zsmalloc, bytes |
+| --- | ---: | --- | ---: |
+| `seqlz-1` | {{ch16.raw.len}} | raw | {{ch16.zs.raw_cost}} |
+| `seqlz-2` | {{ch16.coded.len}} | table {{ch16.lt.set}} | {{ch16.zs.cost}} |
+| `seqlz-3` | {{ch16.l3.len}} | table {{ch16.l3.set}} | {{ch16.l3.zs_cost}} |
+@assert ch16.l3.set == ch16.lt.set and ch16.l3.len < ch16.coded.len and ch16.l3.own_more > 0
+
+Where the literals have an order of their own, level 3's other two tools pay as well: the page of
+counters of [chapter 13](#anim-undelta) is {{counter.coded.len}} bytes at level 2 and
+{{counter.l3.len}} at level 3, with a table of its own and its literals as deltas.
+@assert counter.l3.own == 1 and counter.l3.delta == 1
+
 ## seqlz_decode(): the literals first {#ch-trace--decode}
 
 The backend calls `seqlz_decode(src, {{ch16.coded.len}}, dst, scratch)` with the per-CPU scratch of
@@ -626,9 +663,3 @@ page
 ([explored-designs.md](https://github.com/martinus/seqlz/blob/main/docs/explored-designs.md#the-score-with-the-swap-times-seqlz-fast-lits-range-ends-at-155-and-211-bytes-per-µs-instead-of-200-and-279)).
 Without the text, this page gains nothing.
 
-At level 3, `seqlz-3`, the same page is {{slab.l3.len}} bytes, {{slab.coded.len}} at level 2. The
-matcher's lazy step and the extension backwards ([chapter 9](#ch-matcher--lazy)) make the difference;
-the literals keep table {{ch16.lt.set}}, as a table of the page's own would not save
-{{own.enc.saves_min}} bytes on them, and they are not stored as deltas, so the text's last sentence holds for this
-page at both levels.
-@assert slab.l3.own == 0 and slab.l3.delta == 0 and slab.l3.len < slab.coded.len

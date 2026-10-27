@@ -1190,6 +1190,74 @@ static void ch16(void) {
         kstr("ch16.zs.saved", "%.1f", zs_cost(n_raw) - zs_cost(n_coded));
     }
 
+    /*
+     * Level 3: the lazy matcher, then the literals; the table of the page's own priced although
+     * own_code() turns it down, to say what it would cost
+     */
+    {
+        static u8 p3[SEQLZ_BLOCK_SIZE], d3[2 * SEQLZ_BLOCK_SIZE];
+        static struct seqlz_state st3;
+        static struct seqlz_sequence s3[SEQLZ_MAX_SEQUENCES];
+        struct own_work* ow = own_work(&st3);
+        u64 ev[SEQLZ_LIT_STREAMS] = {0}, od[SEQLZ_LIT_STREAMS] = {0};
+        unsigned int n3, pre, delta3, nl3, b3 = ~0U, set3 = 0, sz3[SEQLZ_LIT_STREAMS], fixed3 = 0, w3, h3, desc, oc, oh, len3;
+
+        slab_page(p3);
+        fact_num("ch16.l2.seqs", seqlz_find(&st3, p3, s3, SEQLZ_LEVEL_CODED));
+        n3 = seqlz_find(&st3, p3, s3, SEQLZ_LEVEL_OWN);
+        pre = compress_own(&st3, p3, d3, sizeof d3, &delta3);
+        nl3 = get_unaligned_le16(d3);
+        memset(ow->freq, 0, sizeof(ow->freq));
+        lit_sums(d3 + SEQLZ_HEADER, nl3, ev, od, ow->freq);
+        for (k = 0; k < SEQLZ_LIT_SETS; k++) {
+            unsigned int b = 0;
+
+            for (i = 0; i < SEQLZ_LIT_STREAMS; i++)
+                b += lit_bits(ev, od, i, k);
+            if (b < b3) {
+                b3 = b;
+                set3 = k;
+            }
+        }
+        for (i = 0; i < SEQLZ_LIT_STREAMS; i++) {
+            sz3[i] = (lit_bits(ev, od, i, set3) + 7) / 8;
+            fixed3 += sz3[i];
+        }
+        w3 = size_width(sz3);
+        h3 = SEQLZ_LIT_HEADER(w3);
+        if (delta3 || own_code(ow, nl3, h3 + fixed3))
+            die("ch16: at level 3 the page takes deltas or a table of its own");
+        desc = own_code(ow, nl3, 1U << 20);
+        if (!desc)
+            die("ch16: own_code() builds no table even without a limit");
+        oc = own_sizes(ow, d3 + SEQLZ_HEADER, nl3);
+        oh = SEQLZ_LIT_HEADER(size_width(ow->sizes));
+        if (oc >= fixed3 || oh + desc + oc + OWN_SAVES_MIN <= h3 + fixed3)
+            die("ch16: the page's own table is not as the chapter says");
+        len3 = fact_compress_level(p3, d3, SEQLZ_LEVEL_OWN);
+        if (!(get_unaligned_le16(d3) & SEQLZ_LIT_CODED) || (d3[2] & SEQLZ_LIT_CODE_MASK) != set3 ||
+            len3 != h3 + fixed3 + pre - SEQLZ_HEADER - nl3 || set3 != CH16_SET)
+            die("ch16: the level 3 page is not as the chapter says");
+        fact_num("ch16.l3.seqs", n3);
+        fact_num("ch16.l3.lits", nl3);
+        fact_num("ch16.l3.raw_len", pre);
+        fact_num("ch16.l3.set", set3);
+        fact_num("ch16.l3.fixed", fixed3);
+        fact_num("ch16.l3.fixed_total", h3 + fixed3);
+        fact_num("ch16.l3.own_desc", desc);
+        fact_num("ch16.l3.own_coded", oc);
+        fact_num("ch16.l3.own_total", oh + desc + oc);
+        fact_num("ch16.l3.own_less", fixed3 - oc);
+        kstr("ch16.l3.own_less_pct", "%.1f", 100.0 * (fixed3 - oc) / fixed3);
+        fact_num("ch16.l3.own_more", oh + desc + oc - (h3 + fixed3));
+        fact_num("ch16.l3.own_needs", h3 + fixed3 - OWN_SAVES_MIN);
+        fact_num("ch16.l3.len", len3);
+        fact_num("ch16.l3.saved", n_coded - len3);
+        fact_num("ch16.l3.zs_class", zs_class(len3)->size);
+        kstr("ch16.l3.zs_cost", "%.1f", zs_cost(len3));
+        kstr("ch16.l3.zs_saved", "%.1f", zs_cost(n_coded) - zs_cost(len3));
+    }
+
     /* the page without its text */
     {
         static struct ch16_seq q2[SEQLZ_MAX_SEQUENCES];

@@ -260,7 +260,7 @@ literals; a raw page with more was rejected too, but only because the loop never
 
 @listing src/seqlz_decompress.c 424-446
 
-`SEQLZ_LIT_CODED` picks the layout ([chapter 4](#ch-format--layout)). A page with coded literals needs a
+`SEQLZ_LIT_CODED` says whether the literals are raw or coded ([chapter 4](#ch-format--layout)). A page with coded literals needs a
 scratch; zram at level 1 writes only raw literals and may call the decoder without one
 ([chapter 15](#ch-zram-glue)). `seqlz_decode_literals()` also gets `d`, the output page, where a page with a
 table of its own has that table built before the loop below writes the page
