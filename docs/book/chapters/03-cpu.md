@@ -245,7 +245,7 @@ decoder compiled to branches that made 30% and 28% of all mispredictions.
 
 At every position of the page the matcher asks whether the next 4 bytes match at the repeat offset,
 and whether they match at the candidate from the hash table. Both answers are close to random. It
-computes both first and decides with one branch on `rep_hit | cand_hit`
+computes both first, `rep_hit` and `cand_hit`, and decides with one branch on `rep_hit | cand_hit`
 ([chapter 9](#ch-matcher--position)). With three branches per position the matcher mispredicted 539
 times per page, with one 329, and the p99 of compressing a cold page went from 15.4 to 12.6 µs
 ([explored-designs.md](https://github.com/martinus/seqlz/blob/main/docs/explored-designs.md#the-compressor-seqlz-fast)).
@@ -516,15 +516,16 @@ shows how the copies handle offsets below 8 and from 8 on.
 
 ## Shifts by 64, and what the kernel's sanitizers add {#ch-cpu--ubsan}
 
-Bit readers meet undefined behaviour whenever a field can have 0 bits: "the top `x` bits" is
-`v >> (64 - x)`, a shift by 64 for `x = 0`, and x86-64 then shifts by 0 and returns `v`, not 0.
+Bit readers meet undefined behaviour whenever a field can have 0 bits: "the top `x` bits" of a
+64-bit `v` is `v >> (64 - x)`, a shift by 64 for `x = 0`, and x86-64 then shifts by 0 and returns `v`, not 0.
 `seqlz_br_value()` shifts by 1 and then by `63 - x` instead ([chapter 12](#ch-dec-basics--bit-reader)).
-The token table's entries hold their shift as `(64 - raw_bits) & 63`, 0 for class 0, which has no
-offset bits ([chapter 7](#ch-internal)). `__builtin_ctzll(0)` is undefined too, `rep bsf` gives 64 on
+The token table's entries hold the shift for the offset's `raw_bits` bits as `(64 - raw_bits) & 63`,
+0 for class 0, which has no offset bits ([chapter 7](#ch-internal)). `__builtin_ctzll(0)` is undefined too, `rep bsf` gives 64 on
 CPUs with `tzcnt` and nothing defined on older ones; `seqlz_match_len()` ORs in a bit where the XOR
 could be 0 ([chapter 9](#ch-matcher--match-len)), and the literal streams' marker bit is never shifted
-out. And the fast path's limits `lit_fast` and `in_fast` are `unsigned long`, not pointers, because
-"16 bytes before the end" of a short input would be a pointer before the buffer.
+out. And the limits of the decoder's fast path, `lit_fast` for the literals and `in_fast` for the input,
+are `unsigned long`, not pointers, because "16 bytes before the end" of a short input would be a pointer
+before the buffer ([chapter 14](#ch-decode--setup)).
 
 The kernel can check for undefined behaviour at run time with **UBSan**. `CONFIG_UBSAN_SHIFT` checks
 every shift whose count the compiler cannot prove to be in range, `CONFIG_UBSAN_BOUNDS` every array

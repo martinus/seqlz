@@ -457,7 +457,8 @@ checking it only up to 16 positions after a match cost 0.3%, never checking it 3
 
 ### No step, and a cleared table
 
-The step `1 + (pos − anchor) >> 6` needed `anchor` in the loop over positions without a match, which has
+The step `1 + (pos − anchor) >> 6`, with `pos` the matcher's position and `anchor` where its literals
+since the last match start ([chapter 9](#ch-matcher)), needed `anchor` in the loop over positions without a match, which has
 no register to spare. Without it, pages that compress are 5% faster to write, and the write p99 went from
 1.31 to 1.21 times `lz4`'s
 ([explored-designs.md](https://github.com/martinus/seqlz/blob/main/docs/explored-designs.md#the-matcher-without-its-step-writes-1-to-3-faster-kept)).

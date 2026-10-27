@@ -47,8 +47,9 @@ Its {{ll.len.18}}-bit code is `{{ll.code.18}}`, so the entry
 The third paragraph explains a habit of the encoder: it masks values that are already in range. A
 kernel with UBSan, which distributions enable, adds a compare and a branch to every shift and index
 the compiler cannot prove in range, and a mask is such a proof ([chapter 3](#ch-cpu--ubsan)). So
-`enc_put()` shifts by `n & 63U` ([chapter 10](#ch-encoder)), and `put_len_value()` indexes the
-length values' `enc[]` with `seqlz_len_symbol(v, &extra) & (ENC_LEN_SYMBOLS - 1U)`. The symbol is at
+`enc_put()` shifts the accumulator by `n & 63U`, its count of bits `n` masked ([chapter 10](#ch-encoder--put)),
+and `put_len_value()` indexes the length values' `enc[]` with the symbol of the value `v`,
+`seqlz_len_symbol(v, &n_extra) & (ENC_LEN_SYMBOLS - 1U)`. The symbol is at
 most {{ch08.le_last_symbol}} ({{k16.ch08.le_last_symbol}} on 16 KiB pages), and `& 31` changes nothing;
 it only tells the compiler what the code knows. For that `enc[]` needs a power of 2 entries,
 `ENC_LEN_SYMBOLS`, 32, where {{const.LEN_SYMBOLS}} would do ({{k16.const.LEN_SYMBOLS}} on 16 KiB

@@ -412,9 +412,11 @@ Else the block is invalid. A decoder may read past the end of a stream, as long 
 ## Literals as deltas
 
 With `e = 1` each literal was stored as its delta to the byte `x` before it in the block, the literal minus
-that byte modulo 256, before it was coded, and `copy()` adds the byte back: the literal `lits[used + i]`,
-which goes to the block's byte `p = |out|`, is `(lits[used + i] + out[p - x]) mod 256` if `p >= x`, else as
-it is, with
+that byte modulo 256, before it was coded, and `copy()` adds the byte back. Take a literal that `copy()`
+writes to byte `p` of the block, where `out` is the block as far as it is written, so `out[p - x]` is the
+byte `x` before it. If `p >= x`, the block stores the literal as `(literal - out[p - x]) mod 256`, and
+`copy()` writes `(stored + out[p - x]) mod 256`; if `p < x`, there is no such byte, and the literal is
+stored as it is. `x` depends on `dt`:
 
 - `dt = 1`: `x = 4`;
 - `dt = 2`: `x = 8`;
