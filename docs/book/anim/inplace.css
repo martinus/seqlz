@@ -1,0 +1,17 @@
+.an-stage svg text.ip-head { fill: var(--muted); font-family: var(--display); font-size: 13px; font-weight: 700; }
+.an-stage svg text.ip-note { fill: var(--muted); }
+.an-stage svg text.ip-key { font-family: var(--display); }
+.an-stage .ip-hdr { fill: var(--muted); }
+.an-stage .ip-raw { fill: var(--sheet); stroke: var(--rule); }
+.an-stage .ip-gone { fill: none; stroke: var(--rule); stroke-dasharray: 3 3; }
+.an-stage .ip-bits { fill: var(--mark); fill-opacity: 0.45; }
+.an-stage .ip-room { fill: none; stroke: var(--muted); stroke-width: 0.8; }
+.an-stage .ip-s0 { fill: var(--accent); }
+.an-stage .ip-s1 { fill: var(--accent); fill-opacity: 0.6; }
+.an-stage .ip-store { fill: none; stroke: var(--ink); stroke-width: 1.5; }
+.an-stage .ip-now { stroke: var(--ink); stroke-width: 1.5; }
+.an-stage .ip-stale { fill: none; stroke: var(--muted); stroke-dasharray: 2 3; }
+.an-stage .ip-read { fill: var(--muted); fill-opacity: 0.35; }
+.an-stage .ip-reader { fill: var(--accent); fill-opacity: 0.35; stroke: var(--accent); stroke-width: 1.5; }
+.an-stage .ip-ghost { stroke: var(--accent); stroke-width: 1.2; stroke-dasharray: 3 2; }
+.an-stage svg text.ip-halo { paint-order: stroke; stroke: var(--paper); stroke-width: 4px; stroke-linejoin: round; }

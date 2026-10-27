@@ -746,6 +746,14 @@ matcher's table and `u8 literals[SEQLZ_BLOCK_SIZE]`, and with the table at least
 {{ch11.hash_bytes}} bytes on 4 KiB pages and {{k16.ch11.hash_bytes|grp}} on 16 KiB pages, the
 literals cost no byte of work memory.
 
+The copy is what makes the overwrite safe: the reader of the raw literals is not in `dst` at all. The
+animation runs `lit_streams()` on [chapter 16](#ch-trace)'s page at level 2, a run of literals per
+step, with the copy drawn under the bytes of `dst` the literals came from. From the first run on, the
+later streams store over raw literals that are read later, from the copy. The bitstream is the one
+thing no store may reach, and none does.
+
+@anim inplace wide dst while code_literals() codes chapter 16's page at level 2: the copy the runs of lit_streams() read, each flush's store into the 8 streams' rooms, the header, and the bitstream's move down. From the encoder's own lit_put() and lit_flush(), checked against code_literals().
+
 @listing src/seqlz_compress_literals.c 861-867
 
 The other three asserts are the bounds the sums and the counts rely on. A stream has at most an
