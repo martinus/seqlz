@@ -437,12 +437,13 @@ bytes, 4.7 bytes per µs: whoever values a µs at less should run `zstd`. Going 
 `seqlz-2` has the lowest score.
 
 With the times of a real swap-out and swap-in in the virtual machine, all three levels in the same
-boots, the means over four zram dumps of a phone and a desktop, 16th October 2026, the hull is `lz4`,
-`seqlz-1`, `seqlz-2`, `seqlz-3` and `zstd` 3, at 597, 145, 21 and 0.2 bytes per µs: `seqlz-2` has the
-lowest score from 21 to 145 bytes per µs. `lzo-rle` is not on it, its swap-ins are slower than `lz4`'s
-([explored-designs.md, "The numbers again on 16th October"](https://github.com/martinus/seqlz/blob/main/docs/explored-designs.md#the-numbers-again-on-16th-october-all-three-levels-with-lzo-rle-the-readmes-chart)).
-Whoever runs `lz4` instead of `zstd` 3 says, by that choice, that a µs is worth more than about 43
-bytes to them, 457 bytes per page for 10.6 µs.
+boots, the means over four zram dumps of a phone and a desktop, 22nd October 2026, the hull is `lz4`,
+`seqlz-1`, `seqlz-2` and `seqlz-3`, at 689, 131 and 22 bytes per µs: `seqlz-2` has the lowest score
+from 22 to 131 bytes per µs, and `seqlz-3` below 22. `zstd` 3 is not on it any more: `seqlz-3` stores
+3.8% less in 72% of its time per page written. `lzo-rle` is not on it either, its swap-ins are slower
+than `lz4`'s
+([explored-designs.md, "One rule for which literals are deltas"](https://github.com/martinus/seqlz/blob/main/docs/explored-designs.md#one-rule-for-which-literals-are-deltas-045-fewer-bytes-a-simpler-spec-kept)).
+[Chapter 17](#ch-decisions--score) has the chart.
 
 ## The codecs zram has, and where seqlz sits {#ch-zram--codecs}
 

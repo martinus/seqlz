@@ -41,21 +41,22 @@ too, at most `lz4`'s 16 416 bytes, until October 2026. It is in the bytes now, s
 CPU whether it swaps or not.
 
 The result: the kernel VM with zram as swap, a swap-out and a cold swap-in of every page, means over
-20 000 pages of each of four zram dumps of a phone and a desktop, 3 boots each, 16th October 2026.
+20 000 pages of each of four zram dumps of a phone and a desktop, 3 boots each, 22nd October 2026, with
+level 3's literals as deltas.
 
 <figure class="diagram">
 <div class="scroll">
-<svg viewBox="0 0 720 345" role="img" aria-label="Stored bytes per page against time per page written for lz4, lzo-rle, the three seqlz levels and zstd 3, means over four zram dumps of a phone and a desktop; the levels lie between lz4 and zstd 3, seqlz-3 at zstd 3's height in less time.">
+<svg viewBox="0 0 720 345" role="img" aria-label="zsmalloc memory per page against time per page written for lz4, lzo-rle, the three seqlz levels and zstd 3, means over four zram dumps of a phone and a desktop; seqlz-3 stores less than zstd 3 in less time, and the hull runs from lz4 through the three levels.">
 <line x1="60" y1="300.0" x2="680" y2="300.0" stroke="currentColor" stroke-opacity="0.15" fill="none"/>
-<text x="54" y="304.0" text-anchor="end" font-size="11">0</text>
+<text x="54" y="304.0" text-anchor="end" font-size="11">0%</text>
 <line x1="60" y1="235.0" x2="680" y2="235.0" stroke="currentColor" stroke-opacity="0.15" fill="none"/>
-<text x="54" y="239.0" text-anchor="end" font-size="11">500</text>
+<text x="54" y="239.0" text-anchor="end" font-size="11">10%</text>
 <line x1="60" y1="170.0" x2="680" y2="170.0" stroke="currentColor" stroke-opacity="0.15" fill="none"/>
-<text x="54" y="174.0" text-anchor="end" font-size="11">1000</text>
+<text x="54" y="174.0" text-anchor="end" font-size="11">20%</text>
 <line x1="60" y1="105.0" x2="680" y2="105.0" stroke="currentColor" stroke-opacity="0.15" fill="none"/>
-<text x="54" y="109.0" text-anchor="end" font-size="11">1500</text>
+<text x="54" y="109.0" text-anchor="end" font-size="11">30%</text>
 <line x1="60" y1="40.0" x2="680" y2="40.0" stroke="currentColor" stroke-opacity="0.15" fill="none"/>
-<text x="54" y="44.0" text-anchor="end" font-size="11">2000</text>
+<text x="54" y="44.0" text-anchor="end" font-size="11">40%</text>
 <line x1="60.0" y1="300" x2="60.0" y2="304" stroke="currentColor" fill="none"/>
 <text x="60.0" y="316" text-anchor="middle" font-size="11">0</text>
 <line x1="148.6" y1="300" x2="148.6" y2="304" stroke="currentColor" fill="none"/>
@@ -74,29 +75,30 @@ The result: the kernel VM with zram as swap, a swap-out and a cold swap-in of ev
 <text x="680.0" y="316" text-anchor="middle" font-size="11">21</text>
 <line x1="60" y1="300" x2="680" y2="300" stroke="currentColor" fill="none"/>
 <line x1="60" y1="40" x2="60" y2="300" stroke="currentColor" fill="none"/>
-<text x="370" y="334" text-anchor="middle" font-size="11">time per page written, µs</text>
-<text x="16" y="170" text-anchor="middle" font-size="11" transform="rotate(-90 16 170)">stored bytes per page</text>
-<polyline points="318.9,105.7 334.0,144.8 356.1,159.0 419.0,164.9 632.2,165.1" stroke="currentColor" stroke-dasharray="4 3" stroke-opacity="0.6" fill="none"/>
-<circle cx="318.9" cy="105.7" r="4" class="fill-paper" stroke="currentColor"/>
-<text x="326.9" y="99.7" text-anchor="start" font-size="12">lz4</text>
-<circle cx="323.1" cy="114.4" r="4" class="fill-paper" stroke="currentColor"/>
-<text x="315.1" y="124.4" text-anchor="end" font-size="12">lzo-rle</text>
-<g class="acc"><circle cx="334.0" cy="144.8" r="5" class="fill-acc" stroke="currentColor"/><text x="342.0" y="140.8" text-anchor="start" font-size="12">seqlz-1</text></g>
-<g class="acc"><circle cx="356.1" cy="159.0" r="5" class="fill-acc" stroke="currentColor"/><text x="348.1" y="175.0" text-anchor="end" font-size="12">seqlz-2</text></g>
-<g class="acc"><circle cx="419.0" cy="164.9" r="5" class="fill-acc" stroke="currentColor"/><text x="419.0" y="184.9" text-anchor="middle" font-size="12">seqlz-3</text></g>
-<circle cx="632.2" cy="165.1" r="4" class="fill-paper" stroke="currentColor"/>
-<text x="632.2" y="155.1" text-anchor="middle" font-size="12">zstd 3</text>
+<text x="370" y="334" text-anchor="middle" font-size="11">time per page written, swap-out + 0.73 × swap-in, µs</text>
+<text x="16" y="170" text-anchor="middle" font-size="11" transform="rotate(-90 16 170)">zsmalloc memory per page, % of 4 KiB</text>
+<polyline points="333.1,62.8 345.8,110.8 370.6,127.8 485.7,141.4" stroke="currentColor" stroke-dasharray="4 3" stroke-opacity="0.6" fill="none"/>
+<circle cx="333.1" cy="62.8" r="4" class="fill-paper" stroke="currentColor"/>
+<text x="341.1" y="56.8" text-anchor="start" font-size="12">lz4</text>
+<circle cx="336.9" cy="73.2" r="4" class="fill-paper" stroke="currentColor"/>
+<text x="328.9" y="83.2" text-anchor="end" font-size="12">lzo-rle</text>
+<g class="acc"><circle cx="345.8" cy="110.8" r="5" class="fill-acc" stroke="currentColor"/><text x="353.8" y="106.8" text-anchor="start" font-size="12">seqlz-1</text></g>
+<g class="acc"><circle cx="370.6" cy="127.8" r="5" class="fill-acc" stroke="currentColor"/><text x="362.6" y="143.8" text-anchor="end" font-size="12">seqlz-2</text></g>
+<g class="acc"><circle cx="485.7" cy="141.4" r="5" class="fill-acc" stroke="currentColor"/><text x="485.7" y="161.4" text-anchor="middle" font-size="12">seqlz-3</text></g>
+<circle cx="651.1" cy="135.6" r="4" class="fill-paper" stroke="currentColor"/>
+<text x="651.1" y="125.6" text-anchor="middle" font-size="12">zstd 3</text>
 </svg>
 </div>
-<figcaption>Stored bytes per page against time per page written (swap-out + 0.73 × swap-in), kernel VM, zram as swap, means over four zram dumps of a phone and a desktop, 16th October 2026; the dashed line joins the codecs on the hull. Lower left is better.</figcaption>
+<figcaption>zsmalloc memory per page against time per page written (swap-out + 0.73 × swap-in), kernel VM, zram as swap, means over four zram dumps of a phone and a desktop, 22nd October 2026; the dashed line joins the codecs on the hull. Lower left is better.</figcaption>
 </figure>
 
-From the fastest to the smallest the hull is `lz4`, `seqlz-1`, `seqlz-2`, `seqlz-3` and `zstd` 3:
-`seqlz-1` saves 597 bytes per µs against `lz4`, `seqlz-2` 145 against `seqlz-1`, `seqlz-3` 21 against
-`seqlz-2`, and `zstd` 3 only 0.2 against `seqlz-3`, 1.5 bytes per page for 7.2 µs more. `lzo-rle` stores
-4.5% less than `lz4`, but its swap-ins are 0.46 µs slower, and with 0.73 reads per write that leaves it
-off the hull
-([explored-designs.md](https://github.com/martinus/seqlz/blob/main/docs/explored-designs.md#the-numbers-again-on-16th-october-all-three-levels-with-lzo-rle-the-readmes-chart)).
+From the fastest to the smallest the hull is `lz4`, `seqlz-1`, `seqlz-2` and `seqlz-3`: `seqlz-1` saves
+689 bytes per µs against `lz4`, `seqlz-2` 131 against `seqlz-1`, `seqlz-3` 22 against `seqlz-2`.
+`zstd` 3 is not on it: `seqlz-3` stores 3.8% less, 24.4% of a page against 25.3%, in 14.42 µs per page
+written against 20.02, and its swap-ins take 4.39 µs against 6.86. `lzo-rle` stores 4.5% less than
+`lz4`, but its swap-ins are 0.45 µs slower, and with 0.73 reads per write that makes it 1.5% slower per
+page written and leaves it off the hull
+([explored-designs.md](https://github.com/martinus/seqlz/blob/main/docs/explored-designs.md#one-rule-for-which-literals-are-deltas-045-fewer-bytes-a-simpler-spec-kept)).
 zram's read benchmark, which decodes every page several times, trains the branch predictor and flatters
 seqlz; a swap-in decodes a page once, and these are a swap-in's times. About 1.9 µs of a fault on the PC
 are the kernel's for every codec, so a decoder 40% slower than `lz4`'s makes a swap-in about 20% slower
@@ -873,7 +875,7 @@ before zsmalloc, than `seqlz-2` on single pages, and a delta against a similar p
 ([explored-designs.md](https://github.com/martinus/seqlz/blob/main/docs/explored-designs.md#the-ideas-of-29-and-31-measured)).
 Both are zram's work: an index, or more than one page decoded per fault. Neither is built.
 
-## Where zstd still wins, and why {#ch-decisions--zstd}
+## Where zstd 3 still beats level 2, and why {#ch-decisions--zstd}
 
 `zstd` at level 3, zram's default level for it, stores pages 6% smaller than `seqlz-2` on a
 desktop's zram pages, 1105 against 1183 bytes per page in `docs/seqlz.md`'s result table. As Σ zsmalloc
@@ -894,9 +896,10 @@ cost on all pages of the desktop's and the phone's zram
    page instead of the best of 8 saved seqlz another 2.4%, 32 bytes per page, for 14% slower writes the
    first time it was measured, mostly on pages whose literals fit the 8 tables badly
    ([explored-designs.md](https://github.com/martinus/seqlz/blob/main/docs/explored-designs.md#per-page-its-own-literal-table-and-one-of-4-token-tables-measured-not-kept)).
-   Level 3 has one, and with it and a lazy step it stores pages as small as `zstd` 3 on the Mi 9T, in
-   less than half its time to write ([above](#ch-decisions--level3)); since 21st October it also stores
-   its literals as deltas, 4.6% fewer bytes on ten samples ([above](#ch-decisions--deltas)).
+   Level 3 has one, and with it and a lazy step it stored pages as small as `zstd` 3 on the Mi 9T on
+   15th October, in less than half its time to write ([above](#ch-decisions--level3)); since 21st
+   October it also stores its literals as deltas, 5.0% fewer bytes on ten samples, and in the kernel VM
+   on 22nd October it stores 3.8% less than `zstd` 3 ([above](#ch-decisions--deltas)).
 3. **Adaptive sequence coding.** `zstd` codes `ll`, `ml` and the offset with three tables it can build for
    the data, three lookups per sequence; seqlz's one fixed token table keeps its decoder fast. The offsets
    are the clearest loss: as plain bits they cost 18 bytes per page, 2%, above their entropy
