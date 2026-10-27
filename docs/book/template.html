@@ -104,27 +104,27 @@ main { min-width: 0; padding-inline: 1.5rem; padding-block: 0 6rem; }
 
 /* ---- parts and chapters ---- */
 .part { padding-block: 5rem 2rem; border-top: 3px solid var(--ink); margin-top: 5rem; }
-.partno { font-family: var(--display); font-weight: 700; font-stretch: 75%; letter-spacing: 0.14em; text-transform: uppercase; color: var(--accent); font-size: 1.1rem; }
-.parttitle { font-family: var(--display); font-weight: 800; font-stretch: 70%; font-size: clamp(3rem, 7.5vw, 4.6rem); line-height: 0.98; margin: 0.4rem 0 1.2rem; text-wrap: balance; }
-.partintro { max-width: 40rem; color: var(--muted); font-size: 1.12rem; }
+.partno { font-family: var(--display); font-weight: 700; font-stretch: 75%; letter-spacing: 0.12em; text-transform: uppercase; color: var(--muted); font-size: 0.85rem; }
+.parttitle { font-family: var(--display); font-weight: 800; font-stretch: 62%; font-size: clamp(2.4rem, 6vw, 3.6rem); line-height: 1; margin: 0.4rem 0 1rem; text-wrap: balance; }
+.partintro { max-width: 38rem; color: var(--muted); }
 .chapter { padding-top: 3.5rem; }
 .chapterhead { margin-bottom: 1.8rem; padding-bottom: 1rem; border-bottom: 1px solid var(--rule); }
 .chapno { font-family: var(--display); font-weight: 700; font-stretch: 75%; letter-spacing: 0.1em; text-transform: uppercase; color: var(--accent); font-size: 0.85rem; }
 .chapterhead h1 { font-family: var(--display); font-weight: 750; font-stretch: 75%; font-size: clamp(2rem, 4.6vw, 2.75rem); line-height: 1.08; margin: 0.3rem 0 0; text-wrap: balance; }
-.here { margin: -0.8rem 0 1.8rem; font-family: var(--display); font-size: 0.86rem; line-height: 1.35; }
-.here-head { font-weight: 700; font-stretch: 75%; text-transform: uppercase; letter-spacing: 0.08em; font-size: 0.72rem; margin-bottom: 0.3rem; }
-.here-head a { color: var(--muted); }
-.here-row { display: grid; grid-template-columns: 7.2rem minmax(0, 1fr); gap: 0.6rem; padding-block: 0.14rem; }
-.here-what { color: var(--muted); }
-.here-path { display: flex; flex-wrap: wrap; align-items: baseline; gap: 0.1rem 0.35rem; }
-.here-path a { color: var(--ink); text-decoration: none; white-space: nowrap; }
-.here-path a:hover { color: var(--accent); }
-.here-path a.cur { color: var(--accent); font-weight: 700; box-shadow: inset 0 -2px 0 var(--accent); }
-.here-no { color: var(--muted); font-variant-numeric: tabular-nums; }
-.here-path a.cur .here-no { color: var(--accent); }
-.here-sep, .here-data { color: var(--muted); }
-.here-data { font-style: italic; }
-@media (max-width: 520px) { .here-row { grid-template-columns: 1fr; gap: 0; padding-block: 0.25rem; } }
+.onmap { margin: -0.8rem 0 1.8rem; font-family: var(--display); font-size: 0.86rem; line-height: 1.35; }
+.onmap-head { font-weight: 700; font-stretch: 75%; text-transform: uppercase; letter-spacing: 0.08em; font-size: 0.72rem; margin-bottom: 0.3rem; }
+.onmap-head a { color: var(--muted); }
+.onmap-row { display: grid; grid-template-columns: 7.2rem minmax(0, 1fr); gap: 0.6rem; padding-block: 0.14rem; }
+.onmap-what { color: var(--muted); }
+.onmap-path { display: flex; flex-wrap: wrap; align-items: baseline; gap: 0.1rem 0.35rem; }
+.onmap-path a { color: var(--ink); text-decoration: none; white-space: nowrap; }
+.onmap-path a:hover { color: var(--accent); }
+.onmap-path a.cur { color: var(--accent); font-weight: 700; box-shadow: inset 0 -2px 0 var(--accent); }
+.onmap-no { color: var(--muted); font-variant-numeric: tabular-nums; }
+.onmap-path a.cur .onmap-no { color: var(--accent); }
+.onmap-sep, .onmap-data { color: var(--muted); }
+.onmap-data { font-style: italic; }
+@media (max-width: 520px) { .onmap-row { grid-template-columns: 1fr; gap: 0; padding-block: 0.25rem; } }
 h2, h3, h4 { font-family: var(--display); text-wrap: balance; line-height: 1.2; }
 /* a click on a title puts it into the address, see the script; # marks the title that is there */
 .hlink { cursor: pointer; -webkit-tap-highlight-color: transparent; }
