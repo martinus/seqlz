@@ -527,6 +527,13 @@ byte is the low byte of the third pointer again, `10 + 20 = 30`; the other 7, an
 `add8()`, are written over by the 7 bytes of the match and by the sequences after it.
 @assert delta.ptr.rec[1].ll == 1 and delta.ptr.rec[1].pos == 16 and delta.ptr.rec[0].ll + 7 == 16 and delta.ptr.fast.before[:2] == "10" and delta.ptr.fast.after[:2] == "30"
 
+One literal is too few to see the words at work. The animation below takes a page of counters of 4
+bytes instead, each 0 to 11 more than the one before, which level 3 stores with `SEQLZ_DELTA_4`: its
+first sequence goes through `undelta_literals()`, with the bytes kept as they are at the start and the
+byte loop at the end, and its second through `undelta_fast()`.
+
+@anim undelta The first bytes of the page of counters, one copy, `add4()`, byte or match per step: the deltas copied into the page, the bytes 4 before added back word by word, then the fast path's 16 bytes. Every byte is one the real `seqlz_decode()` had in the page at that step, recorded with a hook on its `add4()`.
+
 ::: measured What the deltas cost a read
 The 16 bytes for every sequence, whatever `nl` is, make the deltas cost more than their count of
 literals suggests: with a distance below 8 they are 4 steps through
