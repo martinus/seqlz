@@ -113,6 +113,21 @@ static inline void words_page(u8* p) {
     }
 }
 
+/*
+ * chapters 11 and 13's base64 page: lines of 64 characters of base64 and a newline, as a key or a
+ * certificate in PEM form, drawn by the C library's classic linear congruential generator from
+ * seed 1, as letters_page()
+ */
+static inline void base64_page(u8* p) {
+    static const char a[] = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+    unsigned int k, seed = 1;
+
+    for (k = 0; k < SEQLZ_BLOCK_SIZE; k++) {
+        seed = seed * 1103515245U + 12345U;
+        p[k] = k % 65 == 64 ? '\n' : (u8)a[(seed >> 16) % 64];
+    }
+}
+
 /* "name":[n bytes as numbers], for the JSON the programs print */
 static inline void array(const char* name, const u8* p, unsigned int n) {
     unsigned int i;

@@ -1,0 +1,22 @@
+.an-stage svg text.or-head { fill: var(--muted); font-family: var(--display); font-size: 13px; font-weight: 700; }
+.an-stage svg text.or-note { fill: var(--muted); }
+.an-stage svg text.or-tf { fill: var(--paper); }
+.an-stage .or-unread { fill: var(--sheet); stroke: var(--rule); }
+.an-stage .or-read { fill: var(--muted); opacity: 0.55; }
+.an-stage .or-win { fill: var(--paper); stroke: var(--accent); }
+.an-stage .or-zero { fill: var(--sheet); stroke: var(--rule); stroke-dasharray: 2 2; }
+.an-stage .or-new { fill: var(--mark); }
+.an-stage .or-run { fill: var(--mark); }
+.an-stage .or-len { fill: var(--accent); }
+.an-stage .or-pad { fill: var(--sheet); stroke: var(--rule); stroke-dasharray: 2 2; }
+.an-stage .or-top { fill: none; stroke: var(--ink); stroke-width: 1.5; }
+.an-stage .or-field { fill: var(--sheet); stroke: var(--rule); }
+.an-stage .or-off { opacity: 0.5; stroke-dasharray: 3 2; }
+.an-stage .or-empty { fill: var(--sheet); stroke: var(--rule); stroke-width: 0.5; }
+.an-stage .or-c0 { fill: var(--accent); }
+.an-stage .or-c1 { fill: var(--mark); }
+.an-stage .or-c2 { fill: var(--muted); }
+.an-stage .or-alt { fill-opacity: 0.7; }
+.an-stage .or-old { opacity: 0.5; }
+.an-stage .or-none { fill: var(--muted); opacity: 0.4; }
+.an-stage .or-now { stroke: var(--ink); stroke-width: 2; }

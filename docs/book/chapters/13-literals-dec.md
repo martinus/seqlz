@@ -267,6 +267,12 @@ does not fit 8 bits either. The pages `OWN` was made for have lengths of 7 to 10
 and 3 bits, where an entry such as `quad[0xd1]`, a run of 1 and the lengths 9 and 10, does three
 symbols in one lookup ([chapter 7](#ch-internal--own)).
 
+The animation runs these steps, the checks and `own_fill()` ([below](#ch-literals-dec--the-checks-at-the-end))
+on the text page, and as a choice on a page of base64 text, lines of 64 characters as a key in PEM
+form has them, where most lookups take two lengths.
+
+@anim ownread wide The loop of read_own_table() one step per lookup: the description's bits, the 64-bit window, the entry of quad[] and the symbols it takes, the buckets and the code space; then the checks and own_fill(), length by length. From the real compressor at level 3, replayed and checked against read_own_table().
+
 ### The checks, at the end
 
 @listing src/seqlz_decompress_literals.c 243-249
