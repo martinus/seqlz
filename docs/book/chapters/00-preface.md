@@ -17,6 +17,9 @@ the literal minus that byte, before it codes them: 869.7 instead of 915.6 bytes 
 of 20 000 pages, 5.0% fewer, for about 4 µs more to write a page on the Mi 9T's A76, in userspace
 ([explored-designs.md](https://github.com/martinus/seqlz/blob/main/docs/explored-designs.md#level-3-stores-its-literals-as-deltas-not-xors-084-fewer-bytes-than-the-xor-kept),
 [one rule](https://github.com/martinus/seqlz/blob/main/docs/explored-designs.md#one-rule-for-which-literals-are-deltas-045-fewer-bytes-a-simpler-spec-kept)).
+With that, in the kernel VM on 22nd October 2026, the mean over four zram dumps of a phone and a
+desktop, `seqlz-3` stores 3.8% less than `zstd` 3, in 72% of its time to write a page, and its swap-ins
+take 36% less time ([chapter 17](#ch-decisions--score)).
 
 All of that is {{ch00.src_lines|grp}} lines of C in one directory, `src/`, plus the trained code
 lengths in four `.inc` files, two for each page size.
