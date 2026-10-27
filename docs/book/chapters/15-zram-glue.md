@@ -358,7 +358,8 @@ template for zram trees with and without the October 2026 series.
 The figure shows where it sits when zram writes or reads a page: zram takes this CPU's stream, zcomp
 passes its buffers and the backend's context to the backend, and the backend hands the context to the
 library as its work memory. The contexts are the form with the split; without it, one union serves
-both directions.
+both directions. The names of zram and zcomp are those of a tree without the series, which may name
+the streams of the split differently.
 
 <figure class="diagram">
 <div class="scroll">
