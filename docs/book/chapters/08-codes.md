@@ -187,6 +187,106 @@ For `k = 0xd1`, binary `{{own.q.d1.bits}}`:
 | 6 | `{{own.q.d1.w6}}` | 9, `{{own.code.9}}` | the length 10, `before[1] = 0`, `pos = end[1] = 8` |
 @assert own.q.d1.sym == 10 and own.code[8] == "00" and own.code[9] == "01" and own.q.d1.end1 == 6
 
+The figure shows where each part of the 8 bits ends up in the entry: the run in `before[0]`, each
+length in `len[]`, and in `end[]` the bits up to the end of each length, with the run before it.
+@assert len(own.code[10]) == 4 and len(own.code[8]) == len(own.code[9]) == 2 and own.q.d1.symlen == 4 and len(own.q.d1.b.free) == 9 and int(own.q.d1.b.free, 2) == 0 and own.q.d1.b.all == own.q.d1.b.alone + own.q.d1.b.free + own.q.d1.b.run2 + own.q.d1.b.run1 + own.q.d1.b.end2 + own.q.d1.b.end1 + own.q.d1.b.l2 + own.q.d1.b.l1 and int(own.q.d1.b.all, 2) == int(own.q.d1.entry, 16)
+
+<figure class="diagram">
+<div class="scroll">
+<svg viewBox="0 0 720 262" role="img" aria-label="The 8 bits 0xd1 decoded with the code OWN into a run of 1, the length 9 and the length 10, and where build_own() puts them in the 32 bits of quad[0xd1]" font-size="12">
+  <text x="10" y="16" font-weight="bold">k = 0xd1, the 8 bits {{own.q.d1.bits}}, read with decode[] symbol by symbol</text>
+  <g class="mark"><rect x="184" y="34" width="176" height="30" class="fill-mark" fill-opacity="0.3" stroke="currentColor"/></g>
+  <line x1="228" y1="59" x2="228" y2="64" stroke="currentColor" stroke-width="0.6" class="mut"/>
+  <line x1="272" y1="59" x2="272" y2="64" stroke="currentColor" stroke-width="0.6" class="mut"/>
+  <line x1="316" y1="59" x2="316" y2="64" stroke="currentColor" stroke-width="0.6" class="mut"/>
+  <text x="202.1" y="53.7" textLength="139.8" lengthAdjust="spacing" font-weight="bold" font-size="13">{{own.code.10}}</text>
+  <g class="acc"><rect x="360" y="34" width="88" height="30" class="fill-acc" fill-opacity="0.3" stroke="currentColor"/></g>
+  <line x1="404" y1="59" x2="404" y2="64" stroke="currentColor" stroke-width="0.6" class="mut"/>
+  <text x="378.1" y="53.7" textLength="51.8" lengthAdjust="spacing" font-weight="bold" font-size="13">{{own.code.8}}</text>
+  <g><rect x="448" y="34" width="88" height="30" class="fill-sheet" stroke="currentColor"/></g>
+  <line x1="492" y1="59" x2="492" y2="64" stroke="currentColor" stroke-width="0.6" class="mut"/>
+  <text x="466.1" y="53.7" textLength="51.8" lengthAdjust="spacing" font-weight="bold" font-size="13">{{own.code.9}}</text>
+  <line x1="184" y1="64" x2="184" y2="72" stroke="currentColor"/>
+  <text x="184" y="84" text-anchor="middle" font-size="11">0</text>
+  <line x1="360" y1="64" x2="360" y2="72" stroke="currentColor"/>
+  <text x="360" y="84" text-anchor="middle" font-size="11">{{own.q.d1.symlen}}</text>
+  <line x1="448" y1="64" x2="448" y2="72" stroke="currentColor"/>
+  <text x="448" y="84" text-anchor="middle" font-size="11">{{own.q.d1.end1}}</text>
+  <line x1="536" y1="64" x2="536" y2="72" stroke="currentColor"/>
+  <text x="536" y="84" text-anchor="middle" font-size="11">{{own.q.d1.end2}}</text>
+  <text x="172" y="84" text-anchor="end" font-size="11" class="mut">pos</text>
+  <g class="mark"><text x="272.0" y="102" text-anchor="middle" font-size="11">symbol {{own.q.d1.sym}}</text><text x="272.0" y="116" text-anchor="middle" font-size="11">a run of {{own.q.d1.run1}}</text></g>
+  <g class="acc"><text x="404.0" y="102" text-anchor="middle" font-size="11">symbol 8</text><text x="404.0" y="116" text-anchor="middle" font-size="11">length {{own.q.d1.l1}}</text></g>
+  <g><text x="492.0" y="102" text-anchor="middle" font-size="11">symbol 9</text><text x="492.0" y="116" text-anchor="middle" font-size="11">length {{own.q.d1.l2}}</text></g>
+  <text x="10" y="150" font-weight="bold">quad[0xd1] = {{own.q.d1.entry}}, bit 31 on the left</text>
+  <g><rect x="24" y="176" width="21" height="26" class="fill-paper" stroke="currentColor"/></g>
+  <text x="30.9" y="193.3" textLength="7.2" lengthAdjust="spacing" font-weight="bold" font-size="12">{{own.q.d1.b.alone}}</text>
+  <text x="34.5" y="220" text-anchor="middle" font-weight="bold">{{own.q.d1.alone}}</text>
+  <text x="34.5" y="236" text-anchor="middle" font-size="10" class="mut">31</text>
+  <text x="139.5" y="170" text-anchor="middle" font-size="10">unused</text>
+  <g><rect x="45" y="176" width="189" height="26" class="fill-paper" stroke="currentColor"/></g>
+  <line x1="66" y1="197" x2="66" y2="202" stroke="currentColor" stroke-width="0.6" class="mut"/>
+  <line x1="87" y1="197" x2="87" y2="202" stroke="currentColor" stroke-width="0.6" class="mut"/>
+  <line x1="108" y1="197" x2="108" y2="202" stroke="currentColor" stroke-width="0.6" class="mut"/>
+  <line x1="129" y1="197" x2="129" y2="202" stroke="currentColor" stroke-width="0.6" class="mut"/>
+  <line x1="150" y1="197" x2="150" y2="202" stroke="currentColor" stroke-width="0.6" class="mut"/>
+  <line x1="171" y1="197" x2="171" y2="202" stroke="currentColor" stroke-width="0.6" class="mut"/>
+  <line x1="192" y1="197" x2="192" y2="202" stroke="currentColor" stroke-width="0.6" class="mut"/>
+  <line x1="213" y1="197" x2="213" y2="202" stroke="currentColor" stroke-width="0.6" class="mut"/>
+  <text x="51.9" y="193.3" textLength="175.2" lengthAdjust="spacing" font-weight="bold" font-size="12">{{own.q.d1.b.free}}</text>
+  <text x="139.5" y="236" text-anchor="middle" font-size="10" class="mut">30 to 22</text>
+  <text x="265.5" y="170" text-anchor="middle" font-size="10">before[1]</text>
+  <g><rect x="234" y="176" width="63" height="26" class="fill-paper" stroke="currentColor"/></g>
+  <line x1="255" y1="197" x2="255" y2="202" stroke="currentColor" stroke-width="0.6" class="mut"/>
+  <line x1="276" y1="197" x2="276" y2="202" stroke="currentColor" stroke-width="0.6" class="mut"/>
+  <text x="240.9" y="193.3" textLength="49.2" lengthAdjust="spacing" font-weight="bold" font-size="12">{{own.q.d1.b.run2}}</text>
+  <text x="265.5" y="220" text-anchor="middle" font-weight="bold">{{own.q.d1.run2}}</text>
+  <text x="265.5" y="236" text-anchor="middle" font-size="10" class="mut">21 to 19</text>
+  <text x="328.5" y="170" text-anchor="middle" font-size="10">before[0]</text>
+  <g class="mark"><rect x="297" y="176" width="63" height="26" class="fill-mark" fill-opacity="0.3" stroke="currentColor"/></g>
+  <line x1="318" y1="197" x2="318" y2="202" stroke="currentColor" stroke-width="0.6" class="mut"/>
+  <line x1="339" y1="197" x2="339" y2="202" stroke="currentColor" stroke-width="0.6" class="mut"/>
+  <text x="303.9" y="193.3" textLength="49.2" lengthAdjust="spacing" font-weight="bold" font-size="12">{{own.q.d1.b.run1}}</text>
+  <text x="328.5" y="220" text-anchor="middle" font-weight="bold">{{own.q.d1.run1}}</text>
+  <text x="328.5" y="236" text-anchor="middle" font-size="10" class="mut">18 to 16</text>
+  <text x="402.0" y="170" text-anchor="middle" font-size="10">end[1]</text>
+  <g><rect x="360" y="176" width="84" height="26" class="fill-sheet" stroke="currentColor"/></g>
+  <line x1="381" y1="197" x2="381" y2="202" stroke="currentColor" stroke-width="0.6" class="mut"/>
+  <line x1="402" y1="197" x2="402" y2="202" stroke="currentColor" stroke-width="0.6" class="mut"/>
+  <line x1="423" y1="197" x2="423" y2="202" stroke="currentColor" stroke-width="0.6" class="mut"/>
+  <text x="366.9" y="193.3" textLength="70.2" lengthAdjust="spacing" font-weight="bold" font-size="12">{{own.q.d1.b.end2}}</text>
+  <text x="402.0" y="220" text-anchor="middle" font-weight="bold">{{own.q.d1.end2}}</text>
+  <text x="402.0" y="236" text-anchor="middle" font-size="10" class="mut">15 to 12</text>
+  <text x="486.0" y="170" text-anchor="middle" font-size="10">end[0]</text>
+  <g class="acc"><rect x="444" y="176" width="84" height="26" class="fill-acc" fill-opacity="0.3" stroke="currentColor"/></g>
+  <line x1="465" y1="197" x2="465" y2="202" stroke="currentColor" stroke-width="0.6" class="mut"/>
+  <line x1="486" y1="197" x2="486" y2="202" stroke="currentColor" stroke-width="0.6" class="mut"/>
+  <line x1="507" y1="197" x2="507" y2="202" stroke="currentColor" stroke-width="0.6" class="mut"/>
+  <text x="450.9" y="193.3" textLength="70.2" lengthAdjust="spacing" font-weight="bold" font-size="12">{{own.q.d1.b.end1}}</text>
+  <text x="486.0" y="220" text-anchor="middle" font-weight="bold">{{own.q.d1.end1}}</text>
+  <text x="486.0" y="236" text-anchor="middle" font-size="10" class="mut">11 to 8</text>
+  <text x="570.0" y="170" text-anchor="middle" font-size="10">len[1]</text>
+  <g><rect x="528" y="176" width="84" height="26" class="fill-sheet" stroke="currentColor"/></g>
+  <line x1="549" y1="197" x2="549" y2="202" stroke="currentColor" stroke-width="0.6" class="mut"/>
+  <line x1="570" y1="197" x2="570" y2="202" stroke="currentColor" stroke-width="0.6" class="mut"/>
+  <line x1="591" y1="197" x2="591" y2="202" stroke="currentColor" stroke-width="0.6" class="mut"/>
+  <text x="534.9" y="193.3" textLength="70.2" lengthAdjust="spacing" font-weight="bold" font-size="12">{{own.q.d1.b.l2}}</text>
+  <text x="570.0" y="220" text-anchor="middle" font-weight="bold">{{own.q.d1.l2}}</text>
+  <text x="570.0" y="236" text-anchor="middle" font-size="10" class="mut">7 to 4</text>
+  <text x="654.0" y="170" text-anchor="middle" font-size="10">len[0]</text>
+  <g class="acc"><rect x="612" y="176" width="84" height="26" class="fill-acc" fill-opacity="0.3" stroke="currentColor"/></g>
+  <line x1="633" y1="197" x2="633" y2="202" stroke="currentColor" stroke-width="0.6" class="mut"/>
+  <line x1="654" y1="197" x2="654" y2="202" stroke="currentColor" stroke-width="0.6" class="mut"/>
+  <line x1="675" y1="197" x2="675" y2="202" stroke="currentColor" stroke-width="0.6" class="mut"/>
+  <text x="618.9" y="193.3" textLength="70.2" lengthAdjust="spacing" font-weight="bold" font-size="12">{{own.q.d1.b.l1}}</text>
+  <text x="654.0" y="220" text-anchor="middle" font-weight="bold">{{own.q.d1.l1}}</text>
+  <text x="654.0" y="236" text-anchor="middle" font-size="10" class="mut">3 to 0</text>
+  <text x="24" y="170" font-size="10">alone</text>
+</svg>
+</div>
+<figcaption>The 8 bits <code>0xd1</code> decoded with <code>OWN</code>, and the fields of <code>quad[0xd1]</code> they fill, from the tables the build makes.</figcaption>
+</figure>
+
 Two lengths, so the loop ends, and the entry is `{{own.q.d1.entry}}`. With no length at all, `got ==
 0`, the entry is only the bit that sends the decoder to `decode[]`. With one, `end[1]` is set to
 `end[0]`: the decoder reads the second end whenever the first length leaves room in the code space,

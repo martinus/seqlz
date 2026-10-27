@@ -138,6 +138,18 @@ static void quad_facts(const struct seqlz_tables* t, unsigned int k) {
     fact_num(key("own.q.%02x.symlen", k), t->own.decode[k] >> 8);
     for (unsigned int pos = 1; pos < 8; pos++)
         fact_str(key("own.q.%02x.w%u", k, pos), bin(k << pos & 0xffU, 8));
+    /* each field's bits, for chapter 8's figure of the entry */
+    fact_str(key("own.q.%02x.b.alone", k), bin(e >> OWN_QUAD_ALONE_AT, 32 - OWN_QUAD_ALONE_AT));
+    fact_str(key("own.q.%02x.b.free", k),
+             bin(e >> (OWN_QUAD_RUN2_AT + 3) & ((1U << (OWN_QUAD_ALONE_AT - OWN_QUAD_RUN2_AT - 3)) - 1U),
+                 OWN_QUAD_ALONE_AT - OWN_QUAD_RUN2_AT - 3));
+    fact_str(key("own.q.%02x.b.run2", k), bin(e >> OWN_QUAD_RUN2_AT & OWN_QUAD_RUN_MAX, 3));
+    fact_str(key("own.q.%02x.b.run1", k), bin(e >> OWN_QUAD_RUN1_AT & OWN_QUAD_RUN_MAX, 3));
+    fact_str(key("own.q.%02x.b.end2", k), bin(e >> OWN_QUAD_END2_AT & 15U, 4));
+    fact_str(key("own.q.%02x.b.end1", k), bin(e >> OWN_QUAD_END1_AT & 15U, 4));
+    fact_str(key("own.q.%02x.b.l2", k), bin(e >> 4 & 15U, 4));
+    fact_str(key("own.q.%02x.b.l1", k), bin(e & 15U, 4));
+    fact_str(key("own.q.%02x.b.all", k), bin(e, 32));
 }
 
 /* bit i of p, most significant bit of each byte first */

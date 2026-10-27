@@ -461,7 +461,7 @@ static void header_facts(void) {
 
 static void ch06_facts(void) {
     static const unsigned int lens[] = {5, 16, 31, 100, 4059};
-    static const unsigned int offs[] = {1, 2, 8, 15, 24, 255, 256, 264, 2040, 2048, 4095};
+    static const unsigned int offs[] = {1, 2, 8, 15, 24, 72, 255, 256, 264, 399, 2040, 2048, 4095};
     static const unsigned int toks[][3] = {{2, 7, 4}, {1, 7, 0}, {2, 4094, 1}, {20, 100, 3}, {0, 4, 0}};
     unsigned int k, extra, raw, sym, cls, aligned;
     char P[64];
@@ -533,6 +533,8 @@ static void ch06_facts(void) {
         fact_num(K(P, "cls"), cls);
         fact_num(K(P, "raw"), raw);
         fact_num(K(P, "sent"), o >> SEQLZ_OFF_SHIFT(cls));
+        fact_num(K(P, "shift"), SEQLZ_OFF_SHIFT(cls));
+        fact_num(K(P, "nib"), 4U * cls);
     }
     for (k = 0; k < sizeof toks / sizeof toks[0]; k++) {
         unsigned int t = seqlz_token(toks[k][0], toks[k][1], toks[k][2]);

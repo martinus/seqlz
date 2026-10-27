@@ -397,6 +397,11 @@ At level 3 it comes after the count, and after the lazy step, which can move a m
 on and leave the byte it passed over to be taken back with the new offset. On the second page below
 it takes the 2 literals before the match found late.
 
+On another made-up page both take bytes: the table finds a short match at `pos`, `seqlz_lazy()` a
+longer one at `pos + 1`, and the step back moves that one back past `pos`, into the literals before it.
+
+@anim lazy wide Level 3 on a page of random bytes with three copies in it. `anim/lazy.c` builds the page and checks each match against what `seqlz_find()` returns at levels 2 and 3.
+
 ::: measured The lazy step from 20 bytes on, the step back kept at level 3
 On 20 000 pages each of a phone dump and two desktop samples, a lazy step for matches up to
 4 + n bytes saved more bytes the larger n was, and n = 16, the 20 of `SEQLZ_LAZY_LEN`, kept most of

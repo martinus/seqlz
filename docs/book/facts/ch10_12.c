@@ -5,6 +5,7 @@
  * examples come from the real helpers:
  *   ch10.ab.*, ch10.ptr.*   the page of ab and the page of pointers put by put and flush by flush,
  *                           checked against what seqlz_compress() writes
+ *   ch10.slab.*             one sequence of chapter 16's page, the same way
  *   ch10.esc.*              the escape, and token 10 escaped
  *   ch11.*                  chapter 11's page of letters through seqlz_code_literals(), step by step
  *   ch12.*                  the sizes and offsets of the decoder's tables, repeat_pattern(), and the
@@ -87,6 +88,7 @@ struct trace {
     struct seqlz_encoder e;
     u8* low;                    /* the lowest byte a flush wrote */
     unsigned int seqs, flushes; /* how many of them get facts */
+    unsigned int from;          /* the first sequence with facts, counted from 1; 0 is 1 */
     unsigned int n_flush;
 };
 
@@ -140,6 +142,14 @@ static void len_value_facts(const char* prefix, const struct value_table* vt, un
     str(key("%s.bits", pre), "%s %s", bin(code, len), bin(x, extra));
 }
 
+/* the bits put_len_value() puts for v, as a string */
+static const char* value_bits(const struct value_table* vt, unsigned int v) {
+    unsigned int extra, s = seqlz_len_symbol(v, &extra);
+    u32 entry = vt->enc[s];
+
+    return bin((u64)(entry & 0xffffU) << extra | (v & ((1U << extra) - 1U)), (entry >> 16 & 15U) + extra);
+}
+
 /*
  * The page through a copy of encode_emit()'s bits, the facts of the first r->seqs sequences and
  * r->flushes flushes; fails unless the page comes out as seqlz_compress() writes it.
@@ -160,7 +170,10 @@ static void encode_traced(struct trace* r, void (*make)(u8*)) {
     r->n_flush = 0;
     for (i = 0; i < n; i++) {
         unsigned int ll = seq[i].literals, ml = i + 1 == n ? 0 : seq[i].match, off = seq[i].offset;
-        unsigned int raw, cls, tok, tlen, cnt0 = e->cnt;
+        unsigned int raw, cls, tok, tlen, cnt0 = e->cnt, last = e->last;
+        unsigned int at0 = 8U * (unsigned int)(dst + CAP - e->p) + e->cnt;
+        int traced = i < r->seqs && i + 1 >= r->from;
+        char want[128];
         u32 code;
         u64 v;
 
@@ -174,7 +187,12 @@ static void encode_traced(struct trace* r, void (*make)(u8*)) {
         code = token_code(tok, &tlen);
         v = (u64)code << raw | ((off >> SEQLZ_OFF_SHIFT(cls)) & (0U - (cls != 0)));
         enc_put(e, v, tlen + raw);
-        if (i < r->seqs) {
+        snprintf(want, sizeof want, "%s", bin(v, tlen + raw));
+        if (ll >= SEQLZ_LL_CAP)
+            strcat(want, value_bits(&T->ll, ll - SEQLZ_LL_CAP));
+        if (ml - 4 >= SEQLZ_ML_CAP)
+            strcat(want, value_bits(&T->ml, ml - 4 - SEQLZ_ML_CAP));
+        if (traced) {
             char pre[64];
 
             snprintf(pre, sizeof pre, "ch10.%s.s%u", r->name, i + 1);
@@ -182,6 +200,10 @@ static void encode_traced(struct trace* r, void (*make)(u8*)) {
             fact_num(key("%s.ml", pre), ml);
             fact_num(key("%s.ml4", pre), ml - 4);
             fact_num(key("%s.off", pre), off);
+            fact_num(key("%s.last", pre), last);
+            fact_num(key("%s.llf", pre), ll < SEQLZ_LL_CAP ? ll : SEQLZ_LL_CAP);
+            fact_num(key("%s.mlf", pre), ml - 4 < SEQLZ_ML_CAP ? ml - 4 : SEQLZ_ML_CAP);
+            fact_num(key("%s.shift", pre), SEQLZ_OFF_SHIFT(cls));
             fact_num(key("%s.cls", pre), cls);
             fact_num(key("%s.raw", pre), raw);
             fact_num(key("%s.tok", pre), tok);
@@ -202,6 +224,8 @@ static void encode_traced(struct trace* r, void (*make)(u8*)) {
             fact_num(key("%s.cnt", pre), e->cnt);
             /* the bits that count, those from before this put first */
             str(key("%s.accbits", pre), "%s%s%s", bin(e->acc >> (tlen + raw), cnt0), cnt0 ? " " : "", bin(e->acc, tlen + raw));
+            if (ll >= SEQLZ_LL_CAP)
+                len_value_facts(key("%s.llv", pre), &T->ll, ll - SEQLZ_LL_CAP);
             if (ml - 4 >= SEQLZ_ML_CAP)
                 len_value_facts(key("%s.mlv", pre), &T->ml, ml - 4 - SEQLZ_ML_CAP);
         }
@@ -211,13 +235,27 @@ static void encode_traced(struct trace* r, void (*make)(u8*)) {
         }
         if (ml - 4 >= SEQLZ_ML_CAP) {
             put_len_value(e, &T->ml, ml - 4 - SEQLZ_ML_CAP);
-            if (i < r->seqs) {
+            if (traced) {
                 str(key("ch10.%s.s%u.mlv.acc", r->name, i + 1), "0x%llx", (unsigned long long)e->acc);
                 fact_num(key("ch10.%s.s%u.mlv.cnt", r->name, i + 1), e->cnt);
             }
         }
         flush_traced(r);
         e->last = off;
+        if (traced) {
+            /* the bits of this sequence as they are in dst now, bit k of the bitstream at end - 1 - k / 8 */
+            unsigned int at1 = 8U * (unsigned int)(dst + CAP - e->p) + e->cnt, k;
+            char* s = scratch();
+
+            for (k = at0; k < at1; k++)
+                s[k - at0] = (char)('0' + (dst[CAP - 1 - k / 8] >> (7 - k % 8) & 1));
+            s[at1 - at0] = 0;
+            if (strcmp(s, want))
+                fail("the bits of a sequence in dst are not the values put");
+            str(key("ch10.%s.s%u.seqbits", r->name, i + 1), "%s", s);
+            fact_num(key("ch10.%s.s%u.nbits", r->name, i + 1), at1 - at0);
+            fact_num(key("ch10.%s.s%u.at", r->name, i + 1), at0);
+        }
     }
     str(key("ch10.%s.last8", r->name), "%s", hexb(dst + CAP - 8, 8));
     str(key("ch10.%s.le64", r->name), "0x%016llx", (unsigned long long)get_unaligned_le64(dst + CAP - 8));
@@ -258,11 +296,14 @@ static void tex_num(const char* k, unsigned int v) {
 static void chapter10(void) {
     struct trace ab = {.name = "ab", .seqs = 1, .flushes = 1};
     struct trace ptr = {.name = "ptr", .seqs = 4, .flushes = 4};
+    /* chapter 10's figure of encode_seq(): a token, its offset bits and an ll value */
+    struct trace slab = {.name = "slab", .seqs = 176, .flushes = 0, .from = 176};
     unsigned int tok, len, codes = 0, most = 0, extra;
     u32 ee = T->token.enc[SEQLZ_ESCAPE], c;
 
     encode_traced(&ab, ab_page);
     encode_traced(&ptr, pointer_page);
+    encode_traced(&slab, slab_page);
     fact_num("ch10.ab.min_dst", min_dst(ab_page));
     fact_num("ch10.ptr.min_dst", min_dst(pointer_page));
     fact_num("ch10.slab.min_dst", min_dst(slab_page));

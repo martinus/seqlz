@@ -314,6 +314,59 @@ value, about 9 bits per page ([chapter 4](#ch-format--end)).
 
 @listing src/seqlz_compress.c 230-251
 
+The figure takes sequence 176 of [chapter 16](#ch-trace)'s page through these lines: a new offset of
+class {{ch10.slab.s176.cls}}, a token with a code of its own, and an `ll` value. The
+[animation above](#anim-ends) counts the same {{ch10.slab.s176.nbits}} bits for it; `facts/ch10_12.c`
+reads them back from `dst` and checks them against the codes put.
+@assert ch10.slab.s176.tlen == 8 and ch10.slab.s176.raw == 12 and ch10.slab.s176.llv.len == 3 and ch10.slab.s176.llv.extra == 4 and ch10.slab.s176.escaped == 0 and ch10.slab.s176.ll >= 15 and ch10.slab.s176.mlf < 31 and ch10.slab.s176.seqbits == ch10.slab.s176.code + ch10.slab.s176.offbits + ch10.slab.s176.llv.code + ch10.slab.s176.llv.xbits
+
+<figure class="diagram">
+<div class="scroll">
+<svg viewBox="0 0 720 340" role="img" aria-label="Sequence 176 of chapter 16's page through encode_seq(): its offset class, its token, the token's code, the offset bits, the ll value, and the 27 bits they make" font-size="12">
+  <text x="10" y="16" font-weight="bold">sequence 176 of chapter 16's page: ll = {{ch10.slab.s176.ll}}, ml = {{ch10.slab.s176.ml}}, off = {{ch10.slab.s176.off}}, e-&gt;last = {{ch10.slab.s176.last}}</text>
+  <text x="10" y="48" class="mut" font-size="11">1</text>
+  <text x="28" y="48">seqlz_off_class({{ch10.slab.s176.off}}, {{ch10.slab.s176.last}}, &amp;raw_bits)</text>
+  <text x="408" y="48"><tspan class="acc" font-weight="bold">class {{ch10.slab.s176.cls}}</tspan>, raw_bits = <tspan class="mark" font-weight="bold">{{ch10.slab.s176.raw}}</tspan></text>
+  <text x="10" y="74" class="mut" font-size="11">2</text>
+  <text x="28" y="74">seqlz_token({{ch10.slab.s176.ll}}, {{ch10.slab.s176.ml}}, {{ch10.slab.s176.cls}})</text>
+  <text x="408" y="74">{{ch10.slab.s176.llf}} + 16 * {{ch10.slab.s176.mlf}} + 512 * {{ch10.slab.s176.cls}} = <tspan font-weight="bold">{{ch10.slab.s176.tok}}</tspan></text>
+  <text x="10" y="100" class="mut" font-size="11">3</text>
+  <text x="28" y="100">token_code({{ch10.slab.s176.tok}}, &amp;tlen)</text>
+  <text x="408" y="100">token.enc[{{ch10.slab.s176.tok}}]: code <tspan class="acc" font-weight="bold">{{ch10.slab.s176.code}}</tspan>, tlen = {{ch10.slab.s176.tlen}}</text>
+  <text x="10" y="126" class="mut" font-size="11">4</text>
+  <text x="28" y="126">enc_put(e, code &lt;&lt; {{ch10.slab.s176.raw}} | ({{ch10.slab.s176.off}} &gt;&gt; {{ch10.slab.s176.shift}}), {{ch10.slab.s176.tlen}} + {{ch10.slab.s176.raw}})</text>
+  <text x="408" y="126">{{ch10.slab.s176.putn}} bits: offset bits <tspan class="mark" font-weight="bold">{{ch10.slab.s176.offbits}}</tspan></text>
+  <text x="10" y="152" class="mut" font-size="11">5</text>
+  <text x="28" y="152">ll &gt;= 15: put_len_value(e, &amp;seqlz_tables.ll, {{ch10.slab.s176.llv.v}})</text>
+  <text x="408" y="152">symbol {{ch10.slab.s176.llv.sym}}: code <tspan font-weight="bold">{{ch10.slab.s176.llv.code}}</tspan>, extra <tspan class="mut" font-weight="bold">{{ch10.slab.s176.llv.xbits}}</tspan></text>
+  <text x="10" y="178" class="mut" font-size="11">6</text>
+  <text x="28" y="178">enc_flush(e)</text>
+  <text x="408" y="178">the whole bytes of acc go below p</text>
+  <text x="10" y="204" class="mut" font-size="11">7</text>
+  <text x="28" y="204">ml - 4 = {{ch10.slab.s176.ml4}}, below 31: no ml value</text>
+  <text x="408" y="204">enc_flush(e), then e-&gt;last = {{ch10.slab.s176.off}}</text>
+  <line x1="396" y1="32" x2="396" y2="214" stroke="currentColor" stroke-width="0.6" class="mut"/>
+  <text x="10" y="244" font-weight="bold">the {{ch10.slab.s176.nbits}} bits of the sequence, in the order the decoder reads them</text>
+  <g class="acc"><rect x="28" y="258" width="176" height="28" class="fill-acc" fill-opacity="0.3" stroke="currentColor"/></g>
+  <text x="35" y="277" textLength="162" lengthAdjust="spacing" font-weight="bold" font-size="13">{{ch10.slab.s176.code}}</text>
+  <text x="116.0" y="304" text-anchor="middle" font-size="11">token {{ch10.slab.s176.tok}}</text>
+  <g class="mark"><rect x="204" y="258" width="264" height="28" class="fill-mark" fill-opacity="0.3" stroke="currentColor"/></g>
+  <text x="211" y="277" textLength="250" lengthAdjust="spacing" font-weight="bold" font-size="13">{{ch10.slab.s176.offbits}}</text>
+  <text x="336.0" y="304" text-anchor="middle" font-size="11">offset {{ch10.slab.s176.off}}</text>
+  <g><rect x="468" y="258" width="66" height="28" class="fill-sheet" stroke="currentColor"/></g>
+  <text x="475" y="277" textLength="52" lengthAdjust="spacing" font-weight="bold" font-size="13">{{ch10.slab.s176.llv.code}}</text>
+  <text x="501.0" y="304" text-anchor="middle" font-size="11">symbol {{ch10.slab.s176.llv.sym}}</text>
+  <g class="mut"><rect x="534" y="258" width="88" height="28" class="fill-paper" stroke="currentColor"/></g>
+  <text x="541" y="277" textLength="74" lengthAdjust="spacing" font-weight="bold" font-size="13">{{ch10.slab.s176.llv.xbits}}</text>
+  <text x="578.0" y="304" text-anchor="middle" font-size="11">low {{ch10.slab.s176.llv.extra}} of {{ch10.slab.s176.llv.v}}</text>
+  <text x="116.0" y="320" text-anchor="middle" font-size="11" class="mut">{{ch10.slab.s176.tlen}} bits</text>
+  <text x="336.0" y="320" text-anchor="middle" font-size="11" class="mut">{{ch10.slab.s176.raw}} bits</text>
+  <text x="545.0" y="320" text-anchor="middle" font-size="11" class="mut">the ll value, {{ch10.slab.s176.llv.n}} bits</text>
+</svg>
+</div>
+<figcaption>Sequence 176 of chapter 16's page through <code>encode_seq()</code>, from its <code>ll</code>, <code>ml</code> and offset to the bits that go into <code>acc</code>, from the real encoder's helpers.</figcaption>
+</figure>
+
 The first sequence of the page of `ab` is {{ch10.ab.s1.ll}} literals and a match at offset
 {{ch10.ab.s1.off}}, with `last` 1: class {{ch10.ab.s1.cls}}, {{ch10.ab.s1.raw}} bit, token
 $2 + 16 \times 31 + 512 \times 1 = {{ch10.ab.s1.tok}}$.
