@@ -3,8 +3,7 @@
 Part II goes through `src/` file by file, in the order in which the files build on each other. This
 page is the other order: the path of one page through the code, written and read back, with a link to
 the chapter of each step. Every chapter of Part II starts with the same path in four lines, its own
-step marked, and most with a box "In short" of their main points, each a link to the section that
-explains it. Skim those, and read on where a point is new to you.
+step marked, and a box "In short" of its main points, each a link to the section that explains it. Skim those, and read on where a point is new to you.
 
 <figure class="diagram">
 <div class="scroll">
