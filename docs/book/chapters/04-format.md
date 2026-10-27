@@ -393,9 +393,11 @@ without any memory of its own, in [chapter 13](#ch-literals-dec--own).
 With `e = 1` each literal was stored, before it was coded, as its **delta** to the byte `x` before it
 in the page: the literal minus that byte, modulo 256. The decoder adds the same byte back as it appends
 the literal, modulo 256 again, which gives the literal back. The byte `dt`, byte 3, right after `t` and
-before the stream sizes, says which `x`. One rule holds for all three: the literal `lits[used + i]`,
-which goes to byte `p = |out|` of the page, is `(lits[used + i] + out[p - x]) mod 256` if `p >= x`, else
-as it is, with
+before the stream sizes, says which `x`. One rule holds for all three. Take a literal that the decoder
+writes to byte `p` of the page, where `out` is the page as far as it is written, so `out[p - x]` is
+the byte `x` before it. If `p >= x`, the page stores the literal as `(literal - out[p - x]) mod 256`,
+and the decoder writes `(stored + out[p - x]) mod 256`; if `p < x`, there is no such byte, and the
+literal is stored as it is. `x` is
 
 | `dt` | `x` |
 | --- | --- |
