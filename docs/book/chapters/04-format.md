@@ -191,109 +191,9 @@ everything after them, up to the end of the compressed page, is `B`, the bitstre
 only layout `seqlz-1` writes, and levels 2 and 3 write it for every page whose literals do not
 code well enough.
 
-**Coded literals.** With the top bit set, the literals are Huffman coded, with one of 8 fixed literal
-tables or with a table that the page brings, and more fields come first. Byte 2, `t`:
-
-<figure class="diagram">
-<div class="scroll">
-<svg viewBox="0 0 720 134" role="img" aria-label="Byte 2 of a page with coded literals, {{ch04.text.t}}: the delta bit, w minus 5 in bits 4 to 6, the literals' code in bits 0 to 3" font-size="12">
-  <text x="222.0" y="30" text-anchor="middle" class="mut">bit 7</text>
-  <rect x="200" y="40" width="44" height="30" class="fill-sheet" stroke="currentColor"/>
-  <text x="222.0" y="60" text-anchor="middle" font-weight="bold">{{ch04.text.t_bit.7}}</text>
-  <text x="266.0" y="30" text-anchor="middle" class="mut">bit 6</text>
-  <rect x="244" y="40" width="44" height="30" class="fill-mark" stroke="currentColor" fill-opacity="0.3"/>
-  <text x="266.0" y="60" text-anchor="middle" font-weight="bold">{{ch04.text.t_bit.6}}</text>
-  <text x="310.0" y="30" text-anchor="middle" class="mut">bit 5</text>
-  <rect x="288" y="40" width="44" height="30" class="fill-mark" stroke="currentColor" fill-opacity="0.3"/>
-  <text x="310.0" y="60" text-anchor="middle" font-weight="bold">{{ch04.text.t_bit.5}}</text>
-  <text x="354.0" y="30" text-anchor="middle" class="mut">bit 4</text>
-  <rect x="332" y="40" width="44" height="30" class="fill-mark" stroke="currentColor" fill-opacity="0.3"/>
-  <text x="354.0" y="60" text-anchor="middle" font-weight="bold">{{ch04.text.t_bit.4}}</text>
-  <text x="398.0" y="30" text-anchor="middle" class="mut">bit 3</text>
-  <rect x="376" y="40" width="44" height="30" class="fill-acc" stroke="currentColor" fill-opacity="0.3"/>
-  <text x="398.0" y="60" text-anchor="middle" font-weight="bold">{{ch04.text.t_bit.3}}</text>
-  <text x="442.0" y="30" text-anchor="middle" class="mut">bit 2</text>
-  <rect x="420" y="40" width="44" height="30" class="fill-acc" stroke="currentColor" fill-opacity="0.3"/>
-  <text x="442.0" y="60" text-anchor="middle" font-weight="bold">{{ch04.text.t_bit.2}}</text>
-  <text x="486.0" y="30" text-anchor="middle" class="mut">bit 1</text>
-  <rect x="464" y="40" width="44" height="30" class="fill-acc" stroke="currentColor" fill-opacity="0.3"/>
-  <text x="486.0" y="60" text-anchor="middle" font-weight="bold">{{ch04.text.t_bit.1}}</text>
-  <text x="530.0" y="30" text-anchor="middle" class="mut">bit 0</text>
-  <rect x="508" y="40" width="44" height="30" class="fill-acc" stroke="currentColor" fill-opacity="0.3"/>
-  <text x="530.0" y="60" text-anchor="middle" font-weight="bold">{{ch04.text.t_bit.0}}</text>
-  <path d="M203 78 V84 H241 V78" fill="none" stroke="currentColor"/>
-  <text x="222.0" y="102" text-anchor="middle" font-weight="bold">e = {{ch04.text.t_bit.7}}</text>
-  <text x="222.0" y="119" text-anchor="middle">t &gt;&gt; 7</text>
-  <path d="M247 78 V84 H373 V78" fill="none" stroke="currentColor"/>
-  <text x="310.0" y="102" text-anchor="middle" font-weight="bold">w - 5 = {{ch04.text.w5}}</text>
-  <text x="310.0" y="119" text-anchor="middle">(t &gt;&gt; 4) &amp; 7</text>
-  <path d="M379 78 V84 H549 V78" fill="none" stroke="currentColor"/>
-  <text x="464.0" y="102" text-anchor="middle" font-weight="bold">code = {{ch04.text.set}}</text>
-  <text x="464.0" y="119" text-anchor="middle">t &amp; 15</text>
-  <text x="150" y="60" text-anchor="end">t = {{ch04.text.t}}</text>
-</svg>
-</div>
-<figcaption>Byte 2 of the made-up text page below: <code>{{ch04.text.t}}</code> is literal table {{ch04.text.set}} and stream sizes of {{ch04.text.w}} bits.</figcaption>
-</figure>
-
-- `code = t & 15` says how the literals are coded: 0 to 7 is one of the 8 fixed literal tables, 8
-  (`SEQLZ_LIT_OWN`) a table of the page's own ([below](#ch-format--own)), and 9 to 15 make the page
-  invalid.
-- `w = 5 + ((t >> 4) & 7)` is the number of bits of each stream size, 5 to 12.
-- `e = t >> 7` says whether the literals are stored as deltas to earlier bytes of the page
-  ([below](#ch-format--deltas)), which only `seqlz-3` writes. The codes 9 to 15 are free for a later format
-  ([no version in the page](#ch-format--version)).
-
-With `e = 1` byte 3 is `dt`, which says which earlier byte each delta is to. The next `w` bytes, from
-byte $3 + e$ on, are one little-endian number `S` of `8 * w` bits with the 8 stream sizes, `w` bits
-each, the lowest first: `s[j] = (S >> (j * w)) & ((1 << w) - 1)`. With code 8 the page's own table follows,
-`d` bytes; with the codes 0 to 7, `d` is 0. Then come the 8 streams, `s[j]`
-bytes each, and after the last one `B`. The literals are dealt out to the streams like cards: stream
-$j$ holds literals $j$, $j + 8$, $j + 16$ and so on, each as a code of the table that `code` names,
-read most significant bit first like `B`. A stream's codes must end in its last byte, and the bits
-after the last code are 0; a stream without literals has `s[j] = 0`. All 8 streams use the same table:
-that there are 8 streams and 8 fixed tables is a coincidence.
-
-A page made up for this book: 4096 bytes of "words" of 2 to 9 letters, picked at random from the 12
-letters `etaoinshrdlu` by the C library's classic random number generator from seed 1, each word
-followed by a space. `seqlz-1` stores it in {{ch04.text.raw}} bytes, `seqlz-2` in
-{{ch04.text.len}}. The first {{ch04.text.streams_at}} bytes of the coded page are
-
-```text
-{{ch04.text.hdr}}  {{ch04.text.t_hex}}  {{ch04.text.sizes_hex}}
-```
-
-- `h = {{ch04.text.h}}`: coded literals, and `n = {{ch04.text.n_hex}} = {{ch04.text.n}}`,
-  {{ch04.text.per_stream}} per stream.
-- `t = {{ch04.text.t}} = 0b{{ch04.text.t_bin}}`: code `{{ch04.text.t}} & 15 = {{ch04.text.set}}`,
-  the fixed table that codes this page's literals in the fewest bits, and
-  `w = 5 + (({{ch04.text.t}} >> 4) & 7) = 5 + {{ch04.text.w5}} = {{ch04.text.w}}`.
-- The {{ch04.text.w}} bytes of sizes are `S = {{ch04.text.S}}`. Its lowest {{ch04.text.w}} bits,
-  `{{ch04.text.s0_hex}} = {{ch04.text.s.0}}`, are the size of stream 0; the 8 sizes are
-  {{ch04.text.s.0}}, {{ch04.text.s.1}}, {{ch04.text.s.2}}, {{ch04.text.s.3}}, {{ch04.text.s.4}},
-  {{ch04.text.s.5}}, {{ch04.text.s.6}} and {{ch04.text.s.7}} bytes, {{ch04.text.sum}} together.
-- No deltas and no own table, `e = 0` and `d = 0`: the streams start at byte
-  $3 + w = {{ch04.text.streams_at}}$, `B` at
-  ${{ch04.text.streams_at}} + {{ch04.text.sum}} = {{ch04.text.b_at}}$, and takes the last
-  {{ch04.text.b_bytes}} bytes of the page.
-@assert ch04.text.best == ch04.text.set and ch04.text.set < 8 and ch04.text.t_bit[7] == 0
-
-{{ch04.text.per_stream}} literals in about {{ch04.text.avg}} bytes is {{ch04.text.bits_per_lit}} bits
-per literal, where the raw page spends 8. `seqlz-3` stores the same page in {{own.text.len}} bytes, with a
-table of its own, [below](#ch-format--own).
-
-::: why Why the stream sizes take `w` bits and not 2 bytes each
-A stream holds every 8th literal, and a literal code has at most 10 bits: on a 4 KiB page at most 640
-bytes, 10 bits, on a 16 KiB page 2560 bytes, 12 bits. The largest stream of most pages is below 128
-bytes, 7 bits. With 2 bytes per size, as until 5th October 2026, the header was 19 bytes, and pages
-were 5.3 bytes larger on average
-([explored-designs.md](https://github.com/martinus/seqlz/blob/main/docs/explored-designs.md#stream-sizes-in-as-many-bits-as-the-largest-needs-kept)).
-Widths of 3 and 4 bits are left out: few pages would use them.
-:::
-
-Why the literals are in 8 streams is a question of the decoder's speed
-([chains of dependent steps](#ch-cpu--chains)). How the encoder picks the table, and when it codes the
-literals at all, is in [chapter 11](#ch-literals-enc).
+The rest of the chapter goes from what every page has to what only some have: the codes, and `B` with
+its sequences, then two pages read bit by bit, then the coded literals, a page's own literal table and
+the deltas, and last the rules of a valid page and the decoder as the spec writes it.
 
 ## Prefix codes from code lengths {#ch-format--codes}
 
@@ -342,188 +242,6 @@ from it: `read(n)`, the next `n` bits as a number, the first bit read the most s
 being 0; `symbol(table)`, bits one by one until they are a code of the table; and `value(table)`, a
 [length value](#ch-format--length-values). The bit order does not change the size of a page, only how
 many of the decoder's cache lines a page needs ([chapter 3](#ch-cpu--msb-first)).
-
-## A page's own literal table, in byte order {#ch-format--own}
-
-With code 8 the page brings its own literal table, right after `dt` and the stream sizes, at
-byte $3 + w + e$. It is
-read most significant bit first, like `B`. It is not a list of 256 code lengths: it is a list of
-symbols of one more fixed table, `OWN`, which goes through the byte values from 0 up and says for each
-one whether it has a code, and how long it is:
-
-- symbol `l - 1`, for `l` from 1 to 10: the next byte value has a code of `l` bits;
-- symbol `9 + k`, for `k` from 1 to 9, then `x = read(k - 1)`: the next $2^{k-1} + x$ byte values have
-  no code, a **run**. Symbol 10 is a run of 1 with no bits after it, symbol 15 with the 5 bits `00000`
-  a run of 32.
-
-A run is a count of byte values in a row that have no code. Small runs are common, a table skips
-one or two byte values here and there, and long ones are rare, e.g. the 32 control characters below
-the space in a text page. So the code for a run has to be short for small counts and still work for
-large ones. `OWN` writes a run in two parts: first how many bits the count has in binary, its
-**width** `k`, as the symbol `9 + k`; then the bits of the count below its first 1:
-
-| run | in binary | width `k` | symbol `9 + k` | bits after the symbol |
-| ---: | --- | ---: | ---: | --- |
-| 1 | `1` | 1 | 10 | none |
-| 2 | `10` | 2 | 11 | `0` |
-| 3 | `11` | 2 | 11 | `1` |
-| 4 | `100` | 3 | 12 | `00` |
-| 5 | `101` | 3 | 12 | `01` |
-| 7 | `111` | 3 | 12 | `11` |
-| 32 | `100000` | 6 | 15 | `00000` |
-| 100 | `1100100` | 7 | 16 | `100100` |
-
-The first bit of a number in binary is always a 1, else the number would have one bit less. So once the
-decoder knows the width, it knows that bit too, and only the `k - 1` bits below it are in the
-bitstream. To decode, it puts the 1 back in front: symbol 12 means width 3, `read(2)` gives `01`, and a
-1 in front of `01` is `101`, a run of 5. The rule above, $2^{k-1} + x$, says the same with numbers
-instead of bits: $2^{k-1}$ is the 1 in front, 4 for `k = 3`, and `x` is the number the bits after the
-symbol make, 1 for `01`.
-
-Writing a number as its width and then its bits is an old idea. Its textbook form is the
-[Elias gamma code](https://en.wikipedia.org/wiki/Elias_gamma_coding): `k - 1` zeros, then all `k`
-bits of the number, the 1 in front included. The decoder counts zeros until it reads a 1; that 1 is
-the number's first bit, and as many bits follow as it counted zeros. A run of 5 is `00` and `101`,
-`00101`, and a run of 32 is `00000100000`, 11 bits. The
-[Exp-Golomb code](https://en.wikipedia.org/wiki/Exponential-Golomb_coding) of order 0 is the same code
-for numbers that start at 0: it writes `n` as Elias gamma writes `n + 1`, so a run as `run - 1`
-gives the same bits. [Chapter 17](#ch-decisions--level3) has its other orders.
-
-`OWN` does not write the zeros: the width is one of its symbols, in the same prefix code as the
-lengths. This does two things. One symbol says that a run comes and how wide it is; with Elias gamma
-each symbol would need one more bit in front, to tell a run from a length. And like every
-[Huffman code](#ch-compression--huffman), `OWN` gives a symbol the shorter a code the more often it came
-on the pages `OWN` was counted on, lengths and runs together. On those pages the lengths came more
-often than the runs, so the lengths of 9 and 10 bits got codes of {{own.len.8}} bits, 7 and 8 bits
-codes of {{own.len.6}} bits, and a run costs more than in Elias gamma (the whole code is in the table
-below):
-
-| run | bits in `OWN`: the symbol and the bits after it | bits in Elias gamma, and 1 for run or length |
-| --- | ---: | ---: |
-| 1 | {{own.len.10}} | 1 + 1 |
-| 2 or 3 | {{own.len.11}} + 1 | 3 + 1 |
-| 4 to 7 | {{own.len.12}} + 2 | 5 + 1 |
-| 32 to 63 | {{own.len.15}} + 5 | 11 + 1 |
-@assert own.len[10] > 2 and own.len[11] + 1 > 4 and own.len[12] + 2 > 6 and own.len[15] + 5 > 12 and own.len[8] == own.len[9] == 2 and own.len[6] == own.len[7] == 3
-
-The bits go where a page's table spends them: every byte value with a code costs one length, and a
-run comes only between them. In the example below, {{own.text.with_code}} of the {{own.text.rows}}
-symbols are lengths.
-
-The list ends as soon as the codes fill the code space, when $\sum 2^{-l}$ over the lengths so far
-is exactly 1: the code is then [complete](#ch-compression--complete), and the byte values after the
-last one have no code. The bits after the last symbol, up to the end of its byte, are 0, and `d` is
-the number of bytes the table takes. The codes follow from the lengths as for every table, the
-[canonical code](#ch-compression--canonical-codes), with the byte value as the symbol. `OWN` has
-{{own.symbols}} symbols and codes of at most {{own.code_bits}} bits, by length:
-
-| symbols | mean | codes |
-| --- | --- | --- |
-| 8, 9 | lengths 9 and 10 | `{{own.code.8}}`, `{{own.code.9}}` |
-| 6, 7 | lengths 7 and 8 | `{{own.code.6}}`, `{{own.code.7}}` |
-| 5, 10 | length 6, a run of 1 | `{{own.code.5}}`, `{{own.code.10}}` |
-| 4, 11 | length 5, a run of 2 or 3 | `{{own.code.4}}`, `{{own.code.11}}` |
-| 12 | a run of 4 to 7 | `{{own.code.12}}` |
-| 2, 3 | lengths 3 and 4 | `{{own.code.2}}`, `{{own.code.3}}` |
-| 0, 1, 13 to 18 | lengths 1 and 2, runs of 8 to 15, ..., 256 to 511 | `{{own.code.0}}` to `{{own.code.18}}` |
-@assert own.len[8] == own.len[9] == 2 and own.len[6] == own.len[7] == 3 and own.len[5] == own.len[10] == 4 and own.len[4] == own.len[11] == 5 and own.len[12] == 6 and own.len[2] == own.len[3] == 7 and own.len[0] == own.len[1] == own.len[13] == own.len[18] == 8 and own.symbols == 19
-
-The lengths that pages' own tables have most, 7 to 10 bits, get the shortest codes. The
-description is in the order of the byte values, so a byte value costs no bits of its own, only its
-length does; `docs/format.md` gives about 0.45 bytes per byte value with a code, 60 to 120 bytes on
-most pages that have a table of their own
-([format.md](https://github.com/martinus/seqlz/blob/main/docs/format.md#a-blocks-own-literal-table)).
-A run of 256 to 511 can never be valid, as a table has only 256 byte values; it is there so that `OWN`
-is complete too. Sent in byte order, with runs, the descriptions made pages 0.5% smaller than the ones
-of 9th October, which listed the bytes by code length, each as its distance to the one before
-([explored-designs.md](https://github.com/martinus/seqlz/blob/main/docs/explored-designs.md#a-pages-own-literal-table-in-the-order-of-the-bytes-decoded-two-lengths-at-a-time-05-smaller-than-by-code-length-reads-29-slower-on-the-a76-kept)). Where its counts come from is [below](#ch-format--tables).
-
-The text page above, at level 3, is {{own.text.len}} bytes. Its byte 2 is `{{own.text.t}}`,
-`0b{{own.text.t_bin}}`: code {{own.text.lcode}} and `w = 5 + {{own.text.w5}} = {{own.text.w}}`. The
-{{own.text.dbytes}} bytes from byte {{own.text.desc_at}} on are its table:
-
-```text
-{{own.text.desc}}
-```
-
-| bits | symbol | means | $\sum 2^{-l}$, in 1/1024 |
-| --- | --- | --- | --- |
-| `{{own.text.d.0.bits}}` | {{own.text.d.0.sym}} | {{own.text.d.0.what}} | {{own.text.d.0.space}} |
-| `{{own.text.d.1.bits}}` | {{own.text.d.1.sym}} | {{own.text.d.1.what}} | {{own.text.d.1.space}} |
-| `{{own.text.d.2.bits}}` | {{own.text.d.2.sym}} | {{own.text.d.2.what}} | {{own.text.d.2.space}} |
-| `{{own.text.d.3.bits}}` | {{own.text.d.3.sym}} | {{own.text.d.3.what}} | {{own.text.d.3.space}} |
-| `{{own.text.d.4.bits}}` | {{own.text.d.4.sym}} | {{own.text.d.4.what}} | {{own.text.d.4.space}} |
-| `{{own.text.d.5.bits}}` | {{own.text.d.5.sym}} | {{own.text.d.5.what}} | {{own.text.d.5.space}} |
-| `{{own.text.d.6.bits}}` | {{own.text.d.6.sym}} | {{own.text.d.6.what}} | {{own.text.d.6.space}} |
-| `{{own.text.d.7.bits}}` | {{own.text.d.7.sym}} | {{own.text.d.7.what}} | {{own.text.d.7.space}} |
-| ... | | | |
-| `{{own.text.d.18.bits}}` | {{own.text.d.18.sym}} | {{own.text.d.18.what}} | {{own.text.d.18.space}} |
-| `{{own.text.d.19.bits}}` | {{own.text.d.19.sym}} | {{own.text.d.19.what}} | {{own.text.d.19.space}} |
-@assert own.text.rows == 20 and own.text.last_row == 19 and own.text.d[19].space == 1024 and own.text.d[18].space < 1024
-
-@anim owndesc wide The same {{own.text.dbytes}} bytes, one symbol of `OWN` per step: the byte values get their lengths or a run skips them, and the lengths fill the code space until the code is complete; then the canonical codes. From the real compressor at level 3.
-
-The sum reaches 1 with `u`, after {{own.text.desc_bits}} bits, and the last byte has
-{{own.text.desc_pad}} zero bits after them. {{own.text.with_code}} byte values have a code: the space,
-`l` and `u` 3 bits, the other 10 letters 4 bits, $3 \cdot \frac{1}{8} + 10 \cdot \frac{1}{16} = 1$. As
-canonical codes, by length and then by byte value, the space is `{{own.text.code.20}}`, `l`
-`{{own.text.code.6c}}`, `u` `{{own.text.code.75}}`, then `a` `{{own.text.code.61}}`, `d`
-`{{own.text.code.64}}` and so on up to `t` `{{own.text.code.74}}`. The streams start at
-${{own.text.desc_at}} + {{own.text.dbytes}} = {{own.text.streams_at}}$ and take {{own.text.sum}} bytes,
-{{own.enc.bits_per_lit}} bits per literal where table {{ch04.text.set}} took {{own.enc.set_bits_per_lit}}, and
-the bitstream is the same {{own.text.b_bytes}} bytes as at level 2. The two runs before the space
-and `a` take {{own.len.15}} + 5 and {{own.len.16}} + 6 bits: on a page of text most of the table's
-bits are the lengths.
-@assert own.text.clen["20"] == own.text.clen["6c"] == own.text.clen["75"] == 3 and own.text.with_code == 13 and own.text.b_bytes == ch04.text.b_bytes
-
-A page is invalid if the sum goes above 1, if a byte value above 255 would get a code, if a bit after
-the last symbol in its byte is not 0, or if $3 + w + e + d$ is beyond `len`. `seqlz_decode()` reads zeros
-past the end of the page, and a code of zeros, `{{own.code.8}}`, is a length, so a table that never
-fills the code space still ends there, and the last of those checks rejects it. How the encoder chooses the lengths and which pages get a
-table is in [chapter 11](#ch-literals-enc--own); how the decoder builds a decode table from them
-without any memory of its own, in [chapter 13](#ch-literals-dec--own).
-
-## Literals as deltas {#ch-format--deltas}
-
-With `e = 1` each literal was stored, before it was coded, as its **delta** to the byte `x` before it
-in the page: the literal minus that byte, modulo 256. The decoder adds the same byte back as it appends
-the literal, modulo 256 again, which gives the literal back. The byte `dt`, byte 3, right after `t` and
-before the stream sizes, says which `x`. One rule holds for all three. Take a literal that the decoder
-writes to byte `p` of the page, where `out` is the page as far as it is written, so `out[p - x]` is
-the byte `x` before it. If `p >= x`, the page stores the literal as `(literal - out[p - x]) mod 256`,
-and the decoder writes `(stored + out[p - x]) mod 256`; if `p < x`, there is no such byte, and the
-literal is stored as it is. `x` is
-
-| `dt` | `x` |
-| --- | --- |
-| 1 | 4 |
-| 2 | 8 |
-| 3 | the smallest multiple of `last` that is 4 or more |
-
-`last` is the offset of the sequence before, 1 for the first, so for `dt = 3` the byte is 4 back for
-`last` 1 or 2, 6 back for `last` 3, and `last` back from 4 on. Only the first `x` bytes of the page have no byte `x` before them; every other literal is a delta,
-the first literals of a sequence too. `out[p - x]` is a byte the decoder has already written, as it is
-in the page: a byte of the match before, of an earlier sequence, or an earlier literal of the same
-sequence; the last sequence is no different. Any other `dt` makes the page invalid. Memory pages are
-full of 4- and 8-byte fields, whose bytes are often those of the field before or differ from them by a
-little, as counters, sizes and addresses of objects in a row do, and the byte after a match often
-differs only a little from the byte the match would have copied next. As deltas, such literals become a
-few small values, which a literal table codes in fewer bits
-([`docs/format.md`](https://github.com/martinus/seqlz/blob/main/docs/format.md#literals-as-deltas)).
-A delta, not a XOR: a field that grows by 1 from `0x0f` to `0x10` has a delta of 1, but `0x0f` XOR
-`0x10` is `0x1f`, every bit the carry flipped. The first form of `e`, on 21st October 2026, XORed the
-literals; the subtraction replaced it the same day, before it was merged ([chapter 17](#ch-decisions--deltas)).
-
-The page of 512 pointers of [chapter 9](#ch-matcher--back) at level 3 begins with
-`{{delta.ptr.l3.head}}`: `h` says {{delta.ptr.l3.n}} coded literals, `t = {{delta.ptr.l3.t}}` is code
-{{delta.ptr.l3.code}} with `w = {{delta.ptr.l3.w}}` and `e = 1`, byte {{delta.ptr.l3.dt_at}} is
-`dt = {{delta.ptr.l3.dt}}`, so `x = 8`, and 5 bytes of sizes follow. Its first literals,
-`{{delta.ptr.plain}}`, are stored as `{{delta.ptr.deltas}}`: the first sequence is
-{{delta.ptr.rec.0.ll}} literals from byte 0, of which the first 8 have no byte 8 before them and stay as
-they are, and its last, `0x20` at byte 8, is stored minus `out[0] = 0x10`. The second sequence is 1
-literal at byte {{delta.ptr.rec.1.pos}}, the first of its sequence, and the decoded delta `0x10` is
-added to `out[8] = 0x20`, the low byte of the pointer before, which gives `0x30`.
-@assert delta.ptr.l3.w == 5 and delta.ptr.l3.dt == ch06.DELTA_8 and delta.ptr.rec[0].pos == 0 and delta.ptr.rec[1].ll == 1 and delta.ptr.rec[1].pos == 16 and delta.ptr.plain[:2] == "10" and delta.ptr.plain[24:26] == "20" and delta.ptr.deltas[24:26] == "10" and delta.ptr.plain[:23] == delta.ptr.deltas[:23] and delta.ptr.fast.before[:2] == "10" and delta.ptr.fast.ref[:2] == "20" and delta.ptr.fast.after[:2] == "30"
 
 ## One sequence: the token {#ch-format--token}
 
@@ -730,7 +448,7 @@ it is written, `|out|` bytes:
   desktop and a phone
   ([explored-designs.md](https://github.com/martinus/seqlz/blob/main/docs/explored-designs.md#the-last-sequence-without-a-token-12-bytes-per-page-less-kept)).
 - **The bitstream ends where its bits end.** After the last bit the decoder needs, fewer than 8 bits
-  of `B` are left, all in its last byte, all 0. The same holds for each literal stream. A page with a
+  of `B` are left, all in its last byte, all 0. The same holds for each literal stream ([below](#ch-format--coded)). A page with a
   byte too many, or a bit 1 in the padding, is invalid. zram stores no checksum, so a page damaged in
   memory has to be caught by the decoder, and the strict end catches most damage with one compare per
   page, at no cost in bytes. It costs a warm read 0.07 to 0.10 µs on the phone's little core and
@@ -741,67 +459,6 @@ Every sequence but the last writes at least 4 bytes, so a decoder stops after at
 sequences, {{const.MAX_SEQUENCES}} on a 4 KiB page, also on a page that is not valid. Two facts follow
 from the rules: a valid page has $n \ge 1$, because the first match needs a byte before it, and the
 first match's offset is at most that sequence's `ll`.
-
-## The rules of a valid page {#ch-format--validity}
-
-A page is valid for a page size and its tables if all of these hold:
-
-1. `len >= 2`.
-2. `n <= PAGE`.
-3. Raw literals: `2 + n <= len`.
-4. Coded literals: `len >= 3 + w + e`.
-5. Coded literals: `code = t & 15` is at most 8, and with `e = 1`, `dt` is 1, 2 or 3.
-6. Code 8: the page's own table is valid ([above](#ch-format--own)), and `3 + w + e + d <= len`.
-7. Coded literals: `3 + w + e + d + s[0] + ... + s[7] <= len`, with `d = 0` for the codes 0 to 7.
-8. Every literal stream's codes take at most `8 * s[j]` bits and fewer than 8 bits less, and its bits
-   after the last code are all 0. So a stream without literals has size 0.
-9. Every escaped token is below 3072.
-10. Every sequence's `ll` is at most the literals left, `n - used`, and at most the room left in the
-    page, `PAGE - |out|`.
-11. Every match's offset is 1 to `|out|`, the bytes written so far.
-12. Every match fits into the room left in the page, `ml <= PAGE - |out|`.
-13. At the end, 0 to 7 bits of `B` are left, and all of them are 0. A decoder may read zeros past the
-    end, but a page that needs more bits than it has then has fewer than 0 left, and fails this.
-
-A header with more literals than the sequences use breaks rule 10 or 12: the end is never reached,
-and the next token's `ll` or match does not fit. `seqlz_decode()` checks every rule, in its own order
-and often in a cheaper form ([chapter 14](#ch-decode)), and the fuzz target `fuzz/seqlz_diff_fuzz.c`
-fails if it and `tools/seqlz-ref/seqlz_ref.c` disagree on whether any input is valid or on what it
-decodes to.
-
-## Decoding, as the spec writes it {#ch-format--decode}
-
-`lits` are the `n` literals, decoded first if they are coded, `used` starts at 0 and `out` empty, as
-[above](#ch-format--end), and `last` is 1. `copy(k)` appends the next `k` literals to `out` and adds
-`k` to `used`: as they are, or with `e = 1` each plus the byte of `out` that
-[literals as deltas](#ch-format--deltas) names, modulo 256.
-
-```text
-loop:
-    if n - used == PAGE - |out|:                the last sequence
-        copy(n - used)
-        stop
-    token: ll, mlf, c
-    x = read(offset bits of class c)
-    off = (c == 0) ? last : x as the offset of class c
-    if ll == 15: ll = 15 + value(LL)
-    if ll > n - used or ll > PAGE - |out|: invalid
-    copy(ll)
-    ml = mlf + 4
-    if mlf == 31: ml = 35 + value(ML)
-    last = off
-    if off == 0 or off > |out| or ml > PAGE - |out|: invalid
-    ml times: append the byte off places before the end of out
-
-at the stop: fewer than 8 bits of B left, all 0, else invalid
-```
-
-The match is copied byte by byte, so it can repeat what it writes itself
-([chapter 2](#ch-compression--overlap)). `seqlz_decode()` does the same work in another shape: it
-decodes all coded literals into a buffer first, so that the loop over the sequences reads them as if
-they were raw, it looks up 11 bits at a time in a table, and it copies 16 bytes at a time where there
-is room ([copying more than needed](#ch-cpu--wild-copy)). The result is the same for every input,
-valid or not; that is what the fuzzers check.
 
 ## A page of `ab`, bit by bit {#ch-format--example}
 
@@ -904,6 +561,355 @@ bytes 25 to 4095: z, 4071 times
   0. With an eighth bit left, or one of them 1, the page would be invalid.
 
 `python3 tools/seqlz-ref/seqlz_ref.py` decodes the {{second.len}} bytes to the page above.
+
+## Coded literals: byte 2, the sizes, 8 streams {#ch-format--coded}
+
+With the top bit of `h` set, the literals are Huffman coded, with one of 8 fixed literal
+tables or with a table that the page brings, and more fields come first. Byte 2, `t`:
+
+<figure class="diagram">
+<div class="scroll">
+<svg viewBox="0 0 720 134" role="img" aria-label="Byte 2 of a page with coded literals, {{ch04.text.t}}: the delta bit, w minus 5 in bits 4 to 6, the literals' code in bits 0 to 3" font-size="12">
+  <text x="222.0" y="30" text-anchor="middle" class="mut">bit 7</text>
+  <rect x="200" y="40" width="44" height="30" class="fill-sheet" stroke="currentColor"/>
+  <text x="222.0" y="60" text-anchor="middle" font-weight="bold">{{ch04.text.t_bit.7}}</text>
+  <text x="266.0" y="30" text-anchor="middle" class="mut">bit 6</text>
+  <rect x="244" y="40" width="44" height="30" class="fill-mark" stroke="currentColor" fill-opacity="0.3"/>
+  <text x="266.0" y="60" text-anchor="middle" font-weight="bold">{{ch04.text.t_bit.6}}</text>
+  <text x="310.0" y="30" text-anchor="middle" class="mut">bit 5</text>
+  <rect x="288" y="40" width="44" height="30" class="fill-mark" stroke="currentColor" fill-opacity="0.3"/>
+  <text x="310.0" y="60" text-anchor="middle" font-weight="bold">{{ch04.text.t_bit.5}}</text>
+  <text x="354.0" y="30" text-anchor="middle" class="mut">bit 4</text>
+  <rect x="332" y="40" width="44" height="30" class="fill-mark" stroke="currentColor" fill-opacity="0.3"/>
+  <text x="354.0" y="60" text-anchor="middle" font-weight="bold">{{ch04.text.t_bit.4}}</text>
+  <text x="398.0" y="30" text-anchor="middle" class="mut">bit 3</text>
+  <rect x="376" y="40" width="44" height="30" class="fill-acc" stroke="currentColor" fill-opacity="0.3"/>
+  <text x="398.0" y="60" text-anchor="middle" font-weight="bold">{{ch04.text.t_bit.3}}</text>
+  <text x="442.0" y="30" text-anchor="middle" class="mut">bit 2</text>
+  <rect x="420" y="40" width="44" height="30" class="fill-acc" stroke="currentColor" fill-opacity="0.3"/>
+  <text x="442.0" y="60" text-anchor="middle" font-weight="bold">{{ch04.text.t_bit.2}}</text>
+  <text x="486.0" y="30" text-anchor="middle" class="mut">bit 1</text>
+  <rect x="464" y="40" width="44" height="30" class="fill-acc" stroke="currentColor" fill-opacity="0.3"/>
+  <text x="486.0" y="60" text-anchor="middle" font-weight="bold">{{ch04.text.t_bit.1}}</text>
+  <text x="530.0" y="30" text-anchor="middle" class="mut">bit 0</text>
+  <rect x="508" y="40" width="44" height="30" class="fill-acc" stroke="currentColor" fill-opacity="0.3"/>
+  <text x="530.0" y="60" text-anchor="middle" font-weight="bold">{{ch04.text.t_bit.0}}</text>
+  <path d="M203 78 V84 H241 V78" fill="none" stroke="currentColor"/>
+  <text x="222.0" y="102" text-anchor="middle" font-weight="bold">e = {{ch04.text.t_bit.7}}</text>
+  <text x="222.0" y="119" text-anchor="middle">t &gt;&gt; 7</text>
+  <path d="M247 78 V84 H373 V78" fill="none" stroke="currentColor"/>
+  <text x="310.0" y="102" text-anchor="middle" font-weight="bold">w - 5 = {{ch04.text.w5}}</text>
+  <text x="310.0" y="119" text-anchor="middle">(t &gt;&gt; 4) &amp; 7</text>
+  <path d="M379 78 V84 H549 V78" fill="none" stroke="currentColor"/>
+  <text x="464.0" y="102" text-anchor="middle" font-weight="bold">code = {{ch04.text.set}}</text>
+  <text x="464.0" y="119" text-anchor="middle">t &amp; 15</text>
+  <text x="150" y="60" text-anchor="end">t = {{ch04.text.t}}</text>
+</svg>
+</div>
+<figcaption>Byte 2 of the made-up text page below: <code>{{ch04.text.t}}</code> is literal table {{ch04.text.set}} and stream sizes of {{ch04.text.w}} bits.</figcaption>
+</figure>
+
+- `code = t & 15` says how the literals are coded: 0 to 7 is one of the 8 fixed literal tables, 8
+  (`SEQLZ_LIT_OWN`) a table of the page's own ([below](#ch-format--own)), and 9 to 15 make the page
+  invalid.
+- `w = 5 + ((t >> 4) & 7)` is the number of bits of each stream size, 5 to 12.
+- `e = t >> 7` says whether the literals are stored as deltas to earlier bytes of the page
+  ([below](#ch-format--deltas)), which only `seqlz-3` writes. The codes 9 to 15 are free for a later format
+  ([no version in the page](#ch-format--version)).
+
+With `e = 1` byte 3 is `dt`, which says which earlier byte each delta is to. The next `w` bytes, from
+byte $3 + e$ on, are one little-endian number `S` of `8 * w` bits with the 8 stream sizes, `w` bits
+each, the lowest first: `s[j] = (S >> (j * w)) & ((1 << w) - 1)`. With code 8 the page's own table follows,
+`d` bytes; with the codes 0 to 7, `d` is 0. Then come the 8 streams, `s[j]`
+bytes each, and after the last one `B`. The literals are dealt out to the streams like cards: stream
+$j$ holds literals $j$, $j + 8$, $j + 16$ and so on, each as a code of the table that `code` names,
+read most significant bit first like `B`. A stream's codes must end in its last byte, and the bits
+after the last code are 0; a stream without literals has `s[j] = 0`. All 8 streams use the same table:
+that there are 8 streams and 8 fixed tables is a coincidence.
+
+A page made up for this book: 4096 bytes of "words" of 2 to 9 letters, picked at random from the 12
+letters `etaoinshrdlu` by the C library's classic random number generator from seed 1, each word
+followed by a space. `seqlz-1` stores it in {{ch04.text.raw}} bytes, `seqlz-2` in
+{{ch04.text.len}}. The first {{ch04.text.streams_at}} bytes of the coded page are
+
+```text
+{{ch04.text.hdr}}  {{ch04.text.t_hex}}  {{ch04.text.sizes_hex}}
+```
+
+- `h = {{ch04.text.h}}`: coded literals, and `n = {{ch04.text.n_hex}} = {{ch04.text.n}}`,
+  {{ch04.text.per_stream}} per stream.
+- `t = {{ch04.text.t}} = 0b{{ch04.text.t_bin}}`: code `{{ch04.text.t}} & 15 = {{ch04.text.set}}`,
+  the fixed table that codes this page's literals in the fewest bits, and
+  `w = 5 + (({{ch04.text.t}} >> 4) & 7) = 5 + {{ch04.text.w5}} = {{ch04.text.w}}`.
+- The {{ch04.text.w}} bytes of sizes are `S = {{ch04.text.S}}`. Its lowest {{ch04.text.w}} bits,
+  `{{ch04.text.s0_hex}} = {{ch04.text.s.0}}`, are the size of stream 0; the 8 sizes are
+  {{ch04.text.s.0}}, {{ch04.text.s.1}}, {{ch04.text.s.2}}, {{ch04.text.s.3}}, {{ch04.text.s.4}},
+  {{ch04.text.s.5}}, {{ch04.text.s.6}} and {{ch04.text.s.7}} bytes, {{ch04.text.sum}} together.
+- No deltas and no own table, `e = 0` and `d = 0`: the streams start at byte
+  $3 + w = {{ch04.text.streams_at}}$, `B` at
+  ${{ch04.text.streams_at}} + {{ch04.text.sum}} = {{ch04.text.b_at}}$, and takes the last
+  {{ch04.text.b_bytes}} bytes of the page.
+@assert ch04.text.best == ch04.text.set and ch04.text.set < 8 and ch04.text.t_bit[7] == 0
+
+{{ch04.text.per_stream}} literals in about {{ch04.text.avg}} bytes is {{ch04.text.bits_per_lit}} bits
+per literal, where the raw page spends 8. `seqlz-3` stores the same page in {{own.text.len}} bytes, with a
+table of its own, [below](#ch-format--own).
+
+::: why Why the stream sizes take `w` bits and not 2 bytes each
+A stream holds every 8th literal, and a literal code has at most 10 bits: on a 4 KiB page at most 640
+bytes, 10 bits, on a 16 KiB page 2560 bytes, 12 bits. The largest stream of most pages is below 128
+bytes, 7 bits. With 2 bytes per size, as until 5th October 2026, the header was 19 bytes, and pages
+were 5.3 bytes larger on average
+([explored-designs.md](https://github.com/martinus/seqlz/blob/main/docs/explored-designs.md#stream-sizes-in-as-many-bits-as-the-largest-needs-kept)).
+Widths of 3 and 4 bits are left out: few pages would use them.
+:::
+
+Why the literals are in 8 streams is a question of the decoder's speed
+([chains of dependent steps](#ch-cpu--chains)). How the encoder picks the table, and when it codes the
+literals at all, is in [chapter 11](#ch-literals-enc).
+
+## A page's own literal table, in byte order {#ch-format--own}
+
+With code 8 the page brings its own literal table, right after `dt` and the stream sizes, at
+byte $3 + w + e$. It is
+read most significant bit first, like `B`. It is not a list of 256 code lengths: it is a list of
+symbols of one more fixed table, `OWN`, which goes through the byte values from 0 up and says for each
+one whether it has a code, and how long it is:
+
+- symbol `l - 1`, for `l` from 1 to 10: the next byte value has a code of `l` bits;
+- symbol `9 + k`, for `k` from 1 to 9, then `x = read(k - 1)`: the next $2^{k-1} + x$ byte values have
+  no code, a **run**. Symbol 10 is a run of 1 with no bits after it, symbol 15 with the 5 bits `00000`
+  a run of 32.
+
+A run is a count of byte values in a row that have no code. Small runs are common, a table skips
+one or two byte values here and there, and long ones are rare, e.g. the 32 control characters below
+the space in a text page. So the code for a run has to be short for small counts and still work for
+large ones. `OWN` writes a run in two parts: first how many bits the count has in binary, its
+**width** `k`, as the symbol `9 + k`; then the bits of the count below its first 1:
+
+| run | in binary | width `k` | symbol `9 + k` | bits after the symbol |
+| ---: | --- | ---: | ---: | --- |
+| 1 | `1` | 1 | 10 | none |
+| 2 | `10` | 2 | 11 | `0` |
+| 3 | `11` | 2 | 11 | `1` |
+| 4 | `100` | 3 | 12 | `00` |
+| 5 | `101` | 3 | 12 | `01` |
+| 7 | `111` | 3 | 12 | `11` |
+| 32 | `100000` | 6 | 15 | `00000` |
+| 100 | `1100100` | 7 | 16 | `100100` |
+
+The first bit of a number in binary is always a 1, else the number would have one bit less. So once the
+decoder knows the width, it knows that bit too, and only the `k - 1` bits below it are in the
+bitstream. To decode, it puts the 1 back in front: symbol 12 means width 3, `read(2)` gives `01`, and a
+1 in front of `01` is `101`, a run of 5. The rule above, $2^{k-1} + x$, says the same with numbers
+instead of bits: $2^{k-1}$ is the 1 in front, 4 for `k = 3`, and `x` is the number the bits after the
+symbol make, 1 for `01`.
+
+Writing a number as its width and then its bits is an old idea. Its textbook form is the
+[Elias gamma code](https://en.wikipedia.org/wiki/Elias_gamma_coding): `k - 1` zeros, then all `k`
+bits of the number, the 1 in front included. The decoder counts zeros until it reads a 1; that 1 is
+the number's first bit, and as many bits follow as it counted zeros. A run of 5 is `00` and `101`,
+`00101`, and a run of 32 is `00000100000`, 11 bits. The
+[Exp-Golomb code](https://en.wikipedia.org/wiki/Exponential-Golomb_coding) of order 0 is the same code
+for numbers that start at 0: it writes `n` as Elias gamma writes `n + 1`, so a run as `run - 1`
+gives the same bits. [Chapter 17](#ch-decisions--level3) has its other orders.
+
+`OWN` does not write the zeros: the width is one of its symbols, in the same prefix code as the
+lengths. This does two things. One symbol says that a run comes and how wide it is; with Elias gamma
+each symbol would need one more bit in front, to tell a run from a length. And like every
+[Huffman code](#ch-compression--huffman), `OWN` gives a symbol the shorter a code the more often it came
+on the pages `OWN` was counted on, lengths and runs together. On those pages the lengths came more
+often than the runs, so the lengths of 9 and 10 bits got codes of {{own.len.8}} bits, 7 and 8 bits
+codes of {{own.len.6}} bits, and a run costs more than in Elias gamma (the whole code is in the table
+below):
+
+| run | bits in `OWN`: the symbol and the bits after it | bits in Elias gamma, and 1 for run or length |
+| --- | ---: | ---: |
+| 1 | {{own.len.10}} | 1 + 1 |
+| 2 or 3 | {{own.len.11}} + 1 | 3 + 1 |
+| 4 to 7 | {{own.len.12}} + 2 | 5 + 1 |
+| 32 to 63 | {{own.len.15}} + 5 | 11 + 1 |
+@assert own.len[10] > 2 and own.len[11] + 1 > 4 and own.len[12] + 2 > 6 and own.len[15] + 5 > 12 and own.len[8] == own.len[9] == 2 and own.len[6] == own.len[7] == 3
+
+The bits go where a page's table spends them: every byte value with a code costs one length, and a
+run comes only between them. In the example below, {{own.text.with_code}} of the {{own.text.rows}}
+symbols are lengths.
+
+The list ends as soon as the codes fill the code space, when $\sum 2^{-l}$ over the lengths so far
+is exactly 1: the code is then [complete](#ch-compression--complete), and the byte values after the
+last one have no code. The bits after the last symbol, up to the end of its byte, are 0, and `d` is
+the number of bytes the table takes. The codes follow from the lengths as for every table, the
+[canonical code](#ch-compression--canonical-codes), with the byte value as the symbol. `OWN` has
+{{own.symbols}} symbols and codes of at most {{own.code_bits}} bits, by length:
+
+| symbols | mean | codes |
+| --- | --- | --- |
+| 8, 9 | lengths 9 and 10 | `{{own.code.8}}`, `{{own.code.9}}` |
+| 6, 7 | lengths 7 and 8 | `{{own.code.6}}`, `{{own.code.7}}` |
+| 5, 10 | length 6, a run of 1 | `{{own.code.5}}`, `{{own.code.10}}` |
+| 4, 11 | length 5, a run of 2 or 3 | `{{own.code.4}}`, `{{own.code.11}}` |
+| 12 | a run of 4 to 7 | `{{own.code.12}}` |
+| 2, 3 | lengths 3 and 4 | `{{own.code.2}}`, `{{own.code.3}}` |
+| 0, 1, 13 to 18 | lengths 1 and 2, runs of 8 to 15, ..., 256 to 511 | `{{own.code.0}}` to `{{own.code.18}}` |
+@assert own.len[8] == own.len[9] == 2 and own.len[6] == own.len[7] == 3 and own.len[5] == own.len[10] == 4 and own.len[4] == own.len[11] == 5 and own.len[12] == 6 and own.len[2] == own.len[3] == 7 and own.len[0] == own.len[1] == own.len[13] == own.len[18] == 8 and own.symbols == 19
+
+The lengths that pages' own tables have most, 7 to 10 bits, get the shortest codes. The
+description is in the order of the byte values, so a byte value costs no bits of its own, only its
+length does; `docs/format.md` gives about 0.45 bytes per byte value with a code, 60 to 120 bytes on
+most pages that have a table of their own
+([format.md](https://github.com/martinus/seqlz/blob/main/docs/format.md#a-blocks-own-literal-table)).
+A run of 256 to 511 can never be valid, as a table has only 256 byte values; it is there so that `OWN`
+is complete too. Sent in byte order, with runs, the descriptions made pages 0.5% smaller than the ones
+of 9th October, which listed the bytes by code length, each as its distance to the one before
+([explored-designs.md](https://github.com/martinus/seqlz/blob/main/docs/explored-designs.md#a-pages-own-literal-table-in-the-order-of-the-bytes-decoded-two-lengths-at-a-time-05-smaller-than-by-code-length-reads-29-slower-on-the-a76-kept)). Where its counts come from is [below](#ch-format--tables).
+
+The text page above, at level 3, is {{own.text.len}} bytes. Its byte 2 is `{{own.text.t}}`,
+`0b{{own.text.t_bin}}`: code {{own.text.lcode}} and `w = 5 + {{own.text.w5}} = {{own.text.w}}`. The
+{{own.text.dbytes}} bytes from byte {{own.text.desc_at}} on are its table:
+
+```text
+{{own.text.desc}}
+```
+
+| bits | symbol | means | $\sum 2^{-l}$, in 1/1024 |
+| --- | --- | --- | --- |
+| `{{own.text.d.0.bits}}` | {{own.text.d.0.sym}} | {{own.text.d.0.what}} | {{own.text.d.0.space}} |
+| `{{own.text.d.1.bits}}` | {{own.text.d.1.sym}} | {{own.text.d.1.what}} | {{own.text.d.1.space}} |
+| `{{own.text.d.2.bits}}` | {{own.text.d.2.sym}} | {{own.text.d.2.what}} | {{own.text.d.2.space}} |
+| `{{own.text.d.3.bits}}` | {{own.text.d.3.sym}} | {{own.text.d.3.what}} | {{own.text.d.3.space}} |
+| `{{own.text.d.4.bits}}` | {{own.text.d.4.sym}} | {{own.text.d.4.what}} | {{own.text.d.4.space}} |
+| `{{own.text.d.5.bits}}` | {{own.text.d.5.sym}} | {{own.text.d.5.what}} | {{own.text.d.5.space}} |
+| `{{own.text.d.6.bits}}` | {{own.text.d.6.sym}} | {{own.text.d.6.what}} | {{own.text.d.6.space}} |
+| `{{own.text.d.7.bits}}` | {{own.text.d.7.sym}} | {{own.text.d.7.what}} | {{own.text.d.7.space}} |
+| ... | | | |
+| `{{own.text.d.18.bits}}` | {{own.text.d.18.sym}} | {{own.text.d.18.what}} | {{own.text.d.18.space}} |
+| `{{own.text.d.19.bits}}` | {{own.text.d.19.sym}} | {{own.text.d.19.what}} | {{own.text.d.19.space}} |
+@assert own.text.rows == 20 and own.text.last_row == 19 and own.text.d[19].space == 1024 and own.text.d[18].space < 1024
+
+@anim owndesc wide The same {{own.text.dbytes}} bytes, one symbol of `OWN` per step: the byte values get their lengths or a run skips them, and the lengths fill the code space until the code is complete; then the canonical codes. From the real compressor at level 3.
+
+The sum reaches 1 with `u`, after {{own.text.desc_bits}} bits, and the last byte has
+{{own.text.desc_pad}} zero bits after them. {{own.text.with_code}} byte values have a code: the space,
+`l` and `u` 3 bits, the other 10 letters 4 bits, $3 \cdot \frac{1}{8} + 10 \cdot \frac{1}{16} = 1$. As
+canonical codes, by length and then by byte value, the space is `{{own.text.code.20}}`, `l`
+`{{own.text.code.6c}}`, `u` `{{own.text.code.75}}`, then `a` `{{own.text.code.61}}`, `d`
+`{{own.text.code.64}}` and so on up to `t` `{{own.text.code.74}}`. The streams start at
+${{own.text.desc_at}} + {{own.text.dbytes}} = {{own.text.streams_at}}$ and take {{own.text.sum}} bytes,
+{{own.enc.bits_per_lit}} bits per literal where table {{ch04.text.set}} took {{own.enc.set_bits_per_lit}}, and
+the bitstream is the same {{own.text.b_bytes}} bytes as at level 2. The two runs before the space
+and `a` take {{own.len.15}} + 5 and {{own.len.16}} + 6 bits: on a page of text most of the table's
+bits are the lengths.
+@assert own.text.clen["20"] == own.text.clen["6c"] == own.text.clen["75"] == 3 and own.text.with_code == 13 and own.text.b_bytes == ch04.text.b_bytes
+
+A page is invalid if the sum goes above 1, if a byte value above 255 would get a code, if a bit after
+the last symbol in its byte is not 0, or if $3 + w + e + d$ is beyond `len`. `seqlz_decode()` reads zeros
+past the end of the page, and a code of zeros, `{{own.code.8}}`, is a length, so a table that never
+fills the code space still ends there, and the last of those checks rejects it. How the encoder chooses the lengths and which pages get a
+table is in [chapter 11](#ch-literals-enc--own); how the decoder builds a decode table from them
+without any memory of its own, in [chapter 13](#ch-literals-dec--own).
+
+## Literals as deltas {#ch-format--deltas}
+
+With `e = 1` each literal was stored, before it was coded, as its **delta** to the byte `x` before it
+in the page: the literal minus that byte, modulo 256. The decoder adds the same byte back as it appends
+the literal, modulo 256 again, which gives the literal back. The byte `dt`, byte 3, right after `t` and
+before the stream sizes, says which `x`. One rule holds for all three. Take a literal that the decoder
+writes to byte `p` of the page, where `out` is the page as far as it is written, so `out[p - x]` is
+the byte `x` before it. If `p >= x`, the page stores the literal as `(literal - out[p - x]) mod 256`,
+and the decoder writes `(stored + out[p - x]) mod 256`; if `p < x`, there is no such byte, and the
+literal is stored as it is. `x` is
+
+| `dt` | `x` |
+| --- | --- |
+| 1 | 4 |
+| 2 | 8 |
+| 3 | the smallest multiple of `last` that is 4 or more |
+
+`last` is the offset of the sequence before, 1 for the first, so for `dt = 3` the byte is 4 back for
+`last` 1 or 2, 6 back for `last` 3, and `last` back from 4 on. Only the first `x` bytes of the page have no byte `x` before them; every other literal is a delta,
+the first literals of a sequence too. `out[p - x]` is a byte the decoder has already written, as it is
+in the page: a byte of the match before, of an earlier sequence, or an earlier literal of the same
+sequence; the last sequence is no different. Any other `dt` makes the page invalid. Memory pages are
+full of 4- and 8-byte fields, whose bytes are often those of the field before or differ from them by a
+little, as counters, sizes and addresses of objects in a row do, and the byte after a match often
+differs only a little from the byte the match would have copied next. As deltas, such literals become a
+few small values, which a literal table codes in fewer bits
+([`docs/format.md`](https://github.com/martinus/seqlz/blob/main/docs/format.md#literals-as-deltas)).
+A delta, not a XOR: a field that grows by 1 from `0x0f` to `0x10` has a delta of 1, but `0x0f` XOR
+`0x10` is `0x1f`, every bit the carry flipped. The first form of `e`, on 21st October 2026, XORed the
+literals; the subtraction replaced it the same day, before it was merged ([chapter 17](#ch-decisions--deltas)).
+
+The page of 512 pointers of [chapter 9](#ch-matcher--back) at level 3 begins with
+`{{delta.ptr.l3.head}}`: `h` says {{delta.ptr.l3.n}} coded literals, `t = {{delta.ptr.l3.t}}` is code
+{{delta.ptr.l3.code}} with `w = {{delta.ptr.l3.w}}` and `e = 1`, byte {{delta.ptr.l3.dt_at}} is
+`dt = {{delta.ptr.l3.dt}}`, so `x = 8`, and 5 bytes of sizes follow. Its first literals,
+`{{delta.ptr.plain}}`, are stored as `{{delta.ptr.deltas}}`: the first sequence is
+{{delta.ptr.rec.0.ll}} literals from byte 0, of which the first 8 have no byte 8 before them and stay as
+they are, and its last, `0x20` at byte 8, is stored minus `out[0] = 0x10`. The second sequence is 1
+literal at byte {{delta.ptr.rec.1.pos}}, the first of its sequence, and the decoded delta `0x10` is
+added to `out[8] = 0x20`, the low byte of the pointer before, which gives `0x30`.
+@assert delta.ptr.l3.w == 5 and delta.ptr.l3.dt == ch06.DELTA_8 and delta.ptr.rec[0].pos == 0 and delta.ptr.rec[1].ll == 1 and delta.ptr.rec[1].pos == 16 and delta.ptr.plain[:2] == "10" and delta.ptr.plain[24:26] == "20" and delta.ptr.deltas[24:26] == "10" and delta.ptr.plain[:23] == delta.ptr.deltas[:23] and delta.ptr.fast.before[:2] == "10" and delta.ptr.fast.ref[:2] == "20" and delta.ptr.fast.after[:2] == "30"
+
+## The rules of a valid page {#ch-format--validity}
+
+A page is valid for a page size and its tables if all of these hold:
+
+1. `len >= 2`.
+2. `n <= PAGE`.
+3. Raw literals: `2 + n <= len`.
+4. Coded literals: `len >= 3 + w + e`.
+5. Coded literals: `code = t & 15` is at most 8, and with `e = 1`, `dt` is 1, 2 or 3.
+6. Code 8: the page's own table is valid ([above](#ch-format--own)), and `3 + w + e + d <= len`.
+7. Coded literals: `3 + w + e + d + s[0] + ... + s[7] <= len`, with `d = 0` for the codes 0 to 7.
+8. Every literal stream's codes take at most `8 * s[j]` bits and fewer than 8 bits less, and its bits
+   after the last code are all 0. So a stream without literals has size 0.
+9. Every escaped token is below 3072.
+10. Every sequence's `ll` is at most the literals left, `n - used`, and at most the room left in the
+    page, `PAGE - |out|`.
+11. Every match's offset is 1 to `|out|`, the bytes written so far.
+12. Every match fits into the room left in the page, `ml <= PAGE - |out|`.
+13. At the end, 0 to 7 bits of `B` are left, and all of them are 0. A decoder may read zeros past the
+    end, but a page that needs more bits than it has then has fewer than 0 left, and fails this.
+
+A header with more literals than the sequences use breaks rule 10 or 12: the end is never reached,
+and the next token's `ll` or match does not fit. `seqlz_decode()` checks every rule, in its own order
+and often in a cheaper form ([chapter 14](#ch-decode)), and the fuzz target `fuzz/seqlz_diff_fuzz.c`
+fails if it and `tools/seqlz-ref/seqlz_ref.c` disagree on whether any input is valid or on what it
+decodes to.
+
+## Decoding, as the spec writes it {#ch-format--decode}
+
+`lits` are the `n` literals, decoded first if they are coded, `used` starts at 0 and `out` empty, as
+[above](#ch-format--end), and `last` is 1. `copy(k)` appends the next `k` literals to `out` and adds
+`k` to `used`: as they are, or with `e = 1` each plus the byte of `out` that
+[literals as deltas](#ch-format--deltas) names, modulo 256.
+
+```text
+loop:
+    if n - used == PAGE - |out|:                the last sequence
+        copy(n - used)
+        stop
+    token: ll, mlf, c
+    x = read(offset bits of class c)
+    off = (c == 0) ? last : x as the offset of class c
+    if ll == 15: ll = 15 + value(LL)
+    if ll > n - used or ll > PAGE - |out|: invalid
+    copy(ll)
+    ml = mlf + 4
+    if mlf == 31: ml = 35 + value(ML)
+    last = off
+    if off == 0 or off > |out| or ml > PAGE - |out|: invalid
+    ml times: append the byte off places before the end of out
+
+at the stop: fewer than 8 bits of B left, all 0, else invalid
+```
+
+The match is copied byte by byte, so it can repeat what it writes itself
+([chapter 2](#ch-compression--overlap)). `seqlz_decode()` does the same work in another shape: it
+decodes all coded literals into a buffer first, so that the loop over the sequences reads them as if
+they were raw, it looks up 11 bits at a time in a table, and it copies 16 bytes at a time where there
+is room ([copying more than needed](#ch-cpu--wild-copy)). The result is the same for every input,
+valid or not; that is what the fuzzers check.
 
 ## No version in the page {#ch-format--version}
 

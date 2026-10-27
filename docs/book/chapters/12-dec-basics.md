@@ -266,7 +266,7 @@ another address does
 ## The bit reader: 64 bits, most significant bit first {#ch-dec-basics--bit-reader}
 
 After the literals, a compressed page has the bitstream: per sequence the token's code, the offset bits
-and the length values, with no alignment to bytes ([chapter 4](#ch-format--layout)).
+and the length values, with no alignment to bytes ([chapter 4](#ch-format--bitstream)).
 
 @listing src/seqlz_decompress.c 148-162
 

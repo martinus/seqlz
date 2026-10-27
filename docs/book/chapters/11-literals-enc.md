@@ -19,7 +19,7 @@ cheaper, in `seqlz_delta_literals()`, and `seqlz_code_own()` codes the deltas. T
 does not change; it only moves down behind the coded literals. This chapter is all of
 `src/seqlz_compress_literals.c`, in the order `code_literals()` uses the helpers rather than file
 order; the four functions without `static` are what `seqlz_compress.c` calls. The format is in
-[chapter 4](#ch-format--layout), the tables and `lit_cost` in [chapter 7](#ch-internal--lit-cost), the
+[chapter 4](#ch-format--coded), the tables and `lit_cost` in [chapter 7](#ch-internal--lit-cost), the
 decoder's side in [chapter 13](#ch-literals-dec).
 
 ## What code_literals() does to dst {#ch-literals-enc--overview}
@@ -256,7 +256,7 @@ which `__builtin_clz()` is undefined. `32 - clz` is then the bit width:
 | {{ch11.lit_stream_max}} bytes, the largest a 4 KiB page can have | `0b1010010000` | 22 | 10 | 13 |
 @assert ch11.lit_stream_max == 640 and ch11.max.all >= ch11.s0.bytes and 0b1010010000 == 640 | 16
 
-Until 5th October 2026 every size had 2 bytes, a header of 19 bytes ([chapter 4](#ch-format--layout)).
+Until 5th October 2026 every size had 2 bytes, a header of 19 bytes ([chapter 4](#ch-format--coded)).
 On a desktop's zram pages the largest stream of a page with coded literals was below 128 bytes on 77%
 of the pages, the mean of two dumps, so the header is now mostly 9 to 11 bytes
 ([explored-designs.md](https://github.com/martinus/seqlz/blob/main/docs/explored-designs.md#stream-sizes-in-as-many-bits-as-the-largest-needs-kept)).

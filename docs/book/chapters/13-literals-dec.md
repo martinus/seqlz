@@ -144,7 +144,7 @@ branch, which the end of `seqlz_decode_literals()` needs.
 @listing src/seqlz_decompress_literals.c 65-88
 
 From `p` on, the header has `width` bytes with the 8 stream sizes, `width` bits each, lowest bit first
-([chapter 4](#ch-format--layout)). `seqlz_decode_literals()` passes byte 3, or byte 4 when byte 3 is the
+([chapter 4](#ch-format--coded)). `seqlz_decode_literals()` passes byte 3, or byte 4 when byte 3 is the
 delta's byte. A 4-byte load always holds a field: it starts at most 7 bits into its
 first byte and has at most 12 bits. The furthest load, for `k = 7` with `width = 12`, is at byte
 `84 / 8 = 10` and reads bytes 10 to 13, past the 12 bytes of sizes and possibly past the end of a short
@@ -387,7 +387,7 @@ accepted them now could not tell old pages from new ones later. With bit 7 set, 
 one compare: a byte of 0 wraps to $2^{32} - 1$, and everything from 4 on is at least 3, so only 1 to 3
 pass. Without deltas, `*delta` is 0 and the page's byte 3 is the first byte of the sizes. `*q`, where
 the streams start when the page has no table of its own, is behind byte 2, that byte and the sizes:
-$3 + w + e$ in the terms of [chapter 4](#ch-format--layout).
+$3 + w + e$ in the terms of [chapter 4](#ch-format--coded).
 
 @listing src/seqlz_decompress_literals.c 287-304
 
