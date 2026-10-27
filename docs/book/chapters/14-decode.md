@@ -1,5 +1,14 @@
 # seqlz_decode(): one table lookup per sequence {#ch-decode}
 
+::: key
+- The fast path takes a sequence without a length value that is far enough from the ends of the page, the literals and the input, with fixed copies and no checks of room; on 7th October 2026 it took 178.5 of the 207 sequences of an average desktop zram page ([the rooms](#ch-decode--rooms), [the fast path](#ch-decode--fast)).
+- On the fast path the next token is looked up before the copies, and the bits are refilled every second sequence without a branch, as a branch on the bits left mispredicts on a page seen once ([the next token](#ch-decode--next-token)).
+- One lookup gives the token's entry, and the offset comes from it in three shifts and a select, with no branch on the class; an escaped token gets its entry from `token_entry()` ([the loop](#ch-decode--offset)).
+- `decode_block()` is inlined twice, with and without deltas, so a page without deltas runs the loop as it did before level 3 had them ([two copies](#ch-decode--deltas)).
+- The slow path checks everything, and a page is valid only if its bits end in the last byte of the input with zeros after them, as zram stores no checksum ([the slow path](#ch-decode--slow), [the end](#ch-decode--end)).
+- No input makes the decoder read or write outside its buffers, and every round writes a match of at least 4 bytes, so a page takes at most {{ch14.max_rounds}} rounds ([safety](#ch-decode--safety)).
+:::
+
 `seqlz_decode()` turns a compressed page back into its `SEQLZ_BLOCK_SIZE` bytes. It reads the header, has the
 coded literals decoded into the scratch if the page has them ([chapter 13](#ch-literals-dec)), and runs
 one loop over the sequences: one lookup in the token table, the offset from the bits after the code,

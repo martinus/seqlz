@@ -1,5 +1,14 @@
 # seqlz_format.h and seqlz.h: the format in constants {#ch-header}
 
+::: key
+- The longest codes set the size of the decoder's tables, and a cold read pays for every cache line of them: 8 bits for length values give 1 KiB, 11 bits for tokens 8 KiB; a token table of 10 bits paid only on the in-order A55, so 11 bits stay ([the token](#ch-header--token)).
+- A token holds `ll` up to 15, `ml - 4` up to 31 and the offset class, 3072 tokens; only {{ch04.tok_coded}} have a code of their own, the others are sent as the escape and 12 plain bits, as a code for every token would take code space from the frequent ones ([the escape](#ch-header--escape)).
+- `seqlz_off_class()` picks one of 6 offset classes without a branch: class 0 is the repeat offset and sends no bits, classes 4 and 5 send multiples of 8 below 2048 divided by 8, and each class's number of bits comes out of one constant, `SEQLZ_RAW_NIBBLES` ([offset classes](#ch-header--offsets)).
+- The format fixes its tables as code lengths, one byte per symbol, and the codes and decode tables are one global `const` struct, `seqlz_tables`, read by every CPU and no part of the work memory ([one global table](#ch-header--tables)).
+- Coded literals use one of 8 fixed literal tables or a table of the page's own, codes of at most 10 bits in 8 streams; at level 3 they may be deltas to an earlier byte, a subtraction and not a XOR, so that values that grow by a little become one small value ([the literal tables](#ch-header--literals)).
+- `seqlz_decode()` reads and writes nothing outside its buffers for any input, as zram stores no checksum, and `seqlz_compress()` never fails with `SEQLZ_COMPRESS_BOUND`, zram's two pages ([decoding a page](#ch-header--encode-decode), [the compressor](#ch-header--compressor)).
+:::
+
 `src/seqlz_format.h` has the format as `#define`s, and two small functions that turn a sequence into
 the numbers the format stores, `seqlz_len_symbol()` and `seqlz_off_class()`. Every file of the codec
 includes it, through `seqlz_tables.h` and `seqlz_internal.h`. `src/seqlz.h` is the interface for the

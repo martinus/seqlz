@@ -1,5 +1,14 @@
 # The decoder's tools: prefetches, copies and a bit reader {#ch-dec-basics}
 
+::: key
+- `prefetch_lines()` asks for the decoder's tables before a page is decoded, 8 cache lines per round, so that the misses of a cold read overlap: {{ch12.lines_coded}} lines for a page with coded literals ([prefetches](#ch-dec-basics--prefetch)).
+- `copy8()` loads before it stores, so from offset 8 on it copies a match that overlaps the bytes it writes; `copy16()` loads both halves first, and is only for literals ([copies](#ch-dec-basics--copies)).
+- `copy_literals()` copies 16 bytes also where fewer literals follow, so most sequences need one copy and no loop, and the next sequence writes over the extra bytes ([copy_literals()](#ch-dec-basics--literals)).
+- For offsets below 8, `repeat_pattern()` builds the match's 8 bytes in a register with a mask and a multiply, and the copy stores that register again and again, with no load after the first ([offsets below 8](#ch-dec-basics--pattern)).
+- `copy_match()` copies the slow path's matches, up to a page long, 8 or 16 bytes at a time, and byte by byte only near the end of the page ([copy_match()](#ch-dec-basics--copy-match)).
+- The bit reader keeps 64 bits with the next bit on top; a refill loads 8 bytes and leaves 56 to 63 bits, and a read past the end gets zeros, which one check at the end of the page catches ([the bit reader](#ch-dec-basics--bit-reader)).
+:::
+
 `src/seqlz_decompress.c` is the decoder, {{ch12.lines}} lines. Its first 214 lines, this chapter, are
 what every decoder of an LZ format needs in some form: copies of 8 and 16 bytes, a copy for the
 literals, one for matches that overlap the bytes they write, and a reader for the bitstream; the

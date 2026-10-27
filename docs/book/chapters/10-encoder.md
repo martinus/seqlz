@@ -1,5 +1,14 @@
 # The encoder writes the page from both ends {#ch-encoder}
 
+::: key
+- The encoder copies the literals to the front of `dst` and writes the bitstream backwards from its end, then turns the bitstream around to right after the literals, so matching and encoding are one pass into a buffer of any size ([both ends](#ch-encoder--layout)).
+- zram's two pages always hold a compressed page, as every sequence but the last covers at least 4 bytes and takes at most 31 bits for its token and offset; `static_assert`s check that argument, and a check of room before each sequence lets a smaller `dst` fail safely ([both ends](#ch-encoder--layout)).
+- The bits go into a 64-bit accumulator, and `enc_flush()` stores its whole bytes below `p` with one little-endian store, so read from the end backwards they are in the order the decoder wants ([enc_flush()](#ch-encoder--flush)).
+- A token without a code of its own goes out as the escape's code and the token in 12 bits, and the token's code and the offset bits go into the accumulator in one put ([codes](#ch-encoder--codes), [encode_seq()](#ch-encoder--emit)).
+- At level 3 the encoder writes a record of {{delta.rec}} bytes in front of each sequence's literals, for the deltas, in level 3's own copy of the loop, so levels 1 and 2 write as fast as before ([records](#ch-encoder--records), [two receivers](#ch-encoder--wrappers)).
+- `encoder_finish()` turns the bitstream around 8 bytes at a time, a little-endian load and a big-endian store; at levels 2 and 3 the literals are coded afterwards, with the matcher's 8 KiB table as the copy of the raw literals ([encoder_finish()](#ch-encoder--finish), [the entry points](#ch-encoder--entry)).
+:::
+
 The matcher of [chapter 9](#ch-matcher) finds a page's sequences; the encoder in
 `src/seqlz_compress.c` writes them in the format of [chapter 4](#ch-format): the literals as they are,
 and for `ll`, `ml` and the offset the token's code, the offset bits and the length values. The two run

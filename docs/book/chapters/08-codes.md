@@ -1,5 +1,14 @@
 # seqlz_codes.c: from code lengths to lookup tables {#ch-codes}
 
+::: key
+- `first_codes()` computes the first canonical code of each length, deflate's rule, and rejects lengths whose codes do not fill the decode table exactly, which also keeps the builders inside their arrays ([first_codes()](#ch-codes--first-codes)).
+- A code's entries are one range of the decode table, because the bitstream is read most significant bit first: the three token codes of 4 bits take the first {{ch08.tok.len4.bytes}} bytes of the token table ([build_token()](#ch-codes--build-token)).
+- `build_own()` fills `quad[]` by decoding each of the 256 values of 8 bits with the `decode[]` it has just built ([build_own()](#ch-codes--own)).
+- `seqlz_tables_build()` refuses lengths that leave out a symbol the encoder may have to write, also when they are a complete code: a byte without a code would count 0 bits in `lit_cost` and make its table look cheapest ([has_all_symbols()](#ch-codes--all-symbols)).
+- A program for the build machine runs all of it when seqlz is built, in userspace as in the kernel, and prints the tables as C, so no program builds tables when it starts, and lengths the encoder cannot use stop the build ([at build time](#ch-codes--kernel)).
+- The code lengths are optimal length-limited prefix codes for counts of training pages; only the most frequent tokens get a code, {{ch08.tok.coded}} on 4 KiB pages, and k-means groups the pages into the 8 literal tables ([the code lengths](#ch-codes--lengths), [the literal tables](#ch-codes--lit-sets-file)).
+:::
+
 The format defines its {{ch17.tables}} tables by their code lengths alone, {{ch08.length_bytes}} bytes
 compiled into the codec: {{tok.symbols}} for the token table, {{ll.symbols}} each for the two tables of
 length values, 256 for each of the 8 literal tables, and {{own.symbols}} for `OWN`, the code a page's own

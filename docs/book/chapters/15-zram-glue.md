@@ -1,5 +1,14 @@
 # From a library to a zram backend {#ch-zram-glue}
 
+::: key
+- `seqlz-1`, `seqlz-2` and `seqlz-3` are the three levels of `seqlz_compress()`: one format, one decoder, and no dictionary, as the tables are part of the format ([three codecs](#ch-zram-glue--head)).
+- The compression context is the matcher's hash table, {{size.state}} bytes, and levels 2 and 3 add a scratch of {{const.SCRATCH}} bytes to decompress; level 3 needs no more memory than level 2 ([the compression context](#ch-zram-glue--cctx), [seqlz-2 and seqlz-3](#ch-zram-glue--fast-lit)).
+- `port.py` writes the kernel's copy from `src/`, which stays the one source of the codec, and stops on a replacement that does not match and on text a kernel reader cannot follow ([the kernel's copy](#ch-zram-glue--port)).
+- The kernel gets two functions in the shape of `include/linux/lz4.h`, and tables generated when the kernel is built, shared read-only by every device and CPU ([two functions](#ch-zram-glue--interface), [the tables](#ch-zram-glue--init)).
+- Without zram's split of the contexts, one union of the hash table and the scratch takes {{size.state}} bytes per CPU from `kmalloc-8k`, safe because zram's mutex keeps writes and reads of a stream apart; `lz4` asks `vmalloc()` for 16 416 bytes, 20 480 handed out ([backend_seqlz.c](#ch-zram-glue--backend)).
+- `check.sh` builds the copy with extra warnings and runs checkpatch and kernel-doc, KUnit tests run in UML, and fuzzers check the decoder against a second decoder written from the specification ([checks](#ch-zram-glue--check), [testing](#ch-zram-glue--tests)).
+:::
+
 Everything up to here is a library: functions that take a block and work memory, and know nothing
 about their caller. `src/zram_seqlz.c`, {{ch15.zram_lines}} lines, is the piece between seqlz and zram
 for the project's benchmark harness: it hands out the work memory per CPU, checks the page size and

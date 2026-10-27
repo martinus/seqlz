@@ -1,5 +1,14 @@
 # seqlz_match.h: the matcher finds the repeats {#ch-matcher}
 
+::: key
+- The matcher hashes 5 bytes, not 4: fewer and longer matches, and when it came on 24th September 2026, 5% fewer cycles to compress a page on x86-64, for 0.6 points more memory ([the hash](#ch-matcher--hash)).
+- `seqlz_match_len()` compares the first 16 bytes with one branch, and finds the first byte that differs with one count of trailing zeros of a XOR ([seqlz_match_len()](#ch-matcher--match-len)).
+- The matcher hands each sequence to a callback that the compiler inlines, so matching and encoding are one loop with no indirect call ([the callback](#ch-matcher--emit)).
+- At levels 1 and 2 it is greedy and tries two candidates at every position, the repeat offset and the last position with the same hash, both decided by one branch and loaded one position ahead ([two candidates](#ch-matcher--plan), [one position](#ch-matcher--position)).
+- The hash table, 4096 slots of 2 bytes, is cleared for every page, so every candidate is a position of this page and its bytes load without a check; of a match, only the position 2 bytes before its end goes into the table ([the state](#ch-matcher--state), [one position of a match](#ch-matcher--insert)).
+- Level 3 adds a lazy step for matches shorter than {{ch09.lazy_len}} bytes, which takes a longer match one position later, and extends every match backwards ([level 3](#ch-matcher--lazy)).
+:::
+
 `src/seqlz_match.h` is the LZ part of seqlz. It walks through a page and at each position asks whether the
 next bytes appeared earlier in the same page. What it finds are sequences, `ll` literals and a match
 of `ml` bytes from `offset` bytes back ([chapter 4](#ch-format)), and it hands each one to a function
