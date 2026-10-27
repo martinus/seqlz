@@ -423,6 +423,13 @@ would not leave those {{own.enc.nu_diff}} bits; the buckets save the sort. The c
 second loop is about a byte that just got shorter and is then among the longest: the room left is
 always a multiple of the longest code's, so another round of the `while` fills it.
 
+The animation puts each byte's share of the literals, $f / n$, next to the share of the code space
+its code takes, $2^{-l}$: the first loop keeps the second at or below the first, and the gain is how
+far below. As a choice it runs on the base64 page of [chapter 13](#ch-literals-dec--own), where the
+second loop has more to do.
+
+@anim ownlens wide own_lengths() on the counts of the text page or the base64 page: the first lengths, the gains and their buckets, the counting sort, and each bucket where a loop changes a length. The counts come from lit_sums() and own_code() at level 3, the steps from a replay checked against own_lengths().
+
 ### Canonical codes, and the description
 
 @listing src/seqlz_compress_literals.c 659-670
@@ -855,6 +862,14 @@ were raw literals. The second assert keeps the copy free: `struct seqlz_state` i
 matcher's table and `u8 literals[SEQLZ_BLOCK_SIZE]`, and with the table at least a page,
 {{ch11.hash_bytes}} bytes on 4 KiB pages and {{k16.ch11.hash_bytes|grp}} on 16 KiB pages, the
 literals cost no byte of work memory.
+
+The copy is what makes the overwrite safe: the reader of the raw literals is not in `dst` at all. The
+animation runs `lit_streams()` on [chapter 16](#ch-trace)'s page at level 2, a run of literals per
+step, with the copy drawn under the bytes of `dst` the literals came from. From the first run on, the
+later streams store over raw literals that are read later, from the copy. The bitstream is the one
+thing no store may reach, and none does.
+
+@anim inplace wide dst while code_literals() codes chapter 16's page at level 2: the copy the runs of lit_streams() read, each flush's store into the 8 streams' rooms, the header, and the bitstream's move down. From the encoder's own lit_put() and lit_flush(), checked against code_literals().
 
 @listing src/seqlz_compress_literals.c 861-867
 

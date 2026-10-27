@@ -446,7 +446,7 @@ STEPPERS = {
     "decode": {
         "src": "src/seqlz_decompress.c", "copy": "dec_inst.c", "trace": "trace.c",
         "link": ("codes", "compress", "compress_literals", "decompress_literals", "default_tables", "lit_sets"),
-        "pages": [("ab", "ab \u00d7 2048, 9 bytes"), ("slab", "chapter 16\u2019s page, 796 bytes")],
+        "pages": [("ab", "ab \u00d7 2048, {{ab.len}} bytes"), ("slab", "chapter 16\u2019s page, {{ch16.coded.len}} bytes")],
         "label": "decode_block() step by step", "fn": "decode_block()", "js": "stepper.js",
         "what": "decoding two pages", "seq": "a sequence",
     },
@@ -487,8 +487,8 @@ def render_stepper(what, where):
         return not re.sub(r'<span class="cm">.*?</span>', "", h).strip()
     rows = "".join(f'<span class="line{" cmline" if only_comment(h) else ""}"><span class="ln" data-n="{a + i}"></span>'
                    f'<span class="lc">{h}</span></span>' for i, h in enumerate(hl))
-    pages = "".join(f'<button type="button" data-page="{pid}" aria-pressed="false">{html.escape(t)}</button>'
-                    for pid, t in k["pages"])
+    pages = "".join(f'<button type="button" data-page="{pid}" aria-pressed="false">'
+                    f'{html.escape(substitute(t, where))}</button>' for pid, t in k["pages"])
     buttons = "".join(f'<button type="button" class="icon" data-do="{b_}" title="{t}" aria-label="{t}">'
                       f'<svg viewBox="0 0 24 24" aria-hidden="true">{ICONS[b_]}</svg></button>' for b_, t in STEP_BUTTONS)
     sid = "stepper-" + what

@@ -1,0 +1,12 @@
+.an-stage svg text.ol-head { fill: var(--muted); font-family: var(--display); font-size: 13px; font-weight: 700; }
+.an-stage svg text.ol-note { fill: var(--muted); }
+.an-stage svg text.ol-mark { fill: var(--mark); font-weight: 700; }
+.an-stage svg text.ol-tf { fill: var(--paper); }
+.an-stage svg text.ol-key { font-family: var(--display); }
+.an-stage .ol-axis { stroke: var(--rule); }
+.an-stage .ol-share { fill: var(--muted); fill-opacity: 0.35; }
+.an-stage .ol-room { fill: var(--accent); }
+.an-stage .ol-now { fill: var(--mark); }
+.an-stage .ol-empty { fill: var(--sheet); stroke: var(--rule); }
+.an-stage .ol-band { fill: var(--sheet); stroke: var(--rule); }
+.an-stage .ol-band2 { fill: var(--why); }
