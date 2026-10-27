@@ -108,6 +108,83 @@ first 3 bytes, and the decoder needs no level to read it:
 `dt` names one of three deltas ([below](#ch-format--deltas)). Raw literals are never deltas: where the
 deltas of a level 3 page do not code well enough, it keeps its literals as they are.
 
+How each level gets to its layouts: level 1 stops after the matcher, level 2 prices the 8 fixed tables,
+level 3 also picks a delta and may build a table of the page's own. Each coded layout comes with a
+condition, and a page that does not meet it gets raw literals.
+
+<figure class="diagram">
+<div class="scroll">
+<svg viewBox="0 0 720 400" role="img" aria-label="The three levels as steps from left to right and the five layouts on the right: seqlz-1 always writes raw literals; seqlz-2 writes a fixed table where coding saves enough, else raw literals; seqlz-3 picks a delta and a fixed table or one of the page's own and can end in any of the five layouts.">
+<defs><marker id="ch-format-lv-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0 L10 5 L0 10 z" fill="currentColor"/></marker></defs>
+<text x="647" y="28" font-size="11" text-anchor="middle" font-weight="700">the layouts</text>
+<rect x="580" y="40" width="135" height="40" rx="4" class="fill-paper" stroke="currentColor"/>
+<text x="647.5" y="57.5" font-size="11" text-anchor="middle">raw literals</text>
+<text x="647.5" y="70.5" font-size="11" text-anchor="middle">no t</text>
+<rect x="580" y="130" width="135" height="40" rx="4" class="fill-paper" stroke="currentColor"/>
+<text x="647.5" y="147.5" font-size="11" text-anchor="middle">fixed table</text>
+<text x="647.5" y="160.5" font-size="11" text-anchor="middle">t: 0 to 7</text>
+<rect x="580" y="190" width="135" height="40" rx="4" class="fill-paper" stroke="currentColor"/>
+<text x="647.5" y="207.5" font-size="11" text-anchor="middle">fixed table, deltas</text>
+<text x="647.5" y="220.5" font-size="11" text-anchor="middle">t: 0 to 7, dt</text>
+<rect x="580" y="250" width="135" height="40" rx="4" class="fill-paper" stroke="currentColor"/>
+<text x="647.5" y="267.5" font-size="11" text-anchor="middle">own table</text>
+<text x="647.5" y="280.5" font-size="11" text-anchor="middle">t: 8, own</text>
+<rect x="580" y="310" width="135" height="40" rx="4" class="fill-paper" stroke="currentColor"/>
+<text x="647.5" y="327.5" font-size="11" text-anchor="middle">own table, deltas</text>
+<text x="647.5" y="340.5" font-size="11" text-anchor="middle">t: 8, dt, own</text>
+<g class="acc"><text x="10" y="64" font-size="12" font-weight="700">seqlz-1</text></g>
+<rect x="80" y="42" width="120" height="36" rx="4" class="fill-sheet" stroke="currentColor"/>
+<text x="140.0" y="64.0" font-size="11" text-anchor="middle">greedy matcher</text>
+<path d="M200 60 L578 60" fill="none" stroke="currentColor" stroke-width="1.2" marker-end="url(#ch-format-lv-arrow)"/>
+<g class="acc"><text x="10" y="154" font-size="12" font-weight="700">seqlz-2</text></g>
+<rect x="80" y="132" width="120" height="36" rx="4" class="fill-sheet" stroke="currentColor"/>
+<text x="140.0" y="154.0" font-size="11" text-anchor="middle">greedy matcher</text>
+<rect x="215" y="132" width="130" height="36" rx="4" class="fill-sheet" stroke="currentColor"/>
+<text x="280.0" y="147.5" font-size="11" text-anchor="middle">cheapest of the</text>
+<text x="280.0" y="160.5" font-size="11" text-anchor="middle">8 fixed tables</text>
+<rect x="360" y="125" width="120" height="50" rx="4" class="fill-paper" stroke="currentColor" stroke-dasharray="4 3"/>
+<text x="420.0" y="141.0" font-size="11" text-anchor="middle">coded if it</text>
+<text x="420.0" y="154.0" font-size="11" text-anchor="middle">saves 1/16 and</text>
+<text x="420.0" y="167.0" font-size="11" text-anchor="middle">{{ch11.coded_min}} bytes</text>
+<path d="M200 150 L213 150" fill="none" stroke="currentColor" stroke-width="1.2" marker-end="url(#ch-format-lv-arrow)"/>
+<path d="M345 150 L358 150" fill="none" stroke="currentColor" stroke-width="1.2" marker-end="url(#ch-format-lv-arrow)"/>
+<path d="M480 150 L578 150" fill="none" stroke="currentColor" stroke-width="1.2" marker-end="url(#ch-format-lv-arrow)"/>
+<path d="M420 125 L420 72 L578 72" fill="none" stroke="currentColor" stroke-width="1.2" stroke-dasharray="4 3" marker-end="url(#ch-format-lv-arrow)"/>
+<text x="426" y="104" font-size="10" text-anchor="start" class="mut">else</text>
+<g class="acc"><text x="10" y="274" font-size="12" font-weight="700">seqlz-3</text></g>
+<rect x="80" y="248" width="100" height="44" rx="4" class="fill-sheet" stroke="currentColor"/>
+<text x="130.0" y="267.5" font-size="11" text-anchor="middle">lazy matcher,</text>
+<text x="130.0" y="280.5" font-size="11" text-anchor="middle">step back</text>
+<rect x="192" y="248" width="100" height="44" rx="4" class="fill-sheet" stroke="currentColor"/>
+<text x="242.0" y="267.5" font-size="11" text-anchor="middle">delta: none</text>
+<text x="242.0" y="280.5" font-size="11" text-anchor="middle">or one of 3</text>
+<rect x="304" y="242" width="120" height="56" rx="4" class="fill-sheet" stroke="currentColor"/>
+<text x="364.0" y="261.0" font-size="11" text-anchor="middle">cheapest fixed</text>
+<text x="364.0" y="274.0" font-size="11" text-anchor="middle">table, or the</text>
+<text x="364.0" y="287.0" font-size="11" text-anchor="middle">page's own</text>
+<rect x="436" y="245" width="112" height="50" rx="4" class="fill-paper" stroke="currentColor" stroke-dasharray="4 3"/>
+<text x="492.0" y="261.0" font-size="11" text-anchor="middle">coded if it</text>
+<text x="492.0" y="274.0" font-size="11" text-anchor="middle">saves 1/16 and</text>
+<text x="492.0" y="287.0" font-size="11" text-anchor="middle">{{ch11.coded_min}} bytes</text>
+<path d="M180 270 L190 270" fill="none" stroke="currentColor" stroke-width="1.2" marker-end="url(#ch-format-lv-arrow)"/>
+<path d="M292 270 L302 270" fill="none" stroke="currentColor" stroke-width="1.2" marker-end="url(#ch-format-lv-arrow)"/>
+<path d="M424 270 L434 270" fill="none" stroke="currentColor" stroke-width="1.2" marker-end="url(#ch-format-lv-arrow)"/>
+<path d="M548 270 L578 158" fill="none" stroke="currentColor" stroke-width="1.2" marker-end="url(#ch-format-lv-arrow)"/>
+<path d="M548 270 L578 210" fill="none" stroke="currentColor" stroke-width="1.2" marker-end="url(#ch-format-lv-arrow)"/>
+<path d="M548 270 L578 270" fill="none" stroke="currentColor" stroke-width="1.2" marker-end="url(#ch-format-lv-arrow)"/>
+<path d="M548 270 L578 330" fill="none" stroke="currentColor" stroke-width="1.2" marker-end="url(#ch-format-lv-arrow)"/>
+<path d="M500 245 L500 72" fill="none" stroke="currentColor" stroke-width="1.2" stroke-dasharray="4 3"/>
+<text x="494" y="204" font-size="10" text-anchor="end" class="mut">else, the</text>
+<text x="494" y="216" font-size="10" text-anchor="end" class="mut">literals as</text>
+<text x="494" y="228" font-size="10" text-anchor="end" class="mut">they are</text>
+<text x="80" y="372" font-size="10.5" text-anchor="start" class="mut">own table: from {{own.enc.min_lits}} to {{own.enc.max_lits}} literals, where it saves {{own.enc.saves_min}} bytes</text>
+<text x="80" y="388" font-size="10.5" text-anchor="start" class="mut">delta: where it prices lower than the literals as they are</text>
+</svg>
+</div>
+<figcaption>The steps of each level, left to right, and the layouts they end in; the dashed boxes are
+the rule of <a href="#ch-literals-enc--rule">chapter 11</a> on whether the coded literals save enough.</figcaption>
+</figure>
+
 **Raw literals.** With the top bit clear, the `n` literals follow as they are, in page order, and
 everything after them, up to the end of the compressed page, is `B`, the bitstream of the sequences.
 `B` has no length of its own: it ends where the page ends, and zram knows where that is. This is the
