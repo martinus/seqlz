@@ -798,22 +798,22 @@ def map_block(cid, labels):
     rows = BOOK.get("map", {}).get("rows", [])
     if not any(cid == n["id"] for r in rows for n in r["nodes"]):
         return ""
-    out = [f'<nav class="here" aria-label="Where this chapter is"><div class="here-head">'
+    out = [f'<nav class="onmap" aria-label="Where this chapter is"><div class="onmap-head">'
            f'<a href="#{BOOK["map"]["chapter"]}">Where this chapter is in the code</a></div>']
     for r in rows:
         items = []
         if r.get("from"):
-            items.append(f'<span class="here-data">{html.escape(r["from"])}</span><span class="here-sep">{arrow}</span>')
+            items.append(f'<span class="onmap-data">{html.escape(r["from"])}</span><span class="onmap-sep">{arrow}</span>')
         for k, n in enumerate(r["nodes"]):
             if k:
-                items.append(f'<span class="here-sep">{html.escape(n.get("join", arrow))}</span>')
+                items.append(f'<span class="onmap-sep">{html.escape(n.get("join", arrow))}</span>')
             cur = ' class="cur" aria-current="location"' if n["id"] == cid else ""
-            items.append(f'<a href="#{n["id"]}"{cur}><span class="here-no">{labels.get(n["id"], "?")}</span> '
+            items.append(f'<a href="#{n["id"]}"{cur}><span class="onmap-no">{labels.get(n["id"], "?")}</span> '
                          f'{html.escape(n["label"])}</a>')
         if r.get("to"):
-            items.append(f'<span class="here-sep">{arrow}</span><span class="here-data">{html.escape(r["to"])}</span>')
-        out.append(f'<div class="here-row"><span class="here-what">{html.escape(r["what"])}</span>'
-                   f'<span class="here-path">{"".join(items)}</span></div>')
+            items.append(f'<span class="onmap-sep">{arrow}</span><span class="onmap-data">{html.escape(r["to"])}</span>')
+        out.append(f'<div class="onmap-row"><span class="onmap-what">{html.escape(r["what"])}</span>'
+                   f'<span class="onmap-path">{"".join(items)}</span></div>')
     out.append("</nav>")
     return "".join(out)
 
