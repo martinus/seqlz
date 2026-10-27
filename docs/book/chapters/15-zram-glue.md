@@ -355,6 +355,91 @@ against the specification, so the kernel exports the two functions only.
 The backend, `tools/kernel-port/backend_seqlz.c`, is modelled on zram's `backend_lz4.c` and is a
 template for zram trees with and without the October 2026 series.
 
+The figure shows where it sits when zram writes or reads a page: zram takes this CPU's stream, zcomp
+passes its buffers and the backend's context to the backend, and the backend hands the context to the
+library as its work memory. The contexts are the form with the split; without it, one union serves
+both directions. The names of zram and zcomp are those of a tree without the series, which may name
+the streams of the split differently.
+
+<figure class="diagram">
+<div class="scroll">
+<svg viewBox="0 0 720 420" role="img" aria-label="The call path of a page written and a page read: zram, zcomp, backend_seqlz.c and lib/seqlz, and the two contexts per CPU that the backend allocates, with the bytes kmalloc() hands out for each.">
+  <defs><marker id="ch-zram-glue-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0 L10 5 L0 10 z" fill="currentColor"/></marker></defs>
+  <g font-size="12" font-weight="600">
+    <text x="263" y="18" text-anchor="middle">write a page</text>
+    <text x="565" y="18" text-anchor="middle">read a page</text>
+  </g>
+  <g class="mut" font-size="11">
+    <text x="6" y="54">zram_drv.c</text>
+    <text x="6" y="125">zcomp.c</text>
+    <text x="6" y="212">backend_seqlz.c</text>
+    <text x="6" y="270">lib/seqlz/</text>
+    <text x="6" y="336">per CPU</text>
+  </g>
+  <g fill="none" stroke="currentColor">
+    <rect x="118" y="30" width="290" height="40" rx="3" class="fill-sheet"/>
+    <rect x="420" y="30" width="290" height="40" rx="3" class="fill-sheet"/>
+    <rect x="118" y="88" width="592" height="24" rx="3" class="fill-paper" stroke-dasharray="4 3"/>
+    <rect x="118" y="130" width="290" height="40" rx="3" class="fill-sheet"/>
+    <rect x="420" y="130" width="290" height="40" rx="3" class="fill-sheet"/>
+    <rect x="118" y="188" width="290" height="40" rx="3" class="fill-sheet"/>
+    <rect x="420" y="188" width="290" height="40" rx="3" class="fill-sheet"/>
+    <rect x="118" y="246" width="290" height="40" rx="3" class="fill-sheet"/>
+    <rect x="420" y="246" width="290" height="40" rx="3" class="fill-sheet"/>
+  </g>
+  <g fill="none" stroke="currentColor" marker-end="url(#ch-zram-glue-arrow)">
+    <line x1="263" y1="70" x2="263" y2="87"/><line x1="565" y1="70" x2="565" y2="87"/>
+    <line x1="263" y1="112" x2="263" y2="129"/><line x1="565" y1="112" x2="565" y2="129"/>
+    <line x1="263" y1="170" x2="263" y2="187"/><line x1="565" y1="170" x2="565" y2="187"/>
+    <line x1="263" y1="228" x2="263" y2="245"/><line x1="565" y1="228" x2="565" y2="245"/>
+  </g>
+  <g font-size="12" text-anchor="middle">
+    <text x="263" y="47">zram_write_page()</text>
+    <text x="565" y="47">zram_read_page()</text>
+    <text x="414" y="104" font-size="11">zcomp_stream_get(): this CPU's stream, its mutex held for the call</text>
+    <text x="263" y="147">zcomp_compress()</text>
+    <text x="565" y="147">zcomp_decompress()</text>
+    <text x="263" y="205">seqlz_zcomp_compress()</text>
+    <text x="565" y="205">seqlz_zcomp_decompress()</text>
+    <text x="263" y="263">seqlz_compress()</text>
+    <text x="565" y="263">seqlz_decompress()</text>
+  </g>
+  <g class="mut" font-size="11" text-anchor="middle">
+    <text x="263" y="63">a page not filled with one repeated word</text>
+    <text x="565" y="63">read_compressed_page()</text>
+    <text x="263" y="163">dst: the stream's buffer of 2 pages</text>
+    <text x="565" y="163">src: in zsmalloc, or local_copy</text>
+    <text x="263" y="221">wrkmem = ctx->context, params->level</text>
+    <text x="565" y="221">wrkmem = ctx->context</text>
+    <text x="263" y="279">its static seqlz_compress_block()</text>
+    <text x="565" y="279">seqlz_decode() of src/, renamed</text>
+  </g>
+  <g class="acc">
+    <g fill="none" stroke="currentColor" marker-end="url(#ch-zram-glue-arrow)">
+      <line x1="263" y1="286" x2="263" y2="309"/><line x1="565" y1="286" x2="565" y2="309"/>
+    </g>
+    <rect x="118" y="310" width="290" height="56" rx="3" class="fill-acc" fill-opacity="0.12" stroke="currentColor"/>
+    <rect x="420" y="310" width="290" height="56" rx="3" class="fill-acc" fill-opacity="0.12" stroke="currentColor"/>
+    <g font-size="12" text-anchor="middle">
+      <text x="263" y="327">compression context</text>
+      <text x="565" y="327">decompression context</text>
+    </g>
+  </g>
+  <g font-size="11" text-anchor="middle">
+    <text x="263" y="342">the matcher's hash table, {{size.state|grp}} bytes</text>
+    <text x="263" y="357">kmalloc-8k: {{ch15.mem.cctx_gets|grp}} bytes, every level</text>
+    <text x="565" y="342">the scratch, {{const.SCRATCH|grp}} bytes</text>
+    <text x="565" y="357">kmalloc-8k: {{ch15.mem.dctx_gets|grp}} bytes, levels 2 and 3</text>
+  </g>
+  <g font-size="12">
+    <text x="118" y="390" class="acc">seqlz-1: {{ch01.cctx_kib}} KiB per CPU, seqlz-2 and seqlz-3: {{ch01.split_kib}} KiB per CPU</text>
+    <text x="118" y="410" class="mut" font-size="11">without the split: one union of the two, {{ch01.union_kib}} KiB per CPU at every level</text>
+  </g>
+</svg>
+</div>
+<figcaption>A page written and a page read, from zram to the library, and the work memory per CPU that the backend allocates when a CPU comes up, as <code>kmalloc()</code> hands it out; level 1 has no decompression context.</figcaption>
+</figure>
+
 @listing tools/kernel-port/backend_seqlz.c {{ch15.backend.head.a}}-{{ch15.backend.head.b}}
 
 `pr_fmt` comes before the first include: `pr_err()` and its relatives wrap their format string in it.

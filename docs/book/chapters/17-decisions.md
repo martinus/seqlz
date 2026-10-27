@@ -99,6 +99,16 @@ written against 20.02, and its swap-ins take 4.39 µs against 6.86. `lzo-rle` st
 `lz4`, but its swap-ins are 0.45 µs slower, and with 0.73 reads per write that makes it 1.5% slower per
 page written and leaves it off the hull
 ([explored-designs.md](https://github.com/martinus/seqlz/blob/main/docs/explored-designs.md#one-rule-for-which-literals-are-deltas-045-fewer-bytes-a-simpler-spec-kept)).
+
+The animation below moves lambda from 1 to 2000 bytes per µs: the line of equal score,
+bytes + lambda × time, turns from flat to steep and touches the hull at the codec with the lowest score.
+Its six codecs are the chart's, with the means of 22nd October 2026 as the
+[README](https://github.com/martinus/seqlz/blob/main/README.md) rounds them, to 0.1% of a page and
+0.01 µs. From those the rates come out at 705, 127 and 22 bytes per µs, so the steps leave out the
+rates from 127 to 131 and from 689 to 705, where the rounding would pick another codec.
+
+@anim score wide Each codec's score, zsmalloc bytes per page plus lambda times the time per page written, at 25 exchange rates from 1 to 2000 bytes per µs: kernel VM, zram as swap, means over four zram dumps of a phone and a desktop, 22nd October 2026, memory rounded to 0.1% of 4 KiB. The work memory per CPU is not in the bytes, as in the chart above.
+
 zram's read benchmark, which decodes every page several times, trains the branch predictor and flatters
 seqlz; a swap-in decodes a page once, and these are a swap-in's times. About 1.9 µs of a fault on the PC
 are the kernel's for every codec, so a decoder 40% slower than `lz4`'s makes a swap-in about 20% slower
