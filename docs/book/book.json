@@ -20,6 +20,7 @@
       "id": "part-2", "label": "Part II", "title": "The code, line by line",
       "intro": "Every line of <code>src/</code>, in the order a reader needs it: the kernel's vocabulary, the constants of the format, the tables, the compressor and the decompressor, and the glue to zram.",
       "chapters": [
+        {"file": "part2-map.md", "numbered": false, "label": "Map"},
         {"file": "05-compat.md"},
         {"file": "06-seqlz-h.md"},
         {"file": "07-internal.md"},
@@ -42,5 +43,29 @@
         {"file": "18-glossary.md", "numbered": false, "label": "Appendix"}
       ]
     }
-  ]
+  ],
+  "map": {
+    "chapter": "map",
+    "rows": [
+      {"what": "zram", "from": "a page to write or read", "to": "seqlz_compress(), seqlz_decode()", "nodes": [
+        {"id": "ch-zram-glue", "label": "the backend"}
+      ]},
+      {"what": "write a page", "from": "4096 bytes", "to": "compressed page", "nodes": [
+        {"id": "ch-matcher", "label": "matcher"},
+        {"id": "ch-encoder", "label": "encoder"},
+        {"id": "ch-literals-enc", "label": "literal coder"}
+      ]},
+      {"what": "read a page", "from": "compressed page", "to": "4096 bytes", "nodes": [
+        {"id": "ch-literals-dec", "label": "literal decoder"},
+        {"id": "ch-decode", "label": "sequence loop"},
+        {"id": "ch-dec-basics", "label": "copies and bit reader", "join": "with"}
+      ]},
+      {"what": "under both", "nodes": [
+        {"id": "ch-compat", "label": "kernel names"},
+        {"id": "ch-header", "label": "format constants", "join": "·"},
+        {"id": "ch-internal", "label": "table layout", "join": "·"},
+        {"id": "ch-codes", "label": "tables built", "join": "·"}
+      ]}
+    ]
+  }
 }
