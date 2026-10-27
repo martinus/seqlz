@@ -512,8 +512,9 @@ The fast path of the loop copies 16 bytes of literals whatever `nl` is, at most 
 `nl`, one path for all three deltas: the same `dist` as `undelta_literals()`, then two `add8()` for a
 distance of 8 or more, else four `add4()`. The first word's source lies wholly before `d`, in bytes
 the match before or earlier sequences wrote, which are final; each word after it reads `dist` bytes
-back, into bytes before `d` or of a word restored before it. The bytes past `nl` turn into garbage, as they were
-after `copy16()` already; the match after the literals writes over them before anything reads them.
+back, into bytes before `d` or of a word restored before it. The bytes past `nl`, which `copy16()`
+copied from the next sequence's literals, turn into garbage; the match after the literals writes over
+them before anything reads them.
 Only near the page's start, where `d - dst < dist`, do the first literals have no byte to be a delta
 to, and there it calls `undelta_literals()` and its loops. The second sequence of the page of
 pointers, 1 literal at byte {{delta.ptr.rec.1.pos}}, as the fast path would see it:
