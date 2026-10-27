@@ -4,6 +4,8 @@
  * seqlz_compress.c and seqlz_decompress.c to reach the encoder's records, seqlz_delta_literals(),
  * seqlz_code_literals() and undelta_fast():
  *   delta.sub.*, delta.add.*               sub_bytes() and add8() on one example, step by step
+ *   delta.lane.<row>.<byte>, delta.lane.*  sub_bytes() lane by lane on a word of chapter 13's page of
+ *                                          counters, and which lanes borrow or have bit 7 set
  *   delta.step, delta.penalty, delta.rec   DELTA_STEP, the 8 bits of the delta's byte in sums of
  *                                          every DELTA_STEP-th literal, LIT_REC
  *   delta.last.N                           seqlz_delta_last(N)
@@ -94,6 +96,70 @@ int main(void) {
         fact_x64("delta.add.plain", r + b);
         if (get_unaligned_le64(w + 8) != a)
             fail("add8() does not undo sub_bytes()");
+    }
+    {
+        /*
+         * sub_bytes() lane by lane, on the word of chapter 13's page of counters that
+         * seqlz_delta_literals() subtracts second with SEQLZ_DELTA_4: the 8 bytes at 12 minus the 8
+         * bytes 4 before, checked against the deltas the encoder writes there
+         */
+        static u8 cp[SEQLZ_BLOCK_SIZE], cd[2 * SEQLZ_BLOCK_SIZE];
+        static struct seqlz_state cs;
+        static const char* const names[] = {"a", "b", "ahi", "blo", "diff", "fix", "r", "plain"};
+        const u64 high = 0x8080808080808080ULL;
+        const unsigned int at = 12, dist = 4;
+        struct seqlz_encoder ce;
+        u64 a, b, r, rows[8];
+        char wrong[24] = "", borrow[24] = "", ahigh[24] = "", bhigh[24] = "", lane[8];
+        unsigned int row;
+
+        counter_page(cp);
+        encoder_init(&ce, cd, sizeof(cd), cp + SEQLZ_BLOCK_SIZE);
+        ce.rec = true;
+        seqlz_match_block(cs.table, cp, true, encode_emit_rec, &ce);
+        if (get_unaligned_le16(cd + SEQLZ_HEADER) != 0 || get_unaligned_le16(cd + SEQLZ_HEADER + 2) < at + 8)
+            fail("the page of counters' first sequence does not hold the word");
+        /* the first sequence's words start at dist, 8 bytes apart */
+        if (seqlz_delta_literals(cd, &ce.lit, cp, cs.literals) != SEQLZ_DELTA_4 || (at - dist) % 8)
+            fail("the word is not one sub_bytes() of the page of counters");
+        a = get_unaligned_le64(cp + at);
+        b = get_unaligned_le64(cp + at - dist);
+        r = sub_bytes(a, b);
+        if (r != get_unaligned_le64(cs.literals + at))
+            fail("sub_bytes() is not what the encoder writes");
+        rows[0] = a;
+        rows[1] = b;
+        rows[2] = a | high;
+        rows[3] = b & ~high;
+        rows[4] = (a | high) - (b & ~high);
+        rows[5] = (a ^ ~b) & high;
+        rows[6] = r;
+        rows[7] = a - b;
+        fact_num("delta.lane.at", at);
+        fact_num("delta.lane.dist", dist);
+        for (k = 0; k < 8; k++) {
+            unsigned int ak = (unsigned int)(a >> (8 * k)) & 255U, bk = (unsigned int)(b >> (8 * k)) & 255U;
+
+            if ((u8)(r >> (8 * k)) != (u8)(ak - bk))
+                fail("a lane of sub_bytes() is not the byte's own difference");
+            snprintf(lane, sizeof lane, "%u", k);
+            if ((u8)(rows[7] >> (8 * k)) != (u8)(r >> (8 * k)))
+                strcat(strcat(wrong, *wrong ? " " : ""), lane);
+            if (ak < bk)
+                strcat(strcat(borrow, *borrow ? " " : ""), lane);
+            if (ak & 128U)
+                strcat(strcat(ahigh, *ahigh ? " " : ""), lane);
+            if (bk & 128U)
+                strcat(strcat(bhigh, *bhigh ? " " : ""), lane);
+            for (row = 0; row < 8; row++) {
+                snprintf(hex, sizeof hex, "%02x", (unsigned int)(rows[row] >> (8 * k)) & 255U);
+                fact_str(key("delta.lane.%s.%u", names[row], k), hex);
+            }
+        }
+        fact_str("delta.lane.wrong", wrong);
+        fact_str("delta.lane.borrow", borrow);
+        fact_str("delta.lane.ahigh", ahigh);
+        fact_str("delta.lane.bhigh", bhigh);
     }
     for (k = 1; k <= 9; k++)
         fact_num(key("delta.last.%u", k), seqlz_delta_last(k));

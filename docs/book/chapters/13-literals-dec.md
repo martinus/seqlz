@@ -521,8 +521,9 @@ The fast path of the loop copies 16 bytes of literals whatever `nl` is, at most 
 `nl`, one path for all three deltas: the same `dist` as `undelta_literals()`, then two `add8()` for a
 distance of 8 or more, else four `add4()`. The first word's source lies wholly before `d`, in bytes
 the match before or earlier sequences wrote, which are final; each word after it reads `dist` bytes
-back, into bytes before `d` or of a word restored before it. The bytes past `nl` turn into garbage, as they were
-after `copy16()` already; the match after the literals writes over them before anything reads them.
+back, into bytes before `d` or of a word restored before it. The bytes past `nl`, which `copy16()`
+copied from the next sequence's literals, turn into garbage; the match after the literals writes over
+them before anything reads them.
 Only near the page's start, where `d - dst < dist`, do the first literals have no byte to be a delta
 to, and there it calls `undelta_literals()` and its loops. The second sequence of the page of
 pointers, 1 literal at byte {{delta.ptr.rec.1.pos}}, as the fast path would see it:
@@ -535,6 +536,13 @@ The 8 bytes at `d - 8` are the first sequence's last literal and the 7 bytes of 
 byte is the low byte of the third pointer again, `10 + 20 = 30`; the other 7, and the 8 of the second
 `add8()`, are written over by the 7 bytes of the match and by the sequences after it.
 @assert delta.ptr.rec[1].ll == 1 and delta.ptr.rec[1].pos == 16 and delta.ptr.rec[0].ll + 7 == 16 and delta.ptr.fast.before[:2] == "10" and delta.ptr.fast.after[:2] == "30"
+
+One literal is too few to see the words at work. The animation below takes a page of counters of 4
+bytes instead, each 0 to 11 more than the one before, which level 3 stores with `SEQLZ_DELTA_4`: its
+first sequence goes through `undelta_literals()`, with the bytes kept as they are at the start and the
+byte loop at the end, and its second through `undelta_fast()`.
+
+@anim undelta The first bytes of the page of counters, one copy, `add4()`, byte or match per step: the deltas copied into the page, the bytes 4 before added back word by word, then the fast path's 16 bytes. Every byte is one the real `seqlz_decode()` had in the page at that step, recorded with a hook on its `add4()`.
 
 ::: measured What the deltas cost a read
 The 16 bytes for every sequence, whatever `nl` is, make the deltas cost more than their count of

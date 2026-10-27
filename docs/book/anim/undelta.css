@@ -1,0 +1,12 @@
+.an-stage .ud-empty { fill: var(--paper); stroke: var(--rule); stroke-dasharray: 3 3; }
+.an-stage .ud-delta { fill: var(--warn); stroke: var(--mark); }
+.an-stage .ud-spare { fill: var(--paper); stroke: var(--mark); stroke-dasharray: 3 2; }
+.an-stage .ud-lit { fill: var(--why); stroke: var(--accent); }
+.an-stage .ud-match { fill: var(--sheet); stroke: var(--muted); }
+.an-stage .ud-cur { stroke: var(--accent); stroke-width: 2.5; }
+.an-stage .ud-copy { stroke: var(--ink); stroke-width: 1.5; stroke-dasharray: 5 3; }
+.an-stage .ud-src { stroke: var(--mark); stroke-width: 2.5; }
+.an-stage .ud-arrow { stroke: var(--mark); stroke-width: 1.8; fill: none; }
+.an-stage .ud-tip { fill: var(--mark); stroke: none; }
+.an-stage svg text.ud-tlit { fill: var(--accent); font-weight: 600; }
+.an-stage svg text.ud-tspare, .an-stage svg text.ud-key { fill: var(--muted); }

@@ -356,6 +356,7 @@ gives `24 >= 24`, invalid.
 
 With `deltas`, `undelta_fast()` adds the bytes back on the 16 bytes `copy16()` wrote, before `last`
 becomes this sequence's offset: the distance of `SEQLZ_DELTA_LAST` is the offset of the sequence before.
+[Chapter 13's animation](#anim-undelta) steps through its four `add4()` on a page of counters.
 
 `nl` is not checked against the literals left, which saved 3 instructions per sequence on 3rd October
 2026 (commit `5c769f5`). A page whose tokens claim more literals than its header has moves `lit` past
