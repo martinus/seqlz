@@ -235,6 +235,156 @@ pattern a branch predictor could learn ([chapter 3](#ch-cpu--branches)), so it i
   moves class 2 to 4 and class 3 to 5. Offset 2 is not aligned, so the smallest result is 1 and nothing
   wraps. `& is_new` makes it 0 for the repeat offset.
 
+The figure shows which offsets each class takes, and the sum for three offsets of [chapter
+16](#ch-trace)'s page, 2, 72 and 399. The class then picks its nibble of `SEQLZ_RAW_NIBBLES`, the
+number of offset bits.
+@assert ch06.off[2].cls == 1 and ch06.off[72].cls == 4 and ch06.off[399].cls == 3 and ch06.off[8].cls == ch06.off[24].cls == 4 and ch06.off[255].cls == ch06.off[15].cls == 2 and ch06.off[256].cls == ch06.off[2040].cls == 5 and ch06.off[2048].cls == ch06.off[4095].cls == 3 and ch06.class5_end == 2048
+
+<figure class="diagram">
+<div class="scroll">
+<svg viewBox="0 0 720 380" role="img" aria-label="The offsets of each class on an axis stretched below 256, then the class and the offset bits of the offsets 2, 72 and 399 computed as seqlz_off_class() does" font-size="12">
+  <text x="10" y="10" font-size="11" class="mut">a new offset goes to</text>
+  <line x1="430.0" y1="12" x2="430.0" y2="150" stroke="currentColor" stroke-width="0.8" stroke-dasharray="3 3" class="mut"/>
+  <line x1="610.0" y1="12" x2="610.0" y2="150" stroke="currentColor" stroke-width="0.8" stroke-dasharray="3 3" class="mut"/>
+  <text x="10" y="28">class 1, {{ch04.raw.1}} bit</text>
+  <text x="10" y="54">class 2, {{ch04.raw.2}} bits</text>
+  <text x="10" y="80">class 3, {{ch04.raw.3}} bits</text>
+  <text x="10" y="106">class 4, {{ch04.raw.4}} bits</text>
+  <text x="10" y="132">class 5, {{ch04.raw.5}} bits</text>
+  <g class="acc"><circle cx="152.2" cy="24" r="4" fill="currentColor"/></g>
+  <text x="162.2" y="28" font-size="11">only 2, sent as 2 &gt;&gt; 1</text>
+  <rect x="151.1" y="43" width="278.9" height="14" class="fill-sheet" stroke="currentColor" stroke-width="0.8"/>
+  <text x="438.0" y="54" font-size="11" class="halo">1 to 255, but 2 and the multiples of 8</text>
+  <rect x="430.0" y="69" width="280.0" height="14" class="fill-sheet" stroke="currentColor" stroke-width="0.8"/>
+  <text x="438.0" y="80" font-size="11">the rest from 256 to 4095</text>
+  <g class="acc">
+    <rect x="157.75" y="95" width="2" height="14" class="fill-acc"/>
+    <rect x="166.50" y="95" width="2" height="14" class="fill-acc"/>
+    <rect x="175.25" y="95" width="2" height="14" class="fill-acc"/>
+    <rect x="184.00" y="95" width="2" height="14" class="fill-acc"/>
+    <rect x="192.75" y="95" width="2" height="14" class="fill-acc"/>
+    <rect x="201.50" y="95" width="2" height="14" class="fill-acc"/>
+    <rect x="210.25" y="95" width="2" height="14" class="fill-acc"/>
+    <rect x="219.00" y="95" width="2" height="14" class="fill-acc"/>
+    <rect x="227.75" y="95" width="2" height="14" class="fill-acc"/>
+    <rect x="236.50" y="95" width="2" height="14" class="fill-acc"/>
+    <rect x="245.25" y="95" width="2" height="14" class="fill-acc"/>
+    <rect x="254.00" y="95" width="2" height="14" class="fill-acc"/>
+    <rect x="262.75" y="95" width="2" height="14" class="fill-acc"/>
+    <rect x="271.50" y="95" width="2" height="14" class="fill-acc"/>
+    <rect x="280.25" y="95" width="2" height="14" class="fill-acc"/>
+    <rect x="289.00" y="95" width="2" height="14" class="fill-acc"/>
+    <rect x="297.75" y="95" width="2" height="14" class="fill-acc"/>
+    <rect x="306.50" y="95" width="2" height="14" class="fill-acc"/>
+    <rect x="315.25" y="95" width="2" height="14" class="fill-acc"/>
+    <rect x="324.00" y="95" width="2" height="14" class="fill-acc"/>
+    <rect x="332.75" y="95" width="2" height="14" class="fill-acc"/>
+    <rect x="341.50" y="95" width="2" height="14" class="fill-acc"/>
+    <rect x="350.25" y="95" width="2" height="14" class="fill-acc"/>
+    <rect x="359.00" y="95" width="2" height="14" class="fill-acc"/>
+    <rect x="367.75" y="95" width="2" height="14" class="fill-acc"/>
+    <rect x="376.50" y="95" width="2" height="14" class="fill-acc"/>
+    <rect x="385.25" y="95" width="2" height="14" class="fill-acc"/>
+    <rect x="394.00" y="95" width="2" height="14" class="fill-acc"/>
+    <rect x="402.75" y="95" width="2" height="14" class="fill-acc"/>
+    <rect x="411.50" y="95" width="2" height="14" class="fill-acc"/>
+    <rect x="420.25" y="95" width="2" height="14" class="fill-acc"/>
+  </g>
+  <text x="438.0" y="106" font-size="11" class="halo">8, 16, ..., 248, sent as off &gt;&gt; 3</text>
+  <g class="acc"><rect x="430.0" y="121" width="180.0" height="14" class="fill-acc" fill-opacity="0.45" stroke="currentColor" stroke-width="0.8"/></g>
+  <text x="422.0" y="132" font-size="11" text-anchor="end">256, 264, ..., 2040, sent as off &gt;&gt; 3</text>
+  <line x1="150.0" y1="150" x2="710.0" y2="150" stroke="currentColor"/>
+  <line x1="151.1" y1="150" x2="151.1" y2="155" stroke="currentColor"/>
+  <text x="151.1" y="168" text-anchor="start">1</text>
+  <line x1="430.0" y1="150" x2="430.0" y2="155" stroke="currentColor"/>
+  <text x="430.0" y="168" text-anchor="middle">256</text>
+  <line x1="610.0" y1="150" x2="610.0" y2="155" stroke="currentColor"/>
+  <text x="610.0" y="168" text-anchor="middle">{{ch06.class5_end}}</text>
+  <line x1="710.0" y1="150" x2="710.0" y2="155" stroke="currentColor"/>
+  <text x="710.0" y="168" text-anchor="end">4095</text>
+  <text x="10" y="168" font-size="11" class="mut">offset</text>
+  <g class="mark"><path d="M152.2 149 l-4 -7 h8 z" fill="currentColor"/></g>
+  <g class="mark"><path d="M228.8 149 l-4 -7 h8 z" fill="currentColor"/></g>
+  <g class="mark"><path d="M444.4 149 l-4 -7 h8 z" fill="currentColor"/></g>
+  <text x="10" y="188" font-size="11" class="mut">class 0 is any offset equal to last, the offset of the sequence before: no bits.</text>
+  <g font-size="11" class="mut">
+    <text x="30" y="222" text-anchor="end">off</text>
+    <text x="64" y="222" text-anchor="middle">3</text>
+    <text x="124" y="222" text-anchor="middle">off &lt; 256</text>
+    <text x="204" y="222" text-anchor="middle">off == 2</text>
+    <text x="290" y="222" text-anchor="middle">aligned</text>
+    <text x="350" y="222" text-anchor="middle">class</text>
+    <text x="470" y="222" text-anchor="middle">offset bits</text>
+    <text x="628" y="222" text-anchor="middle">value sent</text>
+  </g>
+  <line x1="10" y1="229" x2="710" y2="229" stroke="currentColor" stroke-width="0.6" class="mut"/>
+  <g class="mark"><text x="30" y="250" text-anchor="end" font-weight="bold">2</text></g>
+  <text x="64" y="250" text-anchor="middle">3</text>
+  <text x="94" y="250" text-anchor="middle">-</text>
+  <text x="124" y="250" text-anchor="middle">{{ch06.off.2.lt256}}</text>
+  <text x="164" y="250" text-anchor="middle">-</text>
+  <text x="204" y="250" text-anchor="middle">{{ch06.off.2.eq2}}</text>
+  <text x="247" y="250" text-anchor="middle">+ 2 *</text>
+  <text x="290" y="250" text-anchor="middle">{{ch06.off.2.aligned}}</text>
+  <text x="320" y="250" text-anchor="middle">=</text>
+  <g class="acc"><text x="350" y="250" text-anchor="middle" font-weight="bold">{{ch06.off.2.cls}}</text></g>
+  <text x="470" y="250" text-anchor="middle">nibble {{ch06.off.2.cls}}: {{ch06.off.2.raw}}</text>
+  <text x="628" y="250" text-anchor="middle">2 &gt;&gt; {{ch06.off.2.shift}} = {{ch06.off.2.sent}}</text>
+  <g class="mark"><text x="30" y="274" text-anchor="end" font-weight="bold">72</text></g>
+  <text x="64" y="274" text-anchor="middle">3</text>
+  <text x="94" y="274" text-anchor="middle">-</text>
+  <text x="124" y="274" text-anchor="middle">{{ch06.off.72.lt256}}</text>
+  <text x="164" y="274" text-anchor="middle">-</text>
+  <text x="204" y="274" text-anchor="middle">{{ch06.off.72.eq2}}</text>
+  <text x="247" y="274" text-anchor="middle">+ 2 *</text>
+  <text x="290" y="274" text-anchor="middle">{{ch06.off.72.aligned}}</text>
+  <text x="320" y="274" text-anchor="middle">=</text>
+  <g class="acc"><text x="350" y="274" text-anchor="middle" font-weight="bold">{{ch06.off.72.cls}}</text></g>
+  <text x="470" y="274" text-anchor="middle">nibble {{ch06.off.72.cls}}: {{ch06.off.72.raw}}</text>
+  <text x="628" y="274" text-anchor="middle">72 &gt;&gt; {{ch06.off.72.shift}} = {{ch06.off.72.sent}}</text>
+  <g class="mark"><text x="30" y="298" text-anchor="end" font-weight="bold">399</text></g>
+  <text x="64" y="298" text-anchor="middle">3</text>
+  <text x="94" y="298" text-anchor="middle">-</text>
+  <text x="124" y="298" text-anchor="middle">{{ch06.off.399.lt256}}</text>
+  <text x="164" y="298" text-anchor="middle">-</text>
+  <text x="204" y="298" text-anchor="middle">{{ch06.off.399.eq2}}</text>
+  <text x="247" y="298" text-anchor="middle">+ 2 *</text>
+  <text x="290" y="298" text-anchor="middle">{{ch06.off.399.aligned}}</text>
+  <text x="320" y="298" text-anchor="middle">=</text>
+  <g class="acc"><text x="350" y="298" text-anchor="middle" font-weight="bold">{{ch06.off.399.cls}}</text></g>
+  <text x="470" y="298" text-anchor="middle">nibble {{ch06.off.399.cls}}: {{ch06.off.399.raw}}</text>
+  <text x="628" y="298" text-anchor="middle">399 &gt;&gt; {{ch06.off.399.shift}} = {{ch06.off.399.sent}}</text>
+  <text x="10" y="331">SEQLZ_RAW_NIBBLES</text>
+  <text x="10" y="347" font-size="11" class="mut">= {{ch06.RAW_NIBBLES}}</text>
+  <rect x="170" y="316" width="60" height="24" class="fill-sheet" stroke="currentColor"/>
+  <text x="200.0" y="333" text-anchor="middle" font-weight="bold">{{ch04.raw.5}}</text>
+  <text x="200.0" y="356" text-anchor="middle" font-size="11">class 5</text>
+  <text x="200.0" y="370" text-anchor="middle" font-size="11" class="mut">&gt;&gt; 20</text>
+  <g class="acc"><rect x="230" y="316" width="60" height="24" class="fill-acc" fill-opacity="0.3" stroke="currentColor"/></g>
+  <text x="260.0" y="333" text-anchor="middle" font-weight="bold">{{ch04.raw.4}}</text>
+  <text x="260.0" y="356" text-anchor="middle" font-size="11">class 4</text>
+  <text x="260.0" y="370" text-anchor="middle" font-size="11" class="mut">&gt;&gt; 16</text>
+  <g class="acc"><rect x="290" y="316" width="60" height="24" class="fill-acc" fill-opacity="0.3" stroke="currentColor"/></g>
+  <text x="320.0" y="333" text-anchor="middle" font-weight="bold">{{ch04.raw.3}}</text>
+  <text x="320.0" y="356" text-anchor="middle" font-size="11">class 3</text>
+  <text x="320.0" y="370" text-anchor="middle" font-size="11" class="mut">&gt;&gt; 12</text>
+  <rect x="350" y="316" width="60" height="24" class="fill-sheet" stroke="currentColor"/>
+  <text x="380.0" y="333" text-anchor="middle" font-weight="bold">{{ch04.raw.2}}</text>
+  <text x="380.0" y="356" text-anchor="middle" font-size="11">class 2</text>
+  <text x="380.0" y="370" text-anchor="middle" font-size="11" class="mut">&gt;&gt; 8</text>
+  <g class="acc"><rect x="410" y="316" width="60" height="24" class="fill-acc" fill-opacity="0.3" stroke="currentColor"/></g>
+  <text x="440.0" y="333" text-anchor="middle" font-weight="bold">{{ch04.raw.1}}</text>
+  <text x="440.0" y="356" text-anchor="middle" font-size="11">class 1</text>
+  <text x="440.0" y="370" text-anchor="middle" font-size="11" class="mut">&gt;&gt; 4</text>
+  <rect x="470" y="316" width="60" height="24" class="fill-sheet" stroke="currentColor"/>
+  <text x="500.0" y="333" text-anchor="middle" font-weight="bold">{{ch04.raw.0}}</text>
+  <text x="500.0" y="356" text-anchor="middle" font-size="11">class 0</text>
+  <text x="500.0" y="370" text-anchor="middle" font-size="11" class="mut">&gt;&gt; 0</text>
+</svg>
+</div>
+<figcaption>The class <code>seqlz_off_class()</code> gives a new offset, on an axis stretched below 256, and its terms added up for the offsets 2, 72 and 399.</figcaption>
+</figure>
+
 | `off` | `aligned` | class | offset bits | value sent |
 | --- | --- | --- | --- | --- |
 | 2 | {{ch06.off.2.aligned}} | {{ch06.off.2.cls}} | {{ch06.off.2.raw}} | {{ch06.off.2.sent}} |
