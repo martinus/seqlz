@@ -1,0 +1,18 @@
+/* level 3's lazy step and step back, anim/lazy.js */
+.an-stage .lz-cell { fill: var(--sheet); stroke: var(--rule); }
+.an-stage .lz-old { fill: var(--paper); stroke: var(--muted); stroke-dasharray: 3 2; }
+.an-stage .lz-win { fill: var(--sheet); stroke: var(--accent); stroke-width: 2; }
+.an-stage .lz-gone { fill: var(--paper); stroke: var(--mark); stroke-width: 1.6; stroke-dasharray: 3 2; }
+.an-stage .lz-cand { fill: var(--mark); stroke: var(--mark); }
+.an-stage .lz-match { fill: var(--accent); stroke: var(--accent); }
+.an-stage .lz-eq { fill: var(--accent); stroke: var(--ink); stroke-width: 2; }
+.an-stage .lz-dim { fill: var(--sheet); stroke: var(--mark); stroke-dasharray: 2 2; }
+.an-stage .lz-bad { fill: var(--paper); stroke: var(--mark); stroke-width: 2; }
+.an-stage .lz-lit { fill: var(--paper); stroke: var(--ink); stroke-width: 1.2; }
+.an-stage .lz-tab { fill: var(--ink); }
+.an-stage .lz-ptr { fill: var(--accent); }
+.an-stage .lz-ptr2 { fill: var(--mark); }
+.an-stage svg text.lz-on { fill: var(--paper); }
+.an-stage svg text.lz-note { fill: var(--muted); }
+.an-stage svg text.lz-ptrt { fill: var(--accent); }
+.an-stage svg text.lz-ptr2t { fill: var(--mark); }
