@@ -1,0 +1,12 @@
+.an-stage svg text.sc-head { font-weight: 600; }
+.an-stage svg text.sc-win { fill: var(--accent); font-weight: 600; }
+.an-stage svg text.sc-muted { fill: var(--muted); }
+.an-stage svg .sc-halo { paint-order: stroke; stroke: var(--paper); stroke-width: 5px; stroke-linejoin: round; }
+.an-stage .sc-axis { stroke: var(--ink); fill: none; }
+.an-stage .sc-grid { stroke: var(--rule); fill: none; }
+.an-stage .sc-hull { stroke: var(--muted); stroke-width: 1.5; stroke-dasharray: 5 4; fill: none; }
+.an-stage .sc-iso { stroke: var(--accent); stroke-width: 2; fill: none; }
+.an-stage .sc-pt { fill: var(--paper); stroke: var(--ink); stroke-width: 1.2; }
+.an-stage .sc-pt.sc-best { fill: var(--accent); stroke: var(--accent); }
+.an-stage .sc-bytes { fill: var(--sheet); stroke: var(--muted); stroke-width: 0.8; }
+.an-stage .sc-time { fill: var(--accent); fill-opacity: 0.35; stroke: var(--accent); stroke-width: 0.8; }
