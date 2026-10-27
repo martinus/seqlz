@@ -257,7 +257,7 @@ from below, whatever the width of the core. Decoding Huffman codes is such a cha
 literal, the decoder looks up the next 10 bits of its stream in the literal table and shifts the
 stream by the code length the entry holds ([chapter 13](#ch-literals-dec--decode)). The next lookup
 needs the shifted bits, so in one stream every literal waits for the load and the shift of the one
-before. The 8 streams of a page with coded literals ([chapter 4](#ch-format--layout)) are 8 chains
+before. The 8 streams of a page with coded literals ([chapter 4](#ch-format--coded)) are 8 chains
 that do not depend on each other: the decoder steps all 8 in turn, and while one stream's load is on
 its way, the next one's can start.
 

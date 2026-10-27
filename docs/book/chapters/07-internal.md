@@ -215,7 +215,7 @@ the mask `0x00ff00ff00ff00ff` and starts again, every 200 literals of the page.
 @listing src/seqlz_tables.h 72-78
 
 These asserts tie the constants of `seqlz_format.h` to byte 2 of a page with coded literals
-([chapter 4](#ch-format--layout)): the 8 fixed tables are the codes 0 to 7, the page's own table the
+([chapter 4](#ch-format--coded)): the 8 fixed tables are the codes 0 to 7, the page's own table the
 code after them, 8, and all of them fit the 4 bits below the width; 3 bits hold the 8 widths 5 to 12,
 and the width field ends where the delta bit, bit 7, starts. The first assert would fail for a 9th fixed
 table, which would collide with `SEQLZ_LIT_OWN`, and the decoder's `s[2] & (SEQLZ_LIT_SETS - 1U)` would
