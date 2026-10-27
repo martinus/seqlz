@@ -1,5 +1,14 @@
 # Decoding eight streams side by side {#ch-literals-dec}
 
+::: key
+- A literal stream is a pointer and 64 bits with a 1 below the valid bits, whose position is the number of bits used, so the 8 streams need no count and their bits stay in registers ([the sentinel](#ch-literals-dec--sentinel)).
+- `seqlz_decode_literals()` decodes 5 literals from each of the 8 streams per round into the scratch, in page order: 8 chains of lookups that an out-of-order CPU works on side by side ([from the header to the bitstream](#ch-literals-dec--main)).
+- Each stream must end exactly where its size says, with zero bits after its last code; as zram stores no checksum, this check and the end of the bitstream tell a damaged page from a valid one ([the ends](#ch-literals-dec--ends)).
+- A page's own table is read from its description, up to two code lengths per lookup, and built in the output page, with its buckets in the scratch, so it needs no work memory ([a page's own table](#ch-literals-dec--own)).
+- Deltas are added back in the page, right after each sequence's literals are copied, as the byte a delta is to may be one of a match; `add4()` and `add8()` add 4 or 8 bytes at a time without a carry from one byte into the next ([in page order](#ch-literals-dec--undelta)).
+- For any input, the reads stay in the input, the writes in the scratch or the page, and the work is bounded ([safety](#ch-literals-dec--safety)).
+:::
+
 A page with coded literals has them Huffman coded in 8 streams, literal `i` in stream `i % 8`
 ([chapter 11](#ch-literals-enc) wrote them). `seqlz_decode()` first calls `seqlz_decode_literals()`, which
 decodes all of them into the scratch, `SEQLZ_SCRATCH` bytes of work memory, and returns where the

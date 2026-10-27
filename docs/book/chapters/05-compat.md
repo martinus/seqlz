@@ -1,5 +1,14 @@
 # seqlz_compat.h: the kernel's names, outside the kernel {#ch-compat}
 
+::: key
+- Every file of `src/` uses the kernel's names, e.g. `u8`, `get_unaligned_le64()` and `prefetch()`: in a kernel build `seqlz_compat.h` includes the kernel's headers, with fallbacks for the Mi 9T's 4.14, and in the kernel's copy `port.py` puts those headers in its place ([in a kernel build](#ch-compat--kernel)).
+- In a kernel build it sets `L1_CACHE_BYTES` to 64 where older arm64 kernels say 128, so that the decoder's prefetches reach every cache line of its tables ([in a kernel build](#ch-compat--kernel)).
+- Outside the kernel it needs only the compiler's own headers, so the benchmarks can build the codec with the kernel's flags, `-mno-sse` and `-nostdinc` among them, and measure what the kernel runs ([outside the kernel](#ch-compat--userspace)).
+- In userspace `prefetch()` is `prefetcht0` in inline assembly, the only inline assembly in `src/`, because clang drops `__builtin_prefetch()` under `-mno-sse`; for the kernel a patch gives x86-64 the same `prefetch()` ([prefetch()](#ch-compat--prefetch)).
+- `min()` is a function and not a macro, so that it does not expand inside `std::min()`, and `div_u64()` divides 64 bits where a 32-bit kernel has no helper for that ([min() and div_u64()](#ch-compat--min)).
+- Numbers are loaded and stored through accessors with a fixed byte order, one load from any address, so a page compresses to the same bytes on every CPU, which CI checks on x86-64, 32-bit x86 and s390x ([endian](#ch-compat--endian)).
+:::
+
 Every file of `src/` is written as if it were in the kernel already: `u8` and `u64`,
 `get_unaligned_le64()`, `prefetch()`, `sizeof_field()`, `min()`, the names a reviewer of `lib/`
 expects. The same files also build as ordinary programs, the tests, the benchmarks, the fuzzers and

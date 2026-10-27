@@ -1,5 +1,14 @@
 # seqlz_tables.h: tables shaped for the decoder {#ch-internal}
 
+::: key
+- Each table is there in two forms, made by one computation: the encoder's codes as numbers, and the decoder's table indexed by the next bits, where a code fills every entry that starts with its bits ([decode tables](#ch-internal--decode-tables), [length values](#ch-internal--value-table)).
+- The token table is 8 KiB for the decoder and 6 KiB for the encoder, which with the matcher's hash table of 8 KiB leaves room in an L1 data cache of 32 KiB ([the token table](#ch-internal--token-table)).
+- `lit_cost[b]` holds byte `b`'s code length in all 8 literal tables, one per 8-bit lane, so the encoder prices all 8 tables with one add per literal ([one add per literal](#ch-internal--lit-cost)).
+- `quad[]` decodes up to two code lengths of a page's own table, and the runs before them, with one lookup of 8 bits ([a page's own table](#ch-internal--own)).
+- `struct seqlz_tables`, {{size.tables|grp}} bytes, is one global `const` written when seqlz is built; a page reads much less of it, the decoder 12 KiB for a page with coded literals ([struct seqlz_tables](#ch-internal--tables)).
+- `token_entry()` packs into 32 bits all the decoder needs about a token, `ll`, `ml` and the shifts that cut the offset out, so the loop never takes a token apart; on 3rd October 2026 that took the decode loop on the Mi 9T's A55 from 16 547 to 15 539 instructions per page ([the fields](#ch-internal--token-entry), [token_entry()](#ch-internal--token-entry-code)).
+:::
+
 `src/seqlz_tables.h` is the layout of the tables: what the compressor, the decompressor and
 `seqlz_codes.c`, which builds the tables both read, share about them. Almost all of its
 {{ch07.lines}} lines are memory layout: the bytes of each table, the bits of each entry, and

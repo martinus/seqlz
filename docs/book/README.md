@@ -13,8 +13,8 @@ python3 docs/book/lint.py            # dashes, banned words, measurements withou
 
 - `chapters/*.md`, in the order of `book.json`: Markdown with these additions. `@listing src/<file>
   <from>-<to>` on a line of its own inserts those lines of `src/` as they are in the checkout, with
-  their line numbers and a link to them on GitHub. `::: why|kernel|cpu|measured|warn|try <title>`
-  up to `:::` is a box. `$...$` outside code is a formula in the text, `$$...$$` on a line of its own
+  their line numbers and a link to them on GitHub. `::: why|kernel|cpu|measured|warn|try|key <title>`
+  up to `:::` is a box (`key`, "In short", is a chapter's main points at its top). `$...$` outside code is a formula in the text, `$$...$$` on a line of its own
   one by itself; KaTeX renders them at build time, so the page needs no script for them.
   `@anim <name> [wide] <caption>` is an animation, `anim/<name>.js` on the frame `anim/core.js`
   (controls, a sentence per step, both themes); if `anim/<name>.c` exists, it is built with `src/`
@@ -50,6 +50,8 @@ python3 docs/book/lint.py            # dashes, banned words, measurements withou
 - To bring the book up to newer code: `remap.py [<commit>]` (default `HEAD`) prints how the listings
   and the line numbers in the prose move from the book's commit to that one; `--write` applies them and
   sets `"src"` to it. Then read the prose next to each listing marked CHANGED, and `build.py --check`.
+- `"map"` in `book.json` is the path of a page through Part II, rows of chapter ids: `build.py` draws it
+  at the top of each chapter it names, that chapter marked, linked to the map chapter `#map`.
 - `STYLE.md` is the brief the chapters were written to, `REVIEW.md` the one they were checked with.
 
 After a change of the format or the tables, build the book: what the code computes follows by

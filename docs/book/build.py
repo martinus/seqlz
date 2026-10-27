@@ -10,7 +10,7 @@ Directives, each on a line of its own, outside fenced code:
   ::: why Optional title
   markdown ...
   :::
-      a box; kinds: why, kernel, cpu, measured, warn, try
+      a box; kinds: why, kernel, cpu, measured, warn, try, key (a chapter's points, at its top)
 
   $$ tex $$
       a formula of its own, on a line of its own
@@ -674,7 +674,7 @@ def unstash(h):
 
 
 BOX_TITLES = {"why": "Why", "kernel": "Kernel background", "cpu": "CPU background",
-              "measured": "Measured", "warn": "Careful", "try": "Try it"}
+              "measured": "Measured", "warn": "Careful", "try": "Try it", "key": "In short"}
 
 
 def md(text):
@@ -775,8 +775,52 @@ def warn(msg):
     print(f"warning: {msg}")
 
 
+def chapter_labels():
+    """chapter id -> its number as text, or its label, for every chapter of book.json, from its '# title {#id}'"""
+    labels, no = {}, 0
+    for part in BOOK["parts"]:
+        for ch in part["chapters"]:
+            f = HERE / "chapters" / ch["file"]
+            m = re.search(r"^# .*\{#([\w-]+)\}", f.read_text(), re.M) if f.exists() else None
+            if ch.get("numbered", True):
+                no += 1
+            if m:
+                labels[m.group(1)] = str(no) if ch.get("numbered", True) else ch.get("label", "")
+    return labels
+
+
+def map_block(cid, labels):
+    """
+    The map of book.json under each chapter it names: one row per path of a page, each chapter on it a
+    link with its number, the chapter cid marked. "" if cid is on no row.
+    """
+    arrow = "\u2192"
+    rows = BOOK.get("map", {}).get("rows", [])
+    if not any(cid == n["id"] for r in rows for n in r["nodes"]):
+        return ""
+    out = [f'<nav class="here" aria-label="Where this chapter is"><div class="here-head">'
+           f'<a href="#{BOOK["map"]["chapter"]}">Where this chapter is in the code</a></div>']
+    for r in rows:
+        items = []
+        if r.get("from"):
+            items.append(f'<span class="here-data">{html.escape(r["from"])}</span><span class="here-sep">{arrow}</span>')
+        for k, n in enumerate(r["nodes"]):
+            if k:
+                items.append(f'<span class="here-sep">{html.escape(n.get("join", arrow))}</span>')
+            cur = ' class="cur" aria-current="location"' if n["id"] == cid else ""
+            items.append(f'<a href="#{n["id"]}"{cur}><span class="here-no">{labels.get(n["id"], "?")}</span> '
+                         f'{html.escape(n["label"])}</a>')
+        if r.get("to"):
+            items.append(f'<span class="here-sep">{arrow}</span><span class="here-data">{html.escape(r["to"])}</span>')
+        out.append(f'<div class="here-row"><span class="here-what">{html.escape(r["what"])}</span>'
+                   f'<span class="here-path">{"".join(items)}</span></div>')
+    out.append("</nav>")
+    return "".join(out)
+
+
 def build():
     parts_html, toc = [], []
+    labels = chapter_labels()
     prebuild([(ch["file"], (HERE / "chapters" / ch["file"]).read_text()) for part in BOOK["parts"]
               for ch in part["chapters"] if (HERE / "chapters" / ch["file"]).exists()])
     ids = set()
@@ -810,6 +854,7 @@ def build():
             body = (body[:m.start()]
                     + f'<header class="chapterhead"><span class="chapno">{label}</span>'
                       f'<h1 id="{cid}">{title}</h1></header>'
+                    + map_block(cid, labels)
                     + body[m.end():])
 
             def add_id(hm):

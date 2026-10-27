@@ -47,7 +47,9 @@ map for everything after it.
 
 **Part II, the code**, goes through `src/` file by file: the headers first, because every `.c` file
 builds on their constants and structs, then the code that builds the Huffman tables, the compressor,
-the decompressor, and the glue that makes seqlz a zram backend.
+the decompressor, and the glue that makes seqlz a zram backend. It opens with [a map](#map) of the
+path of a page through the code, and each of its chapters starts with its place on that map and a
+box "In short" of its main points: read those to find the chapter you need.
 
 **Part III** follows [one page through every function](#ch-trace) with the numbers each step
 produces, and collects [the design decisions](#ch-decisions) with what they were measured against.

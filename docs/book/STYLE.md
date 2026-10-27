@@ -77,6 +77,12 @@ Kinds: `why` (a design decision and what it was measured against), `kernel` (ker
 that is easy to get wrong), `try` (something the reader can run to see it: a command, a few lines of
 C or Python). Use them where they help, not on every page; most explanation is plain prose.
 
+Every chapter of Part II starts with one `::: key` box ("In short"), right after its title: 3 to 6
+bullets, each a claim of the chapter in one sentence with a link to the section that explains it, so
+that a reader can skim the chapter. No claim or number that the chapter does not have. Above it,
+`build.py` puts the chapter's place on the map of Part II, from `"map"` in `book.json`; a new
+chapter of Part II gets a node there.
+
 ## Diagrams
 
 Draw a diagram when it shows a mechanism prose cannot: the layout of a compressed page, the bit fields

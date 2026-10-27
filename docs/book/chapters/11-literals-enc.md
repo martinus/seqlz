@@ -1,5 +1,14 @@
 # Coding the literals: one table of eight or the page's own, eight streams {#ch-literals-enc}
 
+::: key
+- `lit_sums()` prices the literals in all 8 fixed literal tables with one 64-bit add per literal, and its 8 sums per table are also the sizes of the 8 streams, so no second pass is needed ([pricing](#ch-literals-enc--pricing)).
+- At level 3 a page gets a literal table of its own where that saves at least 16 bytes, `OWN_SAVES_MIN`, against the best fixed table; an estimate from the entropy sends many pages back before a code is built, and the code lengths come from a counting sort instead of a Huffman tree ([a table of the page's own](#ch-literals-enc--own)).
+- At level 3 `seqlz_delta_literals()` prices every {{delta.step}}th literal as it is and as each of the three deltas, in all 8 tables at once, and writes the deltas 8 bytes at a time with `sub_bytes()` ([deltas](#ch-literals-enc--deltas), [sub_bytes()](#ch-literals-enc--sub-bytes)).
+- The literals are coded only where the streams save 1/16 of the literals and {{ch11.coded_min}} bytes: zsmalloc's size classes are 16 bytes apart, and a page with coded literals costs a fixed time to read ([the rule](#ch-literals-enc--rule)).
+- The 8 streams are written over the raw literals in place, from a copy in the matcher's table, so they cost no work memory, and `lit_streams()` writes 4 streams at a time, 4 chains side by side ([in place](#ch-literals-enc--in-place), [lit_streams()](#ch-literals-enc--streams)).
+- Writing the streams is what costs, the pricing is cheap, and a page that keeps its raw literals has paid for the pricing too ([the cost](#ch-literals-enc--cost)).
+:::
+
 When `compress_block()` is done, `dst` holds a valid page with raw literals ([chapter 10](#ch-encoder)),
 which is what level 1, `seqlz-1`, stores. From level 2 on, `seqlz_compress()` then calls
 `seqlz_code_literals()`, at level 3 `seqlz_code_own()`, and both call `code_literals()`: it prices the
