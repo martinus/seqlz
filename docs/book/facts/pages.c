@@ -94,6 +94,7 @@ int main(void) {
     page_facts("slab", slab_page);
     page_facts("pointers", pointer_page);
     page_facts("words", words_page);
+    page_facts("counter", counter_page);
     facts_end();
     return 0;
 }

@@ -14,19 +14,19 @@ with `seqlz_decode()`. The format says which pages are valid and what they decod
 compressor finds them: one page of memory can be written in many ways, as with `lz4` or `zstd`. Where
 this chapter says what `seqlz_compress()` writes, it says so.
 
-## Two layouts {#ch-format--layout}
+## One header, five layouts {#ch-format--layout}
 
 This chapter uses the spec's names for three numbers: `PAGE` is the size of a page, 4096 bytes, or
 16384 for 16 KiB pages, `P` is its log2, 12 or 14, and `len` is the length of the compressed page, in
 bytes. The spec says `BLOCK` for `PAGE`, as seqlz compresses blocks of that size, one page each in zram.
 
 A compressed page starts with a 2-byte number `h`, little endian. The top bit, `h & 0x8000`, says
-which of the two layouts follows; the other 15 bits, `n = h & 0x7fff`, are the number of literals of
+whether the literals that follow are raw or coded; the other 15 bits, `n = h & 0x7fff`, are the number of literals of
 the whole page, and `n > PAGE` makes the page invalid.
 
 <figure class="diagram">
 <div class="scroll">
-<svg viewBox="0 0 720 238" role="img" aria-label="The two layouts of a compressed page: a 2-byte header, the literals, then the bitstream; with coded literals the header also has byte 2, with literals as deltas the byte that says which delta, the stream sizes, with code 8 the page's own table, and 8 streams" font-size="12">
+<svg viewBox="0 0 720 238" role="img" aria-label="The layouts of a compressed page: a 2-byte header, the literals, then the bitstream; with coded literals the header also has byte 2, with literals as deltas the byte that says which delta, the stream sizes, with code 8 the page's own table, and 8 streams" font-size="12">
   <text x="20" y="24" text-anchor="start" font-weight="bold">raw literals: h &amp; 0x8000 is 0</text>
   <rect x="20" y="34" width="90" height="34" class="fill-sheet" stroke="currentColor"/>
   <text x="65.0" y="56" text-anchor="middle">h = n</text>
@@ -91,8 +91,22 @@ the whole page, and `n > PAGE` makes the page invalid.
   <text x="20" y="228" text-anchor="start" class="mut">dt: e bytes, 1 if the literals are deltas, else 0; own: d bytes, with code 8 only</text>
 </svg>
 </div>
-<figcaption>The two layouts. The offsets below each box are byte offsets in the compressed page of <code>len</code> bytes; the dashed boxes are there only with literals as deltas, <code>e</code> = 1, and with code 8, the page's own literal table, else <code>e</code> and <code>d</code> are 0.</figcaption>
+<figcaption>Raw and coded literals. The offsets below each box are byte offsets in the compressed page of <code>len</code> bytes; the dashed boxes are there only with literals as deltas, <code>e</code> = 1, and with code 8, the page's own literal table, else <code>e</code> and <code>d</code> are 0.</figcaption>
 </figure>
+
+Two of the coded fields are optional, so a page has one of five layouts. Which one is in the page's
+first 3 bytes, and the decoder needs no level to read it:
+
+| layout | code in `t` | delta byte | own table | written by |
+| --- | --- | --- | --- | --- |
+| raw literals, `h & 0x8000` is 0 | no `t` | no | no | every level, at levels 2 and 3 where coding does not pay |
+| a fixed table | 0 to 7 | no | no | levels 2 and 3 |
+| a fixed table, deltas | 0 to 7 | yes | no | level 3 |
+| the page's own table | 8 | no | yes | level 3 |
+| the page's own table, deltas | 8 | yes | yes | level 3 |
+
+`dt` names one of three deltas ([below](#ch-format--deltas)). Raw literals are never deltas: where the
+deltas of a level 3 page do not code well enough, it keeps its literals as they are.
 
 **Raw literals.** With the top bit clear, the `n` literals follow as they are, in page order, and
 everything after them, up to the end of the compressed page, is `B`, the bitstream of the sequences.
