@@ -401,9 +401,10 @@ as it is, with
 | --- | --- |
 | 1 | 4 |
 | 2 | 8 |
-| 3 | the smallest multiple of `last` that is 4 or more, where `last` is the offset of the sequence before, 1 for the first: 4 for `last` 1 or 2, 6 for `last` 3, else `last` |
+| 3 | the smallest multiple of `last` that is 4 or more |
 
-Only the first `x` bytes of the page have no byte `x` before them; every other literal is a delta,
+`last` is the offset of the sequence before, 1 for the first, so for `dt = 3` the byte is 4 back for
+`last` 1 or 2, 6 back for `last` 3, and `last` back from 4 on. Only the first `x` bytes of the page have no byte `x` before them; every other literal is a delta,
 the first literals of a sequence too. `out[p - x]` is a byte the decoder has already written, as it is
 in the page: a byte of the match before, of an earlier sequence, or an earlier literal of the same
 sequence; the last sequence is no different. Any other `dt` makes the page invalid. Memory pages are
