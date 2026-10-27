@@ -390,6 +390,19 @@ static __always_inline u32 next_token_fast(struct seqlz_bit_reader *br,
 #define FAST_IN_ROOM 8U
 
 /*
+ * The fast path's longest literals and match: a token with ll or ml at its cap
+ * has a length value, and takes the slow path. copy_match_fast() writes up to
+ * 40 bytes, its five stores, or len + 7 for a longer match at an offset below
+ * 8, and copies at most 40 bytes at an offset of 8 or more.
+ */
+#define FAST_LL_MAX (SEQLZ_LL_CAP - 1U)
+#define FAST_ML_MAX (SEQLZ_ML_CAP - 1U + SEQLZ_MIN_MATCH)
+static_assert((FAST_LL_MAX + 40U <= FAST_BLOCK_ROOM &&
+	       FAST_LL_MAX + FAST_ML_MAX + 7U <= FAST_BLOCK_ROOM &&
+	       FAST_ML_MAX <= 40U),
+	      "the fast path's literals and match fit FAST_BLOCK_ROOM");
+
+/*
  * seqlz_decode() for a block whose literals are deltas, see SEQLZ_LIT_DELTA_AT,
  * or are not. deltas is a constant at both calls, so the loop over the
  * sequences is compiled twice, and a block without deltas runs none of their
