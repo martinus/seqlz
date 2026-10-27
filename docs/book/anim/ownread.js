@@ -13,7 +13,7 @@ BookAnim.define('ownread', function (ctx) {
 
   function hx(v) { return '0x' + v.toString(16).padStart(2, '0'); }
   function hex8(v) { return '0x' + (v >>> 0).toString(16).padStart(8, '0'); }
-  function name(v) { return v === 32 ? 'the space' : v === 10 ? 'the newline' : v > 32 && v < 127 ? '"' + String.fromCharCode(v) + '"' : hx(v); }
+  function name(v) { return v === 32 ? '"\u2423"' : v === 10 ? 'the newline' : v > 32 && v < 127 ? '"' + String.fromCharCode(v) + '"' : hx(v); }
   function glyph(v) { return v === 32 ? '␣' : v === 10 ? '↵' : v > 32 && v < 127 ? String.fromCharCode(v) : v.toString(16).padStart(2, '0'); }
   function bin(v, n) { return v.toString(2).padStart(n, '0'); }
   function plural(n, w) { return n + ' ' + w + (n === 1 ? '' : 's'); }

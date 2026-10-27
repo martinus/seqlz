@@ -10,7 +10,8 @@ BookAnim.define('ownlens', function (ctx) {
   var D = ctx.data, FULL = D.full, MAX = D.max, PAGES = {}, pageId = 'text';
   D.pages.forEach(function (p) { PAGES[p.id] = p; });
   function glyph(v) { return v === 32 ? '␣' : v === 10 ? '↵' : v > 32 && v < 127 ? String.fromCharCode(v) : v.toString(16).padStart(2, '0'); }
-  function name(v) { return v === 32 ? 'the space' : v === 10 ? 'the newline' : v > 32 && v < 127 ? '"' + String.fromCharCode(v) + '"' : '0x' + v.toString(16).padStart(2, '0'); }
+  function name(v) { return v === 32 ? '"\u2423"' : v === 10 ? 'the newline' : v > 32 && v < 127 ? '"' + String.fromCharCode(v) + '"' : '0x' + v.toString(16).padStart(2, '0'); }
+  function cap(s) { return s.charAt(0).toUpperCase() + s.slice(1); }
   function list(a) { return a.length < 2 ? a.join('') : a.slice(0, -1).join(', ') + ' and ' + a[a.length - 1]; }
   function sup(n) { return String(n).replace(/\d/g, function (c) { return '⁰¹²³⁴⁵⁶⁷⁸⁹'[c]; }).replace('−', '⁻').replace('l', 'ˡ'); }
   function cap(s) { return s[0].toUpperCase() + s.slice(1); }
@@ -59,7 +60,7 @@ BookAnim.define('ownlens', function (ctx) {
       });
       Object.keys(why).forEach(function (key) {
         var who = why[key], many = who.length > 1;
-        t += ' ' + list(who) + (many ? ' stay' : ' stays') + ': ' + (key.indexOf('more units') > 0 ? (many ? 'each would need ' : 'it would need ') + key : key) + '.';
+        t += ' ' + cap(list(who)) + (many ? ' stay' : ' stays') + ': ' + (key.indexOf('more units') > 0 ? (many ? 'each would need ' : 'it would need ') + key : key) + '.';
       });
       snap({ order: P.by_gain, first: true, gains: true, sorted: true, now: got.map(function (v) { return v[3]; }), say: t });
     }
