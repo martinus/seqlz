@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT OR GPL-2.0-only
 /*
- * undelta.c: the data of the animation "undelta" in chapter 13. A page of counters of 4 bytes, which
+ * undelta.c: the data of the animation "undelta" in chapter 13. The page of counters of pages.h, which
  * level 3 stores with SEQLZ_DELTA_4, decoded by the real seqlz_decode(), with a hook on its stores of
  * 4 bytes: in seqlz_decompress.c only add4() makes them. Prints, as JSON, the first two sequences and
  * the first W bytes of the page step by step: the deltas as the copy left them, after each add4(), the
@@ -34,20 +34,6 @@ static void hook_le32(u32 v, void* p) {
 
 #define put_unaligned_le32(v, p) hook_le32(v, p)
 #include "seqlz_decompress.c"
-
-/*
- * the page: 1024 counters of 4 bytes from 1000 up, each 0 to 11 more than the one before, drawn by
- * the C library's classic rand() from seed 1
- */
-static void counter_page(u8* p) {
-    unsigned int i, v = 1000, seed = 1;
-
-    for (i = 0; i < SEQLZ_BLOCK_SIZE / 4; i++) {
-        seed = seed * 1103515245U + 12345U;
-        v += (seed >> 16 & 32767U) % 12;
-        le(p + 4 * i, v, 4);
-    }
-}
 
 struct seq {
     unsigned int pos, ll, ml, off;

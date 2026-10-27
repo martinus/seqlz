@@ -60,6 +60,20 @@ static inline void pointer_page(u8* p) {
         le(p + 8 * i, 0x7f1234560010ULL + 16ULL * i, 8);
 }
 
+/*
+ * chapter 13's page of counters: 1024 counters of 4 bytes from 1000 up, each 0 to 11 more than the
+ * one before, drawn by the C library's classic rand() from seed 1
+ */
+static inline void counter_page(u8* p) {
+    unsigned int i, v = 1000, seed = 1;
+
+    for (i = 0; i < SEQLZ_BLOCK_SIZE / 4; i++) {
+        seed = seed * 1103515245U + 12345U;
+        v += (seed >> 16 & 32767U) % 12;
+        le(p + 4 * i, v, 4);
+    }
+}
+
 /* chapter 4's page: ab 2048 times */
 static inline void ab_page(u8* p) {
     unsigned int i;

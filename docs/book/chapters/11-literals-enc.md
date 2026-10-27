@@ -611,6 +611,107 @@ a - b                 {{delta.sub.plain}}      bytes f0 00: the borrow took byte
 
 @assert delta.sub.r == "0x00000000000001f0" and delta.sub.plain == "0x00000000000000f0"
 
+The figure shows all 8 bytes of a word lane by lane, on a word that `seqlz_delta_literals()`
+subtracts with `SEQLZ_DELTA_4` on [chapter 13's page of counters](#anim-undelta): the 8 bytes at byte
+{{delta.lane.at}} minus the 8 bytes {{delta.lane.dist}} before.
+Only byte 0 borrows. The borrow clears bit 7 of byte 0 of the difference, which `a | high` had set,
+and stops there; in the other bytes bit 7 stays 1, and `(a ^ ~b) & high` turns it into their true 0.
+The plain `a - b` takes the borrow from byte 1.
+@assert delta.lane.borrow == "0" and delta.lane.wrong == "1" and delta.lane.ahigh == "" and delta.lane.bhigh == "0" and delta.lane.diff[0] < "80" and sorted(delta.lane.diff.values())[1] >= "80" and delta.lane.fix[0] == "00" and sorted(delta.lane.fix.values()) == ["00"] + ["80"] * 7 and max(delta.lane.r.values()) < "80"
+
+<figure class="diagram">
+<div class="scroll">
+<svg viewBox="0 0 720 310" font-size="12" role="img" aria-label="sub_bytes() on a word of the page of counters, byte by byte: the 8 bytes of a and b, a with bit 7 set and b with it cleared, their difference, the fix of bit 7, the result, and a plain subtraction, where the borrow of byte 0 makes byte 1 wrong">
+  <text x="675" y="18" text-anchor="middle">byte 0</text>
+  <text x="613" y="18" text-anchor="middle">byte 1</text>
+  <text x="551" y="18" text-anchor="middle">byte 2</text>
+  <text x="489" y="18" text-anchor="middle">byte 3</text>
+  <text x="427" y="18" text-anchor="middle">byte 4</text>
+  <text x="365" y="18" text-anchor="middle">byte 5</text>
+  <text x="303" y="18" text-anchor="middle">byte 6</text>
+  <text x="241" y="18" text-anchor="middle">byte 7</text>
+  <line x1="20" y1="88" x2="710" y2="88" stroke="currentColor" stroke-opacity="0.35"/>
+  <line x1="20" y1="154" x2="710" y2="154" stroke="currentColor" stroke-opacity="0.35"/>
+  <line x1="20" y1="218" x2="710" y2="218" stroke="currentColor"/>
+  <text x="202" y="45" text-anchor="end">a</text>
+  <rect x="648" y="30" width="54" height="22" rx="3" class="fill-sheet" stroke="currentColor"/><text x="675" y="45" text-anchor="middle">{{delta.lane.a.0}}</text>
+  <rect x="586" y="30" width="54" height="22" rx="3" class="fill-sheet" stroke="currentColor"/><text x="613" y="45" text-anchor="middle">{{delta.lane.a.1}}</text>
+  <rect x="524" y="30" width="54" height="22" rx="3" class="fill-sheet" stroke="currentColor"/><text x="551" y="45" text-anchor="middle">{{delta.lane.a.2}}</text>
+  <rect x="462" y="30" width="54" height="22" rx="3" class="fill-sheet" stroke="currentColor"/><text x="489" y="45" text-anchor="middle">{{delta.lane.a.3}}</text>
+  <rect x="400" y="30" width="54" height="22" rx="3" class="fill-sheet" stroke="currentColor"/><text x="427" y="45" text-anchor="middle">{{delta.lane.a.4}}</text>
+  <rect x="338" y="30" width="54" height="22" rx="3" class="fill-sheet" stroke="currentColor"/><text x="365" y="45" text-anchor="middle">{{delta.lane.a.5}}</text>
+  <rect x="276" y="30" width="54" height="22" rx="3" class="fill-sheet" stroke="currentColor"/><text x="303" y="45" text-anchor="middle">{{delta.lane.a.6}}</text>
+  <rect x="214" y="30" width="54" height="22" rx="3" class="fill-sheet" stroke="currentColor"/><text x="241" y="45" text-anchor="middle">{{delta.lane.a.7}}</text>
+  <text x="202" y="73" text-anchor="end">b</text>
+  <rect x="648" y="58" width="54" height="22" rx="3" class="fill-sheet" stroke="currentColor"/><text x="675" y="73" text-anchor="middle">{{delta.lane.b.0}}</text>
+  <rect x="586" y="58" width="54" height="22" rx="3" class="fill-sheet" stroke="currentColor"/><text x="613" y="73" text-anchor="middle">{{delta.lane.b.1}}</text>
+  <rect x="524" y="58" width="54" height="22" rx="3" class="fill-sheet" stroke="currentColor"/><text x="551" y="73" text-anchor="middle">{{delta.lane.b.2}}</text>
+  <rect x="462" y="58" width="54" height="22" rx="3" class="fill-sheet" stroke="currentColor"/><text x="489" y="73" text-anchor="middle">{{delta.lane.b.3}}</text>
+  <rect x="400" y="58" width="54" height="22" rx="3" class="fill-sheet" stroke="currentColor"/><text x="427" y="73" text-anchor="middle">{{delta.lane.b.4}}</text>
+  <rect x="338" y="58" width="54" height="22" rx="3" class="fill-sheet" stroke="currentColor"/><text x="365" y="73" text-anchor="middle">{{delta.lane.b.5}}</text>
+  <rect x="276" y="58" width="54" height="22" rx="3" class="fill-sheet" stroke="currentColor"/><text x="303" y="73" text-anchor="middle">{{delta.lane.b.6}}</text>
+  <rect x="214" y="58" width="54" height="22" rx="3" class="fill-sheet" stroke="currentColor"/><text x="241" y="73" text-anchor="middle">{{delta.lane.b.7}}</text>
+  <text x="202" y="111" text-anchor="end">a | high</text>
+  <rect x="648" y="96" width="54" height="22" rx="3" class="fill-sheet" stroke="currentColor"/><text x="675" y="111" text-anchor="middle">{{delta.lane.ahi.0}}</text>
+  <rect x="586" y="96" width="54" height="22" rx="3" class="fill-sheet" stroke="currentColor"/><text x="613" y="111" text-anchor="middle">{{delta.lane.ahi.1}}</text>
+  <rect x="524" y="96" width="54" height="22" rx="3" class="fill-sheet" stroke="currentColor"/><text x="551" y="111" text-anchor="middle">{{delta.lane.ahi.2}}</text>
+  <rect x="462" y="96" width="54" height="22" rx="3" class="fill-sheet" stroke="currentColor"/><text x="489" y="111" text-anchor="middle">{{delta.lane.ahi.3}}</text>
+  <rect x="400" y="96" width="54" height="22" rx="3" class="fill-sheet" stroke="currentColor"/><text x="427" y="111" text-anchor="middle">{{delta.lane.ahi.4}}</text>
+  <rect x="338" y="96" width="54" height="22" rx="3" class="fill-sheet" stroke="currentColor"/><text x="365" y="111" text-anchor="middle">{{delta.lane.ahi.5}}</text>
+  <rect x="276" y="96" width="54" height="22" rx="3" class="fill-sheet" stroke="currentColor"/><text x="303" y="111" text-anchor="middle">{{delta.lane.ahi.6}}</text>
+  <rect x="214" y="96" width="54" height="22" rx="3" class="fill-sheet" stroke="currentColor"/><text x="241" y="111" text-anchor="middle">{{delta.lane.ahi.7}}</text>
+  <text x="202" y="139" text-anchor="end">b &amp; ~high</text>
+  <rect x="648" y="124" width="54" height="22" rx="3" class="fill-sheet" stroke="currentColor"/><text x="675" y="139" text-anchor="middle">{{delta.lane.blo.0}}</text>
+  <rect x="586" y="124" width="54" height="22" rx="3" class="fill-sheet" stroke="currentColor"/><text x="613" y="139" text-anchor="middle">{{delta.lane.blo.1}}</text>
+  <rect x="524" y="124" width="54" height="22" rx="3" class="fill-sheet" stroke="currentColor"/><text x="551" y="139" text-anchor="middle">{{delta.lane.blo.2}}</text>
+  <rect x="462" y="124" width="54" height="22" rx="3" class="fill-sheet" stroke="currentColor"/><text x="489" y="139" text-anchor="middle">{{delta.lane.blo.3}}</text>
+  <rect x="400" y="124" width="54" height="22" rx="3" class="fill-sheet" stroke="currentColor"/><text x="427" y="139" text-anchor="middle">{{delta.lane.blo.4}}</text>
+  <rect x="338" y="124" width="54" height="22" rx="3" class="fill-sheet" stroke="currentColor"/><text x="365" y="139" text-anchor="middle">{{delta.lane.blo.5}}</text>
+  <rect x="276" y="124" width="54" height="22" rx="3" class="fill-sheet" stroke="currentColor"/><text x="303" y="139" text-anchor="middle">{{delta.lane.blo.6}}</text>
+  <rect x="214" y="124" width="54" height="22" rx="3" class="fill-sheet" stroke="currentColor"/><text x="241" y="139" text-anchor="middle">{{delta.lane.blo.7}}</text>
+  <text x="202" y="177" text-anchor="end">(a | high) - (b &amp; ~high)</text>
+  <g class="acc"><rect x="648" y="162" width="54" height="22" rx="3" class="fill-sheet" stroke="currentColor" stroke-width="2"/><text x="675" y="177" text-anchor="middle">{{delta.lane.diff.0}}</text></g>
+  <rect x="586" y="162" width="54" height="22" rx="3" class="fill-sheet" stroke="currentColor"/><text x="613" y="177" text-anchor="middle">{{delta.lane.diff.1}}</text>
+  <rect x="524" y="162" width="54" height="22" rx="3" class="fill-sheet" stroke="currentColor"/><text x="551" y="177" text-anchor="middle">{{delta.lane.diff.2}}</text>
+  <rect x="462" y="162" width="54" height="22" rx="3" class="fill-sheet" stroke="currentColor"/><text x="489" y="177" text-anchor="middle">{{delta.lane.diff.3}}</text>
+  <rect x="400" y="162" width="54" height="22" rx="3" class="fill-sheet" stroke="currentColor"/><text x="427" y="177" text-anchor="middle">{{delta.lane.diff.4}}</text>
+  <rect x="338" y="162" width="54" height="22" rx="3" class="fill-sheet" stroke="currentColor"/><text x="365" y="177" text-anchor="middle">{{delta.lane.diff.5}}</text>
+  <rect x="276" y="162" width="54" height="22" rx="3" class="fill-sheet" stroke="currentColor"/><text x="303" y="177" text-anchor="middle">{{delta.lane.diff.6}}</text>
+  <rect x="214" y="162" width="54" height="22" rx="3" class="fill-sheet" stroke="currentColor"/><text x="241" y="177" text-anchor="middle">{{delta.lane.diff.7}}</text>
+  <text x="202" y="205" text-anchor="end">(a ^ ~b) &amp; high</text>
+  <rect x="648" y="190" width="54" height="22" rx="3" class="fill-sheet" stroke="currentColor"/><text x="675" y="205" text-anchor="middle">{{delta.lane.fix.0}}</text>
+  <rect x="586" y="190" width="54" height="22" rx="3" class="fill-sheet" stroke="currentColor"/><text x="613" y="205" text-anchor="middle">{{delta.lane.fix.1}}</text>
+  <rect x="524" y="190" width="54" height="22" rx="3" class="fill-sheet" stroke="currentColor"/><text x="551" y="205" text-anchor="middle">{{delta.lane.fix.2}}</text>
+  <rect x="462" y="190" width="54" height="22" rx="3" class="fill-sheet" stroke="currentColor"/><text x="489" y="205" text-anchor="middle">{{delta.lane.fix.3}}</text>
+  <rect x="400" y="190" width="54" height="22" rx="3" class="fill-sheet" stroke="currentColor"/><text x="427" y="205" text-anchor="middle">{{delta.lane.fix.4}}</text>
+  <rect x="338" y="190" width="54" height="22" rx="3" class="fill-sheet" stroke="currentColor"/><text x="365" y="205" text-anchor="middle">{{delta.lane.fix.5}}</text>
+  <rect x="276" y="190" width="54" height="22" rx="3" class="fill-sheet" stroke="currentColor"/><text x="303" y="205" text-anchor="middle">{{delta.lane.fix.6}}</text>
+  <rect x="214" y="190" width="54" height="22" rx="3" class="fill-sheet" stroke="currentColor"/><text x="241" y="205" text-anchor="middle">{{delta.lane.fix.7}}</text>
+  <text x="202" y="241" text-anchor="end">sub_bytes(a, b)</text>
+  <g class="acc"><rect x="648" y="226" width="54" height="22" rx="3" class="fill-sheet" stroke="currentColor" stroke-width="1.5"/><text x="675" y="241" text-anchor="middle">{{delta.lane.r.0}}</text></g>
+  <g class="acc"><rect x="586" y="226" width="54" height="22" rx="3" class="fill-sheet" stroke="currentColor" stroke-width="1.5"/><text x="613" y="241" text-anchor="middle">{{delta.lane.r.1}}</text></g>
+  <g class="acc"><rect x="524" y="226" width="54" height="22" rx="3" class="fill-sheet" stroke="currentColor" stroke-width="1.5"/><text x="551" y="241" text-anchor="middle">{{delta.lane.r.2}}</text></g>
+  <g class="acc"><rect x="462" y="226" width="54" height="22" rx="3" class="fill-sheet" stroke="currentColor" stroke-width="1.5"/><text x="489" y="241" text-anchor="middle">{{delta.lane.r.3}}</text></g>
+  <g class="acc"><rect x="400" y="226" width="54" height="22" rx="3" class="fill-sheet" stroke="currentColor" stroke-width="1.5"/><text x="427" y="241" text-anchor="middle">{{delta.lane.r.4}}</text></g>
+  <g class="acc"><rect x="338" y="226" width="54" height="22" rx="3" class="fill-sheet" stroke="currentColor" stroke-width="1.5"/><text x="365" y="241" text-anchor="middle">{{delta.lane.r.5}}</text></g>
+  <g class="acc"><rect x="276" y="226" width="54" height="22" rx="3" class="fill-sheet" stroke="currentColor" stroke-width="1.5"/><text x="303" y="241" text-anchor="middle">{{delta.lane.r.6}}</text></g>
+  <g class="acc"><rect x="214" y="226" width="54" height="22" rx="3" class="fill-sheet" stroke="currentColor" stroke-width="1.5"/><text x="241" y="241" text-anchor="middle">{{delta.lane.r.7}}</text></g>
+  <text x="202" y="285" text-anchor="end">a - b</text>
+  <rect x="648" y="270" width="54" height="22" rx="3" class="fill-sheet" stroke="currentColor"/><text x="675" y="285" text-anchor="middle">{{delta.lane.plain.0}}</text>
+  <g class="mark"><rect x="586" y="270" width="54" height="22" rx="3" class="fill-sheet" stroke="currentColor" stroke-width="2"/><text x="613" y="285" text-anchor="middle">{{delta.lane.plain.1}}</text></g>
+  <rect x="524" y="270" width="54" height="22" rx="3" class="fill-sheet" stroke="currentColor"/><text x="551" y="285" text-anchor="middle">{{delta.lane.plain.2}}</text>
+  <rect x="462" y="270" width="54" height="22" rx="3" class="fill-sheet" stroke="currentColor"/><text x="489" y="285" text-anchor="middle">{{delta.lane.plain.3}}</text>
+  <rect x="400" y="270" width="54" height="22" rx="3" class="fill-sheet" stroke="currentColor"/><text x="427" y="285" text-anchor="middle">{{delta.lane.plain.4}}</text>
+  <rect x="338" y="270" width="54" height="22" rx="3" class="fill-sheet" stroke="currentColor"/><text x="365" y="285" text-anchor="middle">{{delta.lane.plain.5}}</text>
+  <rect x="276" y="270" width="54" height="22" rx="3" class="fill-sheet" stroke="currentColor"/><text x="303" y="285" text-anchor="middle">{{delta.lane.plain.6}}</text>
+  <rect x="214" y="270" width="54" height="22" rx="3" class="fill-sheet" stroke="currentColor"/><text x="241" y="285" text-anchor="middle">{{delta.lane.plain.7}}</text>
+  <g class="mark"><path d="M675 294 C675 310 613 310 613 296" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M609 302 L613 294 L617 302 Z" fill="currentColor"/></g>
+  <text class="mark" x="574" y="308" text-anchor="end">the borrow of byte 0</text>
+</svg>
+</div>
+<figcaption><code>sub_bytes()</code> byte by byte on the 8 bytes at byte {{delta.lane.at}} of the page of counters minus the 8 bytes {{delta.lane.dist}} before, byte 0 on the right. Byte 0 borrows: in <code>sub_bytes()</code> the borrow stays inside byte 0, in the plain <code>a - b</code> byte 1 comes out 1 too small.</figcaption>
+</figure>
+
 Compiled for arm64 by clang with `-O2`, `sub_bytes()` is 7 instructions where the XOR was 1, the
 masks as immediates of `orr`, `and` and `eor`. The decoder's `add4()` and `add8()` are the same trick
 for an addition ([chapter 13](#ch-literals-dec--undelta)).
