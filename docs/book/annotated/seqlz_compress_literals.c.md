@@ -661,7 +661,7 @@ x >> 8 & lanes   = {{ch11.odd}}    odd:  tables 7, 5, 3, 1 = {{ch11.sum.7.dec}},
 ```
 
 4 adds instead of 32. The animation under the note does the same on stream 0 of
-[chapter 16](#ch-trace)'s page, {{ch11.slab.s0}} literals in chunks of 25; as a choice, the same adds
+[chapter 5](#ch-trace)'s page, {{ch11.slab.s0}} literals in chunks of 25; as a choice, the same adds
 in 8-bit lanes only.
 @end
 @more {#ch-literals-enc--histograms} Two histograms, even and odd literals, measured
@@ -1156,7 +1156,7 @@ streams end at byte {{ch11.q.8}} and the bitstream starts at byte {{ch11.raw.bs}
 sizes are written after it, over bytes that were raw literals.
 
 The copy is what makes the overwrite safe: the reader of the raw literals is not in `dst` at all. The
-animation under the note runs `lit_streams()` on [chapter 16](#ch-trace)'s page at level 2, a run of
+animation under the note runs `lit_streams()` on [chapter 5](#ch-trace)'s page at level 2, a run of
 literals per step, with the copy drawn under the bytes of `dst` the literals came from. From the first
 run on, the later streams store over raw literals that are read later, from the copy. The bitstream is
 the one thing no store may reach, and none does.

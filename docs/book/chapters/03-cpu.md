@@ -173,7 +173,7 @@ bit first, the frequent short codes keep coming back to the same few lines. Coun
 page touches 42.5 of the token table's 128 lines most significant bit first, and 55.3 least
 significant bit first, with the same bytes of the pages
 ([explored-designs.md](https://github.com/martinus/seqlz/blob/main/docs/explored-designs.md#six-choices-made-on-the-pc-measured-on-the-phone-the-token-table-and-the-prefetches-matter-the-rest-does-not)).
-The same count for the {{slab.tokens}} token lookups of [chapter 16](#ch-trace)'s page, one for each
+The same count for the {{slab.tokens}} token lookups of [chapter 5](#ch-trace)'s page, one for each
 sequence but the last, which has no token:
 
 @anim lines wide The token lookups of chapter {{chapter:ch-trace}}'s page, found with the real codec, and the line of the token table each one reads: most significant bit first as seqlz reads, and the same bits reversed. One page, so the counts are its own, not the mean of 20 000 pages.
@@ -409,7 +409,7 @@ The [model of 8 misses](#anim-misses) shows the two kinds of core side by side.
 
 Until 10th October 2026 the arm64 decoder had a second loop, written for in-order cores; now one loop
 runs on every core, because nothing else in the kernel's `lib/` asks which CPU it runs on
-([chapter 17](#ch-decisions--one-loop-for-all-cores) has the cost on the A55).
+([chapter 6](#ch-decisions--one-loop-for-all-cores) has the cost on the A55).
 
 ## Registers and the 64-bit bit register {#ch-cpu--registers}
 

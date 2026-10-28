@@ -172,7 +172,7 @@ One pass and any `dst` size: two passes, matcher into an array then encoder, wer
 
 Byte 0 of the bitstream, the first the decoder reads, is the last byte of `dst`, and the two ends grow
 toward each other. The animation under the note does the same with a real page, the slab of task
-records from [chapter 16](#ch-trace), one sequence per step; its buttons give `dst` the two pages of
+records from [chapter 5](#ch-trace), one sequence per step; its buttons give `dst` the two pages of
 zram, the smallest size the page fits into, and 1 byte less.
 
 ::: why One pass, any buffer
@@ -322,7 +322,7 @@ On [the page of pointers](#ch-matcher--back):
 @assert ch10.ptr.s1.code + ch10.ptr.s1.offbits == "10101011" + "000001" and ch10.ptr.f2.e3 == "00" and ch10.ptr.s2.code == tok.code[49] and ch10.ptr.f1.cnt1 == 6 and ch10.ptr.f2.cnt1 == 2
 
 The animation under the note does the same, put by put and flush by flush, for the first 4 sequences
-of [chapter 16](#ch-trace)'s page; its values come from the encoder's own helpers, through
+of [chapter 5](#ch-trace)'s page; its values come from the encoder's own helpers, through
 `anim/accum.c`, which checks them against `encode_emit()`.
 
 A flush with `cnt` 0 does happen: a sequence with an `ll` value and no `ml` value flushes twice, the
@@ -412,7 +412,7 @@ An `ll` value gets a flush of its own, and every sequence ends with one, so the 
 overflows: at most 7 + 31 + 20 = 58 bits before a flush. `last` changes only after the record above
 used the old one.
 @more {#ch-encoder--seq176} Sequence 176 of the page of task records, line by line
-The figure takes sequence 176 of [chapter 16](#ch-trace)'s page through these lines: a new offset of
+The figure takes sequence 176 of [chapter 5](#ch-trace)'s page through these lines: a new offset of
 class {{ch10.slab.s176.cls}}, a token with a code of its own, and an `ll` value. The animation of
 `dst` under the note on [both ends](#b43) counts the same {{ch10.slab.s176.nbits}} bits for it;
 `facts/ch10_12.c` reads them back from `dst` and checks them against the codes put.
@@ -549,7 +549,7 @@ a big-endian store writes the top byte to the lowest address, so the 8 bytes com
 `{{ch10.ptr.le64}}` and written as `{{ch10.ptr.head8}}`, the bitstream's first 8 bytes in order.
 
 The animation of `dst` under the note on [both ends](#b43) does all of this for
-[chapter 16](#ch-trace)'s page, whose smallest `dst` takes the path that overlaps.
+[chapter 5](#ch-trace)'s page, whose smallest `dst` takes the path that overlaps.
 @assert ch10.slab.min_dst - slab.len < slab.b.bytes
 @end
 

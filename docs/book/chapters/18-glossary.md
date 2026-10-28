@@ -7,7 +7,7 @@ sense given here.
 ## Compression and the format {#glossary--format}
 
 - **ANS, FSE**: a way to code symbols that can spend a fraction of a bit on one; FSE is `zstd`'s form of
-  it. [Chapter 17](#ch-decisions--bet)
+  it. [Chapter 6](#ch-decisions--bet)
 - **bitstream**: codes and plain bits one after the other, not aligned to bytes; seqlz reads the
   sequences' bitstream most significant bit first. [Chapter 4](#ch-format)
 - **canonical code**: a prefix code that follows from the code lengths alone by a fixed rule, so a table
@@ -74,7 +74,7 @@ sense given here.
   {{ch18.class_bits.4}} and {{ch18.class_bits.5}}. The offset bits follow the token.
   [`seqlz_off_class()`](#ch-header--off-class)
 - **optimal parser**: a matcher that searches for the sequences that make a page smallest; seqlz's was
-  `seqlz-opt`, removed. [Chapter 17](#ch-decisions--not-kept)
+  `seqlz-opt`, removed. [Chapter 6](#ch-decisions--not-kept)
 - **prefix code**: codes of which none is the start of another, so a decoder knows where each ends.
   [Chapter 2](#ch-compression--prefix-codes)
 - **record**: at level 3, the {{delta.rec}} bytes the encoder writes in front of a sequence's literals, its position,
@@ -175,12 +175,12 @@ sense given here.
 ## Codecs, code names and machines {#glossary--names}
 
 - **`bytelz`**: an experiment with seqlz's matcher and a byte format, not kept.
-  [Chapter 17](#ch-decisions--not-kept)
+  [Chapter 6](#ch-decisions--not-kept)
 - **dump**: a copy of all pages in zram at one moment, from one desktop, the Mi 9T or the Android 17
   emulator; their contents are never published, since they hold keys and passwords.
-  [Chapter 17](#ch-decisions--unknown)
+  [Chapter 6](#ch-decisions--unknown)
 - **kernel VM**: `tools/zram-vm/run.sh`, a kernel with the codecs in a virtual machine on one core of a
-  Ryzen 9 7950X fixed at 4.5 GHz; its times decide. [Chapter 17](#ch-decisions)
+  Ryzen 9 7950X fixed at 4.5 GHz; its times decide. [Chapter 6](#ch-decisions)
 - **level**: zram's knob per device for how hard a codec works; seqlz has 1 to 3, `seqlz-1` to
   `seqlz-3`, 2 the default, all in one format. [The levels](#ch-header--compressor)
 - **`lz4`, `lz4hc`, `lzo`, `lzo-rle`, `zstd`**: zram's codecs: `lz4` the fastest, `lz4hc` its slow
@@ -194,7 +194,7 @@ sense given here.
   pay; and also a lazy step, a table of the page's own and literals as deltas. [`seqlz_compress()`](#ch-encoder--entry),
   [`seqlz_compress_literals.c`](#f-seqlz_compress_literals-c)
 - **`seqlz-opt`**: an optimal parser for the same format, for zram's recompression, removed.
-  [Chapter 17](#ch-decisions--not-kept)
+  [Chapter 6](#ch-decisions--not-kept)
 
 ## Measurements {#glossary--measurements}
 
@@ -216,6 +216,6 @@ sense given here.
 - **stored size, Σ zsmalloc cost**: what zsmalloc spends on compressed pages, rounded up to their size
   classes; summed over pages, often as a share of their size. [Chapter 1](#ch-zram--size-classes)
 - **swap-in fault, `MODE=swap`**: the kernel VM's benchmark that swaps each page out and in once, so the
-  branch predictor has not seen it. [Chapter 17](#ch-decisions--score)
+  branch predictor has not seen it. [Chapter 6](#ch-decisions--score)
 - **time per page written**: the mean time to write a page plus 0.73 times the mean time to read one, the
   reads per write of a phone in daily use over 7.1 days; a desktop had 0.34. [Chapter 1](#ch-zram--score)

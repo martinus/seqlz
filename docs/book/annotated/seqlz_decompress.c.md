@@ -725,7 +725,7 @@ CPU 2 of the Ryzen 9 7950X at 4.5 GHz, 3 boots each: `zcomp_decompress()` of `se
 to 1941 ns instead of 2010 to 2011 with gcc, 1976 to 1983 instead of 2020 to 2040 with clang 22.1.8. On
 the Mi 9T the A76 decoded a page seen once in 3241 to 3272 ns instead of 3309 to 3340; the A55 got
 slower and kept a loop of its own until 10th October 2026, when every core got this one loop
-([chapter 17](#ch-decisions--one-loop-for-all-cores),
+([chapter 6](#ch-decisions--one-loop-for-all-cores),
 [explored-designs.md](https://github.com/martinus/seqlz/blob/main/docs/explored-designs.md#the-refill-without-its-branch-every-second-fast-sequence-63-ns-less-per-swap-in-on-x86-64-and-the-a76-kept)).
 :::
 @end
@@ -959,7 +959,7 @@ code and comes as `{{tok.code.3072}}`, `{{ch14.t513.bin}}` and {{ch14.t513.raw_b
 @end
 @more {#ch-decode--example} The two pages of the step-through, sequence by sequence
 The step-through under the note was recorded while `seqlz_decode()` decoded the format's example of
-[chapter 4](#ch-format--example) and the page of [chapter 16](#ch-trace) when the book was built. It
+[chapter 4](#ch-format--example) and the page of [chapter 5](#ch-trace) when the book was built. It
 runs the copy with `deltas` false, as neither page has deltas, so the `if (deltas)` lines never take a
 step. Each sequence comes with its cost in bits against `lz4`'s format. Step with the buttons or the
 arrow keys, with shift from one sequence to the next.
@@ -974,7 +974,7 @@ to `d + {{ch14.ab.store_end}}` and the last {{ch14.ab.bytewise}} bytes one by on
 `end_gap`, 0 literals for 0 bytes, and the {{ch14.ab.count3}} bits left are the zero padding.
 @assert ab.len == 9 and ab.lits == 2 and ab.b.bytes == 5 and ch14.ab.escaped == 1 and ch14.ab.value_bit == 1 and ch14.ab.ml == 35 and ch14.ab.count3 == ab.b.pad and ch14.ab.raw == 2
 
-[Chapter 16](#ch-trace)'s page shows the fast path at work. With coded literals it compresses to
+[Chapter 5](#ch-trace)'s page shows the fast path at work. With coded literals it compresses to
 {{slab.coded.len}} bytes, and its decode goes like this at the start and at the end:
 
 ```text

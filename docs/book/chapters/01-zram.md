@@ -442,7 +442,7 @@ from 22 to 131 bytes per µs, and `seqlz-3` below 22. `zstd` 3 is not on it any 
 3.8% less in 72% of its time per page written. `lzo-rle` is not on it either, its swap-ins are slower
 than `lz4`'s
 ([explored-designs.md, "One rule for which literals are deltas"](https://github.com/martinus/seqlz/blob/main/docs/explored-designs.md#one-rule-for-which-literals-are-deltas-045-fewer-bytes-a-simpler-spec-kept)).
-[Chapter 17](#ch-decisions--score) has the chart.
+[Chapter 6](#ch-decisions--score) has the chart.
 
 ## The codecs zram has, and where seqlz sits {#ch-zram--codecs}
 
@@ -509,7 +509,7 @@ cost in time, not a faster read.
 
 **No recompression.** zram can compress idle pages a second time with a slower algorithm. The project
 measured that with `zstd` 3 and with an optimal parser for seqlz's format, and did not pursue it
-([chapter 17](#ch-decisions--not-kept)). Every design in this book compresses a page once.
+([chapter 6](#ch-decisions--not-kept)). Every design in this book compresses a page once.
 
 $r = 0.73$ is one phone's, in one week of one person's use. Its swap-ins come in bursts: in 15 minutes
 of use on 16th October 2026, 92% of the pages came in bursts of 1024 pages and more, and 114 of 366 241

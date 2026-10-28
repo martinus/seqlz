@@ -96,7 +96,7 @@ phone session in 952.0 bytes of zsmalloc memory against 997.0 for level 2, and t
 write one against 12 µs
 ([explored-designs.md](https://github.com/martinus/seqlz/blob/main/docs/explored-designs.md#level-3-a-lazy-matcher-and-a-literal-table-of-the-pages-own-zstd-3s-memory-in-less-than-half-its-time-on-the-phone-kept)).
 That was before the deltas, which made level 3's writes about 4 µs slower on the A76 in userspace
-([chapter 17](#ch-decisions--deltas)).
+([chapter 6](#ch-decisions--deltas)).
 @end
 
 @@ 72-82
@@ -199,7 +199,7 @@ Why 8 and not all 128 lines of the token table without a loop is not recorded.
 [Chapter 3](#ch-cpu--prefetch) has what the prefetches are worth on the A55, 14.5 µs per cold read. On
 the A76 they once cost 1.2 µs, and for a while only in-order cores prefetched the token table. Since
 10th October 2026 every core runs the same loop with the prefetch
-([chapter 17](#ch-decisions--one-loop-for-all-cores)), and the cost did not show again: cold reads in
+([chapter 6](#ch-decisions--one-loop-for-all-cores)), and the cost did not show again: cold reads in
 7.44 and 7.65 µs with it, 8.07 and 7.60 µs without, in two runs
 ([explored-designs.md](https://github.com/martinus/seqlz/blob/main/docs/explored-designs.md#the-kernel-copys-choices-measured-in-one-boot-and-on-the-phone--o3-kept-one-decode-loop-prefetch-no-__aligned64-no-load16)).
 @end

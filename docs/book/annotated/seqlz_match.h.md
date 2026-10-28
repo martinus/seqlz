@@ -362,7 +362,7 @@ right one with a compare was 9% slower: more instructions.
 @end
 @more {#ch-matcher--back} The page of 512 pointers, position by position
 The step-through under the note runs `seqlz_match_block()` on two pages, one statement at a time: this
-page of 512 pointers, and the made-up page of [chapter 16](#ch-trace). It is the function of this file,
+page of 512 pointers, and the made-up page of [chapter 5](#ch-trace). It is the function of this file,
 recorded while it searched the pages when the book was built, so every position, slot and match is
 the real one. Step with the buttons or the arrow keys, and with shift from one sequence to the next.
 

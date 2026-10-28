@@ -844,37 +844,6 @@ def chapter_labels():
     return labels
 
 
-def map_block(cid, labels):
-    """
-    The map of book.json under each chapter it names: one row per path of a page, each chapter on it a
-    link with its number, the chapter cid marked. "" if cid is on no row.
-    """
-    arrow = "\u2192"
-    rows = BOOK.get("map", {}).get("rows", [])
-    if not any(cid == n["id"] for r in rows for n in r["nodes"]):
-        return ""
-    out = [f'<nav class="onmap" aria-label="Where this chapter is"><div class="onmap-head">'
-           f'<a href="#{BOOK["map"]["chapter"]}">Where this chapter is in the code</a></div>']
-    for r in rows:
-        items = []
-        if r.get("from"):
-            items.append(f'<span class="onmap-data">{html.escape(r["from"])}</span><span class="onmap-sep">{arrow}</span>')
-        for k, n in enumerate(r["nodes"]):
-            if k:
-                items.append(f'<span class="onmap-sep">{html.escape(n.get("join", arrow))}</span>')
-            cur = ' class="cur" aria-current="location"' if n["id"] == cid else ""
-            # a node in the code of Part II has no chapter number
-            no = labels.get(n["id"])
-            items.append(f'<a href="#{n["id"]}"{cur}>' + (f'<span class="onmap-no">{no}</span> ' if no else "")
-                         + f'{html.escape(n["label"])}</a>')
-        if r.get("to"):
-            items.append(f'<span class="onmap-sep">{arrow}</span><span class="onmap-data">{html.escape(r["to"])}</span>')
-        out.append(f'<div class="onmap-row"><span class="onmap-what">{html.escape(r["what"])}</span>'
-                   f'<span class="onmap-path">{"".join(items)}</span></div>')
-    out.append("</nav>")
-    return "".join(out)
-
-
 def add_ids(body, cid):
     """an id for every h2, h3 and h4 without one: cid--<its slug>"""
     def one(hm):
@@ -995,7 +964,6 @@ def build():
             body = (body[:m.start()]
                     + f'<header class="chapterhead"><span class="chapno">{label}</span>'
                       f'<h1 id="{cid}">{title}</h1>{notes_html}</header>'
-                    + map_block(cid, labels)
                     + body[m.end():])
             body = add_ids(body, cid)
             collect_ids(body, ch["file"], ids)

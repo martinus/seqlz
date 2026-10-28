@@ -283,7 +283,7 @@ consecutive matches follow no pattern a branch predictor could learn
 ([branches](book:#ch-cpu--branches)). gcc compiles the function for x86-64 without a jump.
 @more {#ch-header--off-class} Which offsets each class takes, and the sum for 2, 72 and 399
 The figure shows which offsets each class takes, and the sum for three offsets of
-[chapter 16](#ch-trace)'s page, 2, 72 and 399. The class then picks its nibble of
+[chapter 5](#ch-trace)'s page, 2, 72 and 399. The class then picks its nibble of
 `SEQLZ_RAW_NIBBLES`, the number of offset bits.
 @assert ch06.off[2].cls == 1 and ch06.off[72].cls == 4 and ch06.off[399].cls == 3 and ch06.off[8].cls == ch06.off[24].cls == 4 and ch06.off[255].cls == ch06.off[15].cls == 2 and ch06.off[256].cls == ch06.off[2040].cls == 5 and ch06.off[2048].cls == ch06.off[4095].cls == 3 and ch06.class5_end == 2048
 
@@ -575,7 +575,7 @@ pages, level 3 stores 869.7 bytes per page with deltas, 915.6 without, 5.0% less
 22nd October 2026
 ([explored-designs.md](https://github.com/martinus/seqlz/blob/main/docs/explored-designs.md#level-3-stores-its-literals-as-deltas-not-xors-084-fewer-bytes-than-the-xor-kept),
 [one rule](https://github.com/martinus/seqlz/blob/main/docs/explored-designs.md#one-rule-for-which-literals-are-deltas-045-fewer-bytes-a-simpler-spec-kept));
-[chapter 17](#ch-decisions--deltas) has what it costs in time.
+[chapter 6](#ch-decisions--deltas) has what it costs in time.
 @end
 
 @@ 273-298

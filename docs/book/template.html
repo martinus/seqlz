@@ -114,20 +114,6 @@ main { min-width: 0; padding-inline: 1.5rem; padding-block: 0 6rem; }
 .chapterhead { margin-bottom: 1.8rem; padding-bottom: 1rem; border-bottom: 1px solid var(--rule); }
 .chapno { font-family: var(--display); font-weight: 700; font-stretch: 75%; letter-spacing: 0.1em; text-transform: uppercase; color: var(--accent); font-size: 0.85rem; }
 .chapterhead h1 { font-family: var(--display); font-weight: 750; font-stretch: 75%; font-size: clamp(2rem, 4.6vw, 2.75rem); line-height: 1.08; margin: 0.3rem 0 0; text-wrap: balance; }
-.onmap { margin: -0.8rem 0 1.8rem; font-family: var(--display); font-size: 0.86rem; line-height: 1.35; }
-.onmap-head { font-weight: 700; font-stretch: 75%; text-transform: uppercase; letter-spacing: 0.08em; font-size: 0.72rem; margin-bottom: 0.3rem; }
-.onmap-head a { color: var(--muted); }
-.onmap-row { display: grid; grid-template-columns: 7.2rem minmax(0, 1fr); gap: 0.6rem; padding-block: 0.14rem; }
-.onmap-what { color: var(--muted); }
-.onmap-path { display: flex; flex-wrap: wrap; align-items: baseline; gap: 0.1rem 0.35rem; }
-.onmap-path a { color: var(--ink); text-decoration: none; white-space: nowrap; }
-.onmap-path a:hover { color: var(--accent); }
-.onmap-path a.cur { color: var(--accent); font-weight: 700; box-shadow: inset 0 -2px 0 var(--accent); }
-.onmap-no { color: var(--muted); font-variant-numeric: tabular-nums; }
-.onmap-path a.cur .onmap-no { color: var(--accent); }
-.onmap-sep, .onmap-data { color: var(--muted); }
-.onmap-data { font-style: italic; }
-@media (max-width: 520px) { .onmap-row { grid-template-columns: 1fr; gap: 0; padding-block: 0.25rem; } }
 h2, h3, h4 { font-family: var(--display); text-wrap: balance; line-height: 1.2; }
 /* a click on a title puts it into the address, see the script; # marks the title that is there */
 .hlink { cursor: pointer; -webkit-tap-highlight-color: transparent; }

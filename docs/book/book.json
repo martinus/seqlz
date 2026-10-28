@@ -18,7 +18,7 @@
     },
     {
       "id": "part-2", "label": "Part II", "title": "The code, line by line",
-      "intro": "The code of <code>src/</code>, file by file, with a short note next to each block: start there, in the order of the contents. The chapters after the files explain what needs more than a note.",
+      "intro": "The code of <code>src/</code>, file by file, with a short note next to each block, and under a note the details when you want them: why, a worked example, what it was measured at. The map comes first, then the files in the order of the contents.",
       "code": [
         {"group": "zram", "title": "zram's glue", "files": ["src/zram_seqlz.c", "src/seqlz.h"]},
         {"group": "write", "title": "writing a page", "files": ["src/seqlz_compress.c", "src/seqlz_match.h", "src/seqlz_compress_literals.c"]},
@@ -39,29 +39,5 @@
         {"file": "18-glossary.md", "numbered": false, "label": "Appendix"}
       ]
     }
-  ],
-  "map": {
-    "chapter": "map",
-    "rows": [
-      {"what": "zram", "from": "a page to write or read", "to": "seqlz_compress(), seqlz_decode()", "nodes": [
-        {"id": "ch-zram-glue", "label": "the backend"}
-      ]},
-      {"what": "write a page", "from": "4096 bytes", "to": "compressed page", "nodes": [
-        {"id": "ch-matcher", "label": "matcher"},
-        {"id": "ch-encoder", "label": "encoder"},
-        {"id": "ch-literals-enc", "label": "literal coder"}
-      ]},
-      {"what": "read a page", "from": "compressed page", "to": "4096 bytes", "nodes": [
-        {"id": "ch-literals-dec", "label": "literal decoder"},
-        {"id": "ch-decode", "label": "sequence loop"},
-        {"id": "ch-dec-basics", "label": "copies and bit reader", "join": "with"}
-      ]},
-      {"what": "under both", "nodes": [
-        {"id": "ch-compat", "label": "kernel names"},
-        {"id": "ch-header", "label": "format constants", "join": "·"},
-        {"id": "ch-internal", "label": "table layout", "join": "·"},
-        {"id": "ch-codes", "label": "tables built", "join": "·"}
-      ]}
-    ]
-  }
+  ]
 }

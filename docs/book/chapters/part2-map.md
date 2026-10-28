@@ -1,15 +1,15 @@
 # The code on one page {#map}
 
-Part II is the code itself: every file of `src/` as it is, with a short note next to each block and,
-under the note, links to the sections that explain more. Read the files in this order, each one links
-to the next:
+Part II is the code itself: every file of `src/` as it is, with a short note next to each block.
+Under a note, buttons open what goes deeper, below the block: why it is written this way, a worked
+example with real numbers, what it was measured at, an animation. Open them where a note leaves you
+with a question, skip them where it does not. Read the files in this order, each one links to the
+next:
 
 @code
 
-The chapters of Part II after the files explain what needs more than a note. This page is the other
-order: the path of one page through the code, written and read back, with a link to the chapter of each
-step. Every chapter of Part II starts with the same path in four lines, its own
-step marked, and a box "In short" of its main points, each a link to the section that explains it. Skim those, and read on where a point is new to you.
+This page is the other order: the path of one page through the code, written and read back, with a
+link to the code of each step.
 
 <figure class="diagram">
 <div class="scroll">
@@ -169,5 +169,5 @@ changes them.
 | Where do the tables come from? | [training](#ch-codes--lengths), [fixed tables](#ch-codes--fixed) |
 | How much memory does a CPU need? | [work memory](#ch-zram--work-memory), [the backend](#ch-zram-glue--backend) |
 | How does `src/` become kernel code? | [port.py](#ch-zram-glue--port) |
-| What does one real page look like at each step? | [chapter 16](#ch-trace) |
-| Why is it built this way and not another? | [chapter 17](#ch-decisions) |
+| What does one real page look like at each step? | [chapter 5](#ch-trace) |
+| Why is it built this way and not another? | [chapter 6](#ch-decisions) |

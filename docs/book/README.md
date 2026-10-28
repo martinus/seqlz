@@ -51,8 +51,6 @@ python3 docs/book/lint.py            # dashes, banned words, measurements withou
 - To bring the book up to newer code: `remap.py [<commit>]` (default `HEAD`) prints how the listings
   and the line numbers in the prose move from the book's commit to that one; `--write` applies them and
   sets `"src"` to it. Then read the prose next to each listing marked CHANGED, and `build.py --check`.
-- `"map"` in `book.json` is the path of a page through Part II, rows of chapter ids: `build.py` draws it
-  at the top of each chapter it names, that chapter marked, linked to the map chapter `#map`.
 - `STYLE.md` is the brief the chapters were written to, `REVIEW.md` the one they were checked with.
 - Part II is the code itself: `annotate.py` makes a chapter of each file of `src/` with notes,
   `annotated/<file>.md`: the file at the book's commit, a short note next to each block, and under a

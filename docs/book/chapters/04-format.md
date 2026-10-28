@@ -712,7 +712,7 @@ the number's first bit, and as many bits follow as it counted zeros. A run of 5 
 `00101`, and a run of 32 is `00000100000`, 11 bits. The
 [Exp-Golomb code](https://en.wikipedia.org/wiki/Exponential-Golomb_coding) of order 0 is the same code
 for numbers that start at 0: it writes `n` as Elias gamma writes `n + 1`, so a run as `run - 1`
-gives the same bits. [Chapter 17](#ch-decisions--level3) has its other orders.
+gives the same bits. [Chapter 6](#ch-decisions--level3) has its other orders.
 
 `OWN` does not write the zeros: the width is one of its symbols, in the same prefix code as the
 lengths. This does two things. One symbol says that a run comes and how wide it is; with Elias gamma
@@ -837,7 +837,7 @@ few small values, which a literal table codes in fewer bits
 ([`docs/format.md`](https://github.com/martinus/seqlz/blob/main/docs/format.md#literals-as-deltas)).
 A delta, not a XOR: a field that grows by 1 from `0x0f` to `0x10` has a delta of 1, but `0x0f` XOR
 `0x10` is `0x1f`, every bit the carry flipped. The first form of `e`, on 21st October 2026, XORed the
-literals; the subtraction replaced it the same day, before it was merged ([chapter 17](#ch-decisions--deltas)).
+literals; the subtraction replaced it the same day, before it was merged ([chapter 6](#ch-decisions--deltas)).
 
 [The page of 512 pointers](#ch-matcher--back) at level 3 begins with
 `{{delta.ptr.l3.head}}`: `h` says {{delta.ptr.l3.n}} coded literals, `t = {{delta.ptr.l3.t}}` is code
@@ -967,6 +967,6 @@ The one of level 3, from 15th October 2026, is built only where the page's liter
 enough, and on the Mi 9T's Cortex-A76 it got zram's pages to the size of `zstd` 3's in less than half
 its time to write a page
 ([explored-designs.md](https://github.com/martinus/seqlz/blob/main/docs/explored-designs.md#level-3-a-lazy-matcher-and-a-literal-table-of-the-pages-own-zstd-3s-memory-in-less-than-half-its-time-on-the-phone-kept)),
-[chapter 17](#ch-decisions--level3) has the numbers.
+[chapter 6](#ch-decisions--level3) has the numbers.
 [`seqlz_codes.c`](#ch-codes) turns the code lengths into the encoder's codes and the decoder's
 tables when seqlz is built.
