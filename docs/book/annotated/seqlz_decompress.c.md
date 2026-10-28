@@ -387,7 +387,7 @@ The value is sent as a symbol's code and extra bits ([chapter 4](#ch-format--len
 to 15 are their own symbol, with no extra bits. From 16 on, the symbol says where the value's top bit
 is, and the bits below that top bit follow the code; the top bit itself is not sent, the symbol says it.
 One lookup with the next 8 bits gives three things packed into one entry, `code length | extra bits << 4
-| base << 8` ([chapter 7](#ch-internal--value-table)): the code's length `n`, the number of extra bits
+| base << 8` ([the length tables](#ch-internal--decode-tables)): the code's length `n`, the number of extra bits
 `x`, and the base, `2^x` from symbol 16 on and the value itself below. The function returns the base plus
 the `x` bits right after the code, and drops `n + x` bits.
 
@@ -545,6 +545,24 @@ escape's entry has bit 31 set. After the refill and the 12 bits, `token_entry(id
 the table would have had, with a code length of 0 because the bits are dropped already. From here on an
 escaped token is like any other ([token entry](book:#ch-internal--token-entry)).
 @stepper decode The real decode_block() on two pages, statement by statement
+@more {#ch-internal--the-escape} Token 1797 through the escape, step by step
+The escape's {{tok.len.3072}}-bit code `{{tok.code.3072}}` fills the indices {{ch07.tok.3072.first}}
+to {{ch07.tok.3072.last}} of the token table with `1U << 31 | {{tok.len.3072}} << 14 =
+{{ch07.tok.3072.entry}}` ([the entry's bits](#ch-internal--token-entry)).
+
+Token 1797, 5 literals and a match of 20 at a class 3 offset, has no code. The encoder writes the
+escape's `{{tok.code.3072}}`, 1797 in 12 bits, `{{ch07.esc1797.bits}}`, and then the offset, say 1000,
+in 12 bits. The decoder's index is {{ch07.esc1797.index}}, in the escape's range; bit 31 is set, so it
+drops {{ch07.tok.3072.DROP}} bits, refills, reads 1797, checks it against 3072 and calls
+`token_entry(1797, 0)`. That entry describes a token whose code is gone already, `N` 0, `BACK`
+{{ch07.esc1797.BACK}}, `DROP` {{ch07.esc1797.DROP}}, `{{ch07.esc1797.entry}}`, and from there the
+escaped token goes through the same lines as any other.
+
+This is the one place where the decoder takes a token apart at run time. With the tables and classes
+of 14th October 2026 that is about 15 of about 205 sequences per page on desktop pages and 10 of 170 on
+phone pages (20 000 pages of each dump, same-filled pages left out, measured on 14th October); those
+pay for a refill and 12 more bits anyway.
+@end
 
 @@ 501-512
 The offset without a branch, from the token's entry: `<< TOK_N` shifts the code out, `>> back` brings
@@ -553,6 +571,32 @@ offset: it has no bits, `raw` is meaningless, and the select takes `last`. gcc m
 `cmov`.
 
 `TOK_LL` and `TOK_ML` are the lengths as they are, the match length already with its minimum of 4.
+@more {#ch-internal--token-2098-two-literals-a-match-of-7-16-bytes-back} Token 2098's offset, shift by shift
+Token 2098 is 2 literals and a match of 7 at offset 16, [the format's example](#ch-format--token):
+offset 16 is a multiple of 8 below 256, class 4, sent as $16 / 8 = 2$ in 5 bits. Its code has
+{{tok.len.2098}} bits, `{{tok.code.2098}}`, and its entry is `{{ch07.tok.2098.entry}}`
+([its bits](#ch-internal--token-entry)): `N` {{ch07.tok.2098.N}}, `BACK` `(64 - 5) & 63` =
+{{ch07.tok.2098.BACK}}, `SHIFT` {{ch07.tok.2098.SHIFT}}, `DROP`
+${{tok.len.2098}} + 5 = {{ch07.tok.2098.DROP}}$, `LL` {{ch07.tok.2098.LL}}, `ML`
+{{ch07.tok.2098.ML}}.
+
+Say the register holds the code, then `{{ch07.reg_raw_bits}}`, then whatever follows:
+`{{ch07.reg}}`, the first bit of the stream as bit 63. The top 11 bits are `{{ch07.reg_index_bits}}`,
+index {{ch07.reg_index}}, one of the {{ch07.tok.2098.entries}} entries {{ch07.tok.2098.first}} to
+{{ch07.tok.2098.last}} of this code. Then:
+
+```text
+br.bits                   {{ch07.reg_bin}} ... {{ch07.reg_low}}    {{ch07.reg}}
+br.bits << TOK_N   ({{ch07.tok.2098.N}})    {{ch07.reg_shl_bin}} ... {{ch07.reg_shl_low}}    {{ch07.reg_shl}}
+             >> TOK_BACK  ({{ch07.tok.2098.BACK}})                         {{ch07.reg_raw_bits}}   {{ch07.reg_raw}}
+             << TOK_SHIFT ({{ch07.tok.2098.SHIFT}})                                  {{ch07.reg_off}}
+seqlz_br_drop(&br, TOK_DROP) moves on by {{ch07.tok.2098.DROP}} bits, to the next sequence
+```
+
+The left shift throws the code away, the right shift keeps the 5 bits behind it, and the shift by 3
+multiplies by 8. For token 49, 1 literal and 7 bytes at the repeat offset, `BACK` is 0: the decoder
+computes a `raw` it ignores and takes `last`.
+@end
 
 @@ 513-546
 Most sequences go here. The condition: no length value follows (one bit of the entry), and the three

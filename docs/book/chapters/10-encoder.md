@@ -196,7 +196,7 @@ without them, and stored without deltas ([below](#ch-encoder--entry)).
 `v` must have no bits above `n`, and the comment's `n < 64 - cnt` keeps bits from falling out of the
 top. The masks `& 63U` and `& 31U` change no value the encoder uses; they let the compiler drop the
 checks that `CONFIG_UBSAN_SHIFT` adds before a shift it cannot prove in range
-([chapter 7](#ch-internal--decode-tables)). `enc_put_code()` puts a code and then its extra bits in one
+([the masks](#ch-internal--masks)). `enc_put_code()` puts a code and then its extra bits in one
 put, the code in the higher bits, as the decoder reads the most significant bit first.
 
 The page of `ab` repeated has a match of {{ch10.ab.s1.ml}} bytes, so `ml - 4` is {{ch10.ab.s1.ml4}} and
@@ -254,7 +254,7 @@ bitstream went forwards and the flush swapped the bytes of each word; now the sw
 `put_len_value()` masks the symbol to the 32 entries of `enc[]`, for UBSan again, and passes `v`
 whole, since `enc_put_code()` masks it to its extra bits. `token_code()` tests for the common case
 first: an entry of 0 means no code, because a code has a length of at least 1 in the top bits
-([chapter 7](#ch-internal--token-table)). A token without a code is **escaped**: the escape's code
+([an entry of 0](#ch-internal--token-table)). A token without a code is **escaped**: the escape's code
 shifted left by 12 and ORed with the token, one code of the escape's length plus 12 bits.
 {{ch10.tok_codes}} of the {{const.TOKEN_SYMBOLS}} tokens have a code of their own; token 10, `ll` 10
 and a match of 4 bytes at the repeat offset, has none:

@@ -14,7 +14,7 @@ compiled into the codec: {{tok.symbols}} for the token table, {{ll.symbols}} eac
 length values, 256 for each of the 8 literal tables, and {{own.symbols}} for `OWN`, the code a page's own
 literal table is written in. `src/seqlz_codes.c` turns them into
 `struct seqlz_tables`, the {{size.tables|grp}} bytes of codes and decode tables of
-[chapter 7](#ch-internal). It runs on the build machine, when seqlz is built, for userspace and for
+[`seqlz_tables.h`](#ch-internal). It runs on the build machine, when seqlz is built, for userspace and for
 the kernel alike ([below](#ch-codes--kernel)), and in the tests on other lengths. `first_codes()`
 computes the
 [canonical codes](#ch-compression--canonical-codes) and checks that the lengths are a complete prefix
@@ -37,7 +37,7 @@ as it is a program for the build machine ([below](#ch-codes--kernel)).
 @listing src/seqlz_codes.c 9-19
 
 The part of a length value's decode entry that depends only on the symbol, in the layout of
-[chapter 7](#ch-internal--decode-tables): symbols below 16 are their value with no extra bits, a symbol
+[the decode tables](#ch-internal--decode-tables): symbols below 16 are their value with no extra bits, a symbol
 $s$ from 16 on has the base $2^{s - 12}$ and $s - 12$ extra bits
 ([length values](#ch-header--length-values)). Symbol 18 gives `{{ch08.le.18}}`, base 64 and 6 extra bits;
 the last symbol, {{ch08.le_last_symbol}}, has {{ch08.le_last_extra}} extra bits, and on 16 KiB pages
@@ -90,7 +90,7 @@ table has no code shorter than 4 bits; its {{tok.codes_of.11}} codes of 11 bits 
 @listing src/seqlz_codes.c 55-78
 
 The loop runs to `<=` because the escape is symbol 3072. A symbol without a code is skipped: its
-`enc[]` stays 0, which is how the encoder knows to escape it ([chapter 7](#ch-internal--token-table)).
+`enc[]` stays 0, which is how the encoder knows to escape it ([an entry of 0](#ch-internal--token-table)).
 `c = next[l]++` gives the symbol the next code of its length.
 
 A code's entries are one range because the decoder reads the bitstream most significant bit first:
@@ -133,7 +133,7 @@ are there for the encoder's mask, stay 0 from the `memset()` of `seqlz_tables_bu
 @listing src/seqlz_codes.c 101-123
 
 256 symbols, codes of at most 10 bits, entries in the order `lit_put()` and the decoder need
-([chapter 7](#ch-internal--lit-table)). In table 0 the space, `0x20`, and `e`, `0x65`, have the first
+([their layout](#ch-internal--lit-table)). In table 0 the space, `0x20`, and `e`, `0x65`, have the first
 two 4-bit codes, `{{lit.0.code.32}}` and `{{lit.0.code.101}}`: no code in table 0 is shorter, and
 `0x20` comes first in symbol order. The comment is about bit order: the 8 literal streams are read
 most significant bit first, like the sequences' bitstream and like `zstd` reads its Huffman coded
@@ -147,7 +147,7 @@ literals, so the codes go into the tables as `first_codes()` numbers them
 
 `seqlz_tables_build()` takes the token and length tables as a parameter, so that the tests can build
 tables from other lengths, but the literal tables always come from the global
-`seqlz_lit_sets[8][256]`. The second loop fills `lit_cost` ([chapter 7](#ch-internal--lit-cost)) in
+`seqlz_lit_sets[8][256]`. The second loop fills `lit_cost` ([one add per literal](#ch-internal--lit-cost)) in
 one pass over all 2048 pairs: `k % 256` is the byte value, `k / 256` the table and `8U * (k / 256)`
 its lane. The `(u64)` cast matters: the `u8` is promoted to `int`, and shifting an `int` by 56 for
 table 7 is undefined. For byte `0x65` the 8 lanes are `{{ch08.lit101_row}}`, which gives
@@ -161,7 +161,7 @@ table 7 is undefined. For byte `0x65` the 8 lanes are `{{ch08.lit101_row}}`, whi
 its lengths are not in `struct seqlz_lengths` either: `seqlz_own_lengths` is generated into the same
 `.inc` file as the literal tables. The first part is `build_lit()` again for {{own.symbols}} symbols
 and 8 bits, with the two halves of each entry the other way round, the code or symbol in the low byte
-([chapter 7](#ch-internal--own)). `first_codes()` returns `-EINVAL` only if the generated lengths are
+([its layout](#f-seqlz_tables-h-b113)). `first_codes()` returns `-EINVAL` only if the generated lengths are
 broken, and then `seqlz_tables_build()` fails as for any table. Unlike the other tables, a length of 0 is
 `-EINVAL` too: the encoder may write any symbol of `OWN`, so each needs a code, and the loop would read
 `next[0]`, which `first_codes()` never sets.

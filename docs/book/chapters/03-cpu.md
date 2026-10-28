@@ -46,7 +46,7 @@ one byte brings the aligned 64 bytes around it into L1.
 In a swap-in the compressed bytes are cold ([chapter 1](#ch-zram--path)), and the decoder's tables,
 {{size.tables|grp}} bytes shared by all CPUs, may have been pushed out of the caches by whatever ran
 since the last swap-in. The decoder needs its tables on every page, so their sizes are chosen for L1.
-The tables of 4 KiB pages, from `struct seqlz_tables` ([chapter 7](#ch-internal)):
+The tables of 4 KiB pages, from `struct seqlz_tables` ([its layout](#ch-internal--tables)):
 
 | table | entries | bytes | cache lines | read |
 | --- | --- | ---: | ---: | --- |
@@ -381,7 +381,7 @@ consequences show in `src/`:
 
 **Every instruction costs.** On the A55 the decoder's loop ran at 0.99 instructions per cycle, so
 fewer instructions were faster almost one for one. That is why the token table's entries are 4 bytes
-with every field ready to use ([chapter 7](#ch-internal)): taking the token apart at run time took 18
+with every field ready to use ([the entry's bits](#ch-internal--token-entry)): taking the token apart at run time took 18
 of about 60 instructions per sequence. The entries of 4 bytes, with a flag for "a length value
 follows", took the decoder from 16 547 to 15 129 instructions per page on the A55, and with three
 smaller changes from 17 842
@@ -520,7 +520,7 @@ Bit readers meet undefined behaviour whenever a field can have 0 bits: "the top 
 64-bit `v` is `v >> (64 - x)`, a shift by 64 for `x = 0`, and x86-64 then shifts by 0 and returns `v`, not 0.
 `seqlz_br_value()` shifts by 1 and then by `63 - x` instead (the note on [`seqlz_br_value()`](#ch-dec-basics--value)).
 The token table's entries hold the shift for the offset's `raw_bits` bits as `(64 - raw_bits) & 63`,
-0 for class 0, which has no offset bits ([chapter 7](#ch-internal)). `__builtin_ctzll(0)` is undefined too, `rep bsf` gives 64 on
+0 for class 0, which has no offset bits ([`token_entry()`](#ch-internal--token-entry-code)). `__builtin_ctzll(0)` is undefined too, `rep bsf` gives 64 on
 CPUs with `tzcnt` and nothing defined on older ones; `seqlz_match_len()` ORs in a bit where the XOR
 could be 0 ([chapter 9](#ch-matcher--match-len)), and the literal streams' marker bit is never shifted
 out. And the limits of the decoder's fast path, `lit_fast` for the literals and `in_fast` for the input,
@@ -556,7 +556,7 @@ With the mask the check is gone, and the mask itself costs nothing: x86-64's shi
 written `<< (n & 63U)` even where `n` is never 64, and why `enc[]` in `struct value_table` has
 {{ch03.enc_len_symbols}} entries for {{const.LEN_SYMBOLS}} or {{k16.const.LEN_SYMBOLS}} symbols: a
 power of 2, so that `s & (ENC_LEN_SYMBOLS - 1U)` proves every index in range
-([chapter 7](#ch-internal), [chapter 10](#ch-encoder)). Masked shifts and indices took the compressor
+([the masks](#ch-internal--masks), [chapter 10](#ch-encoder)). Masked shifts and indices took the compressor
 from 25 225 to 25 064 cycles per page, with 4.7% fewer instructions
 ([explored-designs.md](https://github.com/martinus/seqlz/blob/main/docs/explored-designs.md#the-compressor-second-round-fewer-instructions)).
 The decoder had 65 such checks in an early version, `lz4`'s 18, but not in its hot path: without them,

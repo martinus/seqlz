@@ -303,7 +303,7 @@ The loop ends with the `break` when the literals left fill the page, or with `re
 {{ch14.tokens_coded}} of the {{const.TOKEN_SYMBOLS}} tokens have a code of their own in the 4 KiB tables;
 the others are the escape's code, `{{tok.code.3072}}`, and the token's number in 12 bits
 ([chapter 4](#ch-format--token)). The escape's entry has bit 31 set and only the code's length in its
-drop field ([chapter 7](#ch-internal--token-entry)). The refill is needed because `next_token()` made sure
+drop field ([the escape's entry](#ch-internal--the-escape)). The refill is needed because `next_token()` made sure
 of only {{ch14.need}} or {{k16.ch14.need}} bits before the escape's code. Of the 4096 numbers 12 bits can
 hold, {{ch14.no_token}} are no token. `token_entry(idx, 0)` builds the entry the table would have, with a
 code length of 0 since the code and the 12 bits are dropped already; from here on, an escaped token is
@@ -314,7 +314,7 @@ like any other. E.g. token 513, {{ch14.t513.ll}} literal and a match of {{ch14.t
 
 @listing src/seqlz_decompress.c 501-512
 
-This is what [chapter 7](#ch-internal--token-entry) built the entry for: the offset in three shifts and a
+This is what [the token entry's fields](#ch-internal--token-entry) are for: the offset in three shifts and a
 select. `<< TOK_N` shifts the code out, `>> back`, with `back = 64 - raw_bits`, brings the offset bits to
 the bottom, and `<< TOK_SHIFT` multiplies by 2 for class 1 and by 8 for classes 4 and 5. Class 0, the
 repeat offset, has no offset bits, and `back` is stored as `(64 - raw_bits) & 63`, 0 and not 64; `raw` is

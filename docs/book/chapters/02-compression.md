@@ -316,7 +316,7 @@ fills $2^{ {{ch02.TOKEN_BITS}}-{{tok.len.49}} } = {{ch02.tok49_entries}}$ entrie
 table. The longest codes, {{ch02.TOKEN_BITS}} bits, fill one entry each.
 @assert ch02.tok49 == 49 and 16 * ch02.tok49_entries == ch02.tok_entries and tok.codes_of[ch02.TOKEN_BITS] > 0
 A token's entry holds more than the symbol and the code length: the two lengths and what is needed to
-cut the offset bits out of the bits that follow ([chapter 7](#ch-internal)).
+cut the offset bits out of the bits that follow ([the token entry](#ch-internal--token-entry)).
 
 The table's size is the reason for the length limits above: it has to stay in the CPU's fastest
 cache, or every lookup waits for memory ([chapter 3](#ch-cpu--cache)).

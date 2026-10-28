@@ -19,7 +19,7 @@ Decoding a Huffman code is a chain: look up the next 10 bits, write the byte, sh
 code's length, and only then are the next code's bits known. 8 streams are 8 such chains with nothing
 between them, and an out-of-order CPU works on them at the same time ([chapter 3](#ch-cpu--chains)).
 The page layout is in [chapter 4](#ch-format--layout), the literal table's entries in
-[chapter 7](#ch-internal--lit-table).
+[`seqlz_tables.h`](#ch-internal--lit-table).
 
 ## A stream is a pointer and 64 bits with a 1 at the end {#ch-literals-dec--sentinel}
 
@@ -234,7 +234,7 @@ run past its end.
 
 @listing src/seqlz_decompress_literals.c 209-227
 
-`top` is the next 8 bits, and `quad[top]` ([chapter 7](#ch-internal--own)) says what they hold. Bit 31
+`top` is the next 8 bits, and `quad[top]` ([its fields](#ch-internal--own)) says what they hold. Bit 31
 means a run that does not fit an entry, e.g. a run of 32: symbol 15's 8-bit code and 5 bits more. Then
 `decode[top]` has the symbol and the code's length, and the run's `nb - 1` bits are read from right
 after the code: `bits <<= d >> 8` drops the code, and `(bits >> 1) >> (64 - nb)` is the top `nb - 1`
@@ -274,7 +274,7 @@ The text page is a poor case for `quad[]`: its lengths of 3 and 4 bits have code
 entry has two of them, and its runs of 2 have one bit after a 5-bit code that, with the next length,
 does not fit 8 bits either. The pages `OWN` was made for have lengths of 7 to 10 bits, with codes of 2
 and 3 bits, where an entry such as `quad[0xd1]`, a run of 1 and the lengths 9 and 10, does three
-symbols in one lookup ([chapter 7](#ch-internal--own)).
+symbols in one lookup ([field by field](#ch-internal--own)).
 
 The animation runs these steps, the checks and `own_fill()` ([below](#ch-literals-dec--the-checks-at-the-end))
 on the text page, and as a choice on a page of base64 text, lines of 64 characters as a key in PEM
@@ -498,7 +498,7 @@ distance of 8 or more.
 @listing src/seqlz_decompress.c 237-276
 
 `delta_dist()` is the delta's distance, 4, 8, or the offset of the sequence before as
-`seqlz_delta_last()` makes it, at least 4 ([chapter 7](#ch-internal--byte2)); both restoring functions
+`seqlz_delta_last()` makes it, at least 4 ([its values](#ch-internal--delta-last)); both restoring functions
 start with it. `undelta_literals()` restores the `nl` literals at `d`, `at` bytes into the page. `k` is the first literal that is a delta, by the one rule of the
 format ([chapter 4](#ch-format--deltas)), the same for all three: 0, the sequence's first literal,
 when the sequence starts `dist` or more bytes into the page, else `dist - at`, as the literals before

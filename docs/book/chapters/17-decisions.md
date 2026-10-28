@@ -512,7 +512,7 @@ read.
 
 The 2-byte entries of before had the decoder compute the class, its bits, a mask and the shift: 18 of
 about 60 instructions per sequence on the A55, where fewer instructions were faster almost one for one.
-The 4-byte entries hold everything ready ([chapter 7](#ch-internal--token-entry)); the flag for a length
+The 4-byte entries hold everything ready ([the entry's bits](#ch-internal--token-entry)); the flag for a length
 value saved instructions but no cycles. The other three changes of that step were the fast path's room
 checks, the prefetch of 8 lines per iteration and the match copied from `d - off`
 ([explored-designs.md](https://github.com/martinus/seqlz/blob/main/docs/explored-designs.md#seqlzs-decoder-for-an-in-order-core-15-fewer-instructions-07-to-08-µs-less-at-cold-p99-on-the-a55-kept)).
@@ -776,7 +776,7 @@ within the noise
 | where the deltas stay raw, the literals stay raw | a second try of the literals as they are, with the fixed tables and a table of their own | it saved 0.71 bytes per page, for writes 0.39 µs slower on the A76 and 0.93 µs on the A55 in zram in the Mi 9T's kernel, 24th October 2026 ([chapter 11](#ch-literals-enc--code-own)) |
 | the records and the deltas in copies of the loops for level 3 | a test for every sequence in the loops all levels share | the test made levels 1 and 2 about 6% slower to write on the A76, and slower to read ([chapter 10](#ch-encoder--wrappers), [chapter 14](#ch-decode--deltas)) |
 | records in `dst` | a second buffer | no byte of work memory; the matcher's state is its hash table until the page is matched ([chapter 10](#ch-encoder--records)) |
-| for an offset below 4, the smallest multiple of it that is 4 or more, 4 or 6 | the offset as it is | the decoder adds 4 or 8 bytes at a time ([chapter 7](#ch-internal--byte2)) |
+| for an offset below 4, the smallest multiple of it that is 4 or more, 4 or 6 | the offset as it is | the decoder adds 4 or 8 bytes at a time ([`seqlz_delta_last()`](#ch-internal--delta-last)) |
 
 The cost is in the code as much as in the time: a second copy of the decoder's loop, `undelta_literals()`,
 `undelta_fast()`, `add4()` and `add8()`, one more field of untrusted input, and in the encoder the

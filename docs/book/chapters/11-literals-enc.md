@@ -19,7 +19,7 @@ cheaper, in `seqlz_delta_literals()`, and `seqlz_code_own()` codes the deltas. T
 does not change; it only moves down behind the coded literals. This chapter is all of
 `src/seqlz_compress_literals.c`, in the order `code_literals()` uses the helpers rather than file
 order; the four functions without `static` are what `seqlz_compress.c` calls. The format is in
-[chapter 4](#ch-format--coded), the tables and `lit_cost` in [chapter 7](#ch-internal--lit-cost), the
+[chapter 4](#ch-format--coded), the tables and `lit_cost` in [`seqlz_tables.h`](#f-seqlz_tables-h-b60), the
 decoder's side in [chapter 13](#ch-literals-dec).
 
 ## What code_literals() does to dst {#ch-literals-enc--overview}
@@ -924,7 +924,7 @@ without a flush.
 @listing src/seqlz_compress_literals.c 217-231
 
 `e & 63U` is the code's length: the low byte holds at most 10, and the mask lets the compiler see a
-shift below 64, for UBSan ([chapter 7](#ch-internal--decode-tables)). `*sum += e` adds the whole
+shift below 64, for UBSan ([the masks](#ch-internal--masks)). `*sum += e` adds the whole
 entry, code and length: the codes add only into bits 8 and up, and a carry never goes down, so the
 low byte of the sum is the sum of the lengths, exact as long as it stays below 256. Between two
 flushes it is at most $4 \times 10 = 40$. `lit_flush()` reads `*sum & 255U`, one mask per flush
