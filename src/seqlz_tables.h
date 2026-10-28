@@ -35,6 +35,7 @@ static_assert(SEQLZ_MAX_BITS < CODE_LENGTHS, "a length value's code length");
 static_assert(SEQLZ_LIT_BITS < CODE_LENGTHS, "a literal's code length");
 
 struct value_table {
+	/* code length | extra bits << 4 | base << 8, see length_entry() */
 	u32 decode[1U << SEQLZ_MAX_BITS];
 	u32 enc[ENC_LEN_SYMBOLS]; /* the encoder's code | length << 16 */
 };
