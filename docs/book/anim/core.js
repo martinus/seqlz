@@ -84,15 +84,16 @@
     var name = fig.getAttribute('data-anim');
     var dataEl = document.getElementById(fig.id + '-data');
     var bar = fig.querySelector('.an-bar'), sayEl = fig.querySelector('.an-say'), stage = fig.querySelector('.an-stage');
+    // the step buttons last, at the right edge: a right hand that taps them does not cover the stage
+    var scrub = el('input', 'an-scrub', null, bar);
+    scrub.type = 'range'; scrub.min = 0; scrub.value = 0; scrub.setAttribute('aria-label', 'Step');
+    var pos = el('span', 'an-pos', null, bar);
     var ctrl = el('div', 'an-ctl', null, bar);
     Object.keys(ICONS).forEach(function (k) {
       var b = el('button', 'icon', null, ctrl);
       b.type = 'button'; b.setAttribute('data-do', k); b.title = TITLES[k]; b.setAttribute('aria-label', TITLES[k]);
       b.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true">' + ICONS[k] + '</svg>';
     });
-    var scrub = el('input', 'an-scrub', null, bar);
-    scrub.type = 'range'; scrub.min = 0; scrub.value = 0; scrub.setAttribute('aria-label', 'Step');
-    var pos = el('span', 'an-pos', null, bar);
     var ctx = {
       stage: stage, el: el, svg: svg,
       data: dataEl ? JSON.parse(dataEl.textContent) : null,

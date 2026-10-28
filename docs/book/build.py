@@ -527,10 +527,10 @@ def render_stepper(what, where):
                                 f'<script>{(HERE / "stepper" / "frame.js").read_text()}</script>')
     out = (f'<figure class="stepper nocomments" id="{sid}" data-kind="{what}" tabindex="-1" aria-label="{k["label"]}">'
             f'<div class="st-bar"><div class="st-pages" role="group" aria-label="Page">{pages}</div>'
-            f'<div class="st-ctl">{buttons}</div>'
+            f'<button type="button" class="st-cm" aria-pressed="false" title="Show the comment lines of the code">comments</button>'
             f'<input type="range" class="st-scrub" min="0" value="0" aria-label="Step">'
             f'<span class="st-pos"></span>'
-            f'<button type="button" class="st-cm" aria-pressed="false" title="Show the comment lines of the code">comments</button></div>'
+            f'<div class="st-ctl">{buttons}</div></div>'
             f'<p class="st-say" aria-live="polite"></p>'
             f'<div class="st-grid"><div class="st-code"><pre class="code numbered"><code>{rows}</code></pre></div>'
             f'<div class="st-state">{decode_panes() if what == "decode" else ""}</div></div>'

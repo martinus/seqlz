@@ -7,7 +7,8 @@ body.railhidden .stepper { --stepw: min(74rem, calc(100vw - 4rem)); }
 .st-pages button { font: inherit; font-size: 0.82rem; font-weight: 600; color: var(--muted); background: transparent; border: 1px solid var(--rule);
                    border-radius: 4px; padding: 0.2rem 0.6rem; cursor: pointer; }
 .st-pages button[aria-pressed="true"] { color: var(--paper); background: var(--accent); border-color: var(--accent); }
-.st-ctl { display: flex; flex-wrap: wrap; gap: 0.1rem; }
+/* the step buttons at the right edge, as in anim/core.css */
+.st-ctl { display: flex; flex-wrap: wrap; gap: 0.1rem; margin-left: auto; }
 .st-ctl .icon { color: var(--ink); }
 .st-ctl .i-pause, .stepper.playing .st-ctl .i-play { display: none; }
 .stepper.playing .st-ctl .i-pause { display: block; }
