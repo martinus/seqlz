@@ -93,7 +93,7 @@ The file has `lit_load_tail()` first, because `lit_refill()` calls it; we go the
 sentinel at the right place for the new `ip`. `| 1U` overwrites the last bit of the 8th byte; that bit
 is not lost, because the next refill moves at most 7 bytes on and loads that byte again. After a refill
 `63 - (used & 7)` bits are valid, at least 56, so `SEQLZ_LIT_ROUNDS`, `56 / SEQLZ_LIT_BITS`, is 5 codes
-of at most 10 bits between refills ([chapter 6](#ch-header--literals)). The only branch is
+of at most 10 bits between refills ([why 56 bits](#f-seqlz_internal-h-b22)). The only branch is
 `end - p >= 8`, which is the same for every refill but the last few of a page.
 @assert ch13.k.rounds == 5 and ch13.k.streams == 8 and ch13.k.lit_bits == 10
 

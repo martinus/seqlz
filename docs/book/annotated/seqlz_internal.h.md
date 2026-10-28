@@ -2,9 +2,9 @@
 
 What the codec's own files share and nobody else needs: the compressor (`seqlz_compress.c`,
 `seqlz_compress_literals.c`) and the decompressor (`seqlz_decompress.c`,
-`seqlz_decompress_literals.c`). The format's constants are in `seqlz_format.h`, the tables' layout in
-`seqlz_tables.h`, and the API for the harness, tests and tools in `seqlz.h`
-([chapter 6](book:#ch-header)). Most of the file is constants with the reason for their value next to
+`seqlz_decompress_literals.c`). The format's constants are in [`seqlz_format.h`](seqlz_format.h.html),
+the tables' layout in [`seqlz_tables.h`](seqlz_tables.h.html), and the API for the harness, tests and
+tools in [`seqlz.h`](seqlz.h.html). Most of the file is constants with the reason for their value next to
 them.
 
 A reading order:
@@ -46,9 +46,13 @@ table may take at most 886 bytes coded, 100 literals must fit below 43 bytes.
 
 The 51 bytes pay for a cost that does not shrink with the literals: a cold literal table and a second
 pass over a buffer. [Chapter 11](book:#ch-literals-enc--rule) has the measurements behind the number.
+The 51 bytes also cover the larger header, at most 13 bytes more than the 2 of a page with raw literals, which
+a `static_assert` in `seqlz_compress_literals.c` checks, because the coded literals are written over
+the raw ones in place ([in place](book:#ch-literals-enc--in-place)).
 
 @@ 35-41
-The scratch is part of the decoder's work memory, one per CPU: 4112 bytes for 4 KiB pages. The loop
+The scratch is part of the decoder's work memory, one per CPU: 4112 bytes for 4 KiB pages,
+{{k16.const.SCRATCH|grp}} for 16 KiB pages. The loop
 over the sequences then reads the decoded literals from it as if they were raw, with the same 16-byte
 copies. For raw literals the bytes after them in the compressed page are the 16 bytes of slack.
 
@@ -75,6 +79,25 @@ compressor works. The code compares with `>=` and `<`, e.g. `level >= SEQLZ_LEVE
 
 The lazy step is [chapter 9](book:#ch-matcher--lazy), the own table and the deltas
 [chapter 11](book:#ch-literals-enc--own).
+@more {#ch-header--compressor} The three levels side by side, measured
+A **level** is what zram calls the knob a user sets per device, `level=` in
+`/sys/block/zram0/algorithm_params` ([the backend](#ch-zram-glue--backend)). seqlz's three levels
+write the same format, and one decoder reads them all:
+
+| level | harness name | matcher | literals |
+| --- | --- | --- | --- |
+| 1 | `seqlz-1` | greedy | raw |
+| 2, `SEQLZ_LEVEL_CODED` | `seqlz-2` | greedy | one of the 8 fixed tables, where it saves enough |
+| 3, `SEQLZ_LEVEL_OWN` | `seqlz-3` | a lazy step for matches below 20 bytes, each match extended backwards | also a table of the page's own, and stored as deltas to earlier bytes of the page first |
+@assert ch09.lazy_len == 20
+
+On the Mi 9T's Cortex-A76, in the phone's own kernel on 15th October 2026, level 3 stored a page of a
+phone session in 952.0 bytes of zsmalloc memory against 997.0 for level 2, and took about 16 µs to
+write one against 12 µs
+([explored-designs.md](https://github.com/martinus/seqlz/blob/main/docs/explored-designs.md#level-3-a-lazy-matcher-and-a-literal-table-of-the-pages-own-zstd-3s-memory-in-less-than-half-its-time-on-the-phone-kept)).
+That was before the deltas, which made level 3's writes about 4 µs slower on the A76 in userspace
+([chapter 17](#ch-decisions--deltas)).
+@end
 
 @@ 72-82
 A token is three fields in one number: `ll` in the low 4 bits, `ml - 4` in the next 5, the offset's
@@ -83,7 +106,17 @@ E.g. 1 literal, a match of 7, class 0: `1 + (3 << 4) = 49`. 20 literals, a match
 `15 + (31 << 4) + (3 << 9) = 2047`, both at their caps.
 
 Only a sequence with a match has a token, so `ml` is at least 4 and `ml - SEQLZ_MIN_MATCH` never
-wraps. gcc compiles each `min()` to a conditional move, no branch.
+wraps; the last sequence's `ml` of 0 would wrap, and `min()` would make it 31. gcc compiles each
+`min()` to a conditional move, no branch.
+@more {#ch-header--token-number} Tokens 49 and 2047 in the bitstream, and the line before 11th October
+Token 49 is the sequence of an array of pointers, 1 literal and 7 bytes at the repeat offset
+([the page of pointers](#ch-matcher--back)), with a {{tok.len.49}}-bit code. Token 2047 has both
+fields at their caps, so both length values follow, `ll - 15 = 5` and `ml - 35 = 65`.
+@assert ch06.tok[1].tok == 49 and ch06.tok[3].tok == 2047
+
+Until 11th October 2026 the last sequence had a token, and the line was
+`ml ? min(ml - 4, SEQLZ_ML_CAP) : 0`.
+@end
 
 @@ 83-96
 The compressor's work memory, one per CPU, since zram compresses on every CPU at once. The union reuses
@@ -94,6 +127,17 @@ place in `dst` ([in place](book:#ch-literals-enc--in-place)).
 `work` adds no byte, `(sizeof(u16) << SEQLZ_HASH_BITS) / sizeof(u64)` is the table's size in `u64`s.
 What it adds is the alignment of 8: level 3 puts `struct own_work`, with `u32` members, behind the copy
 of the literals.
+@more {#ch-header--state} What lies where in `struct seqlz_state`
+A `static_assert` in `seqlz_compress_literals.c` checks that the hash table alone has room for a page,
+so the union is {{size.state}} bytes, no more than the table, and {{k16.size.state|grp}} on 16 KiB
+pages. At level 3 with deltas the copy of the literals is the deltas, which `seqlz_delta_literals()`
+writes there. `struct own_work`, what the encoder needs for a page's own table, lies at byte
+{{own.enc.work_at}}, behind that copy, which on a page that gets such a table is never longer
+([own table](#ch-literals-enc--own)).
+
+In the kernel the hash table and the decoder's scratch share one allocation of 8 KiB per CPU
+([the backend](#ch-zram-glue--backend)).
+@end
 
 @@ 97-107
 Level 3 decides on deltas once for the whole page, and only after the last sequence does it know which

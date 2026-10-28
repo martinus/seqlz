@@ -216,7 +216,7 @@ up to `len + 7`, stay within the {{ch14.room.page}} bytes.
 @listing src/seqlz_decompress.c 405-413
 
 `decode_block()` is the whole decoder, with one parameter more than `seqlz_decode()`: `deltas`, whether
-the page's literals are deltas ([chapter 6](#ch-header--literals)). `seqlz_decode()` comes last in the
+the page's literals are deltas ([the deltas](#ch-header--deltas)). `seqlz_decode()` comes last in the
 file, and is the only caller:
 
 @listing src/seqlz_decompress.c 601-612
@@ -247,7 +247,7 @@ the deltas read another 0.13 to 0.24 µs slower on the A76 and 0.34 to 0.46 µs 
 @listing src/seqlz_decompress.c 414-425
 
 The parameters and the return values, 0 or `-EINVAL`, are those of `seqlz.h`
-([chapter 6](#ch-header--encode-decode)). `delta` is which delta the page's literals are, which
+([`seqlz_decode()`](#ch-header--encode-decode)). `delta` is which delta the page's literals are, which
 `seqlz_decode_literals()` sets for a page with coded literals and which stays 0 for raw ones. `lit_bound` is one past the last byte that may be read where
 the literals are, which is more than `lit_end`. `last`, the repeat offset, starts at 1, as the format
 says ([chapter 4](#ch-format--offsets)), and `skip = 0` has the first fast sequence refill.

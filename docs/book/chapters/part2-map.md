@@ -80,7 +80,7 @@ step marked, and a box "In short" of its main points, each a link to the section
 <g class="acc"><text x="172.5" y="434" font-size="11" text-anchor="middle">seqlz_compat.h</text></g></a>
 <a href="#ch-header"><rect class="fill-sheet" x="255" y="400" width="145" height="44" rx="4" stroke="currentColor" stroke-width="1"/>
 <text x="327.5" y="418" font-size="12" text-anchor="middle" font-weight="700">format constants</text>
-<g class="acc"><text x="327.5" y="434" font-size="11" text-anchor="middle">chapter 6</text></g></a>
+<g class="acc"><text x="327.5" y="434" font-size="11" text-anchor="middle">seqlz_format.h</text></g></a>
 <a href="#ch-internal"><rect class="fill-sheet" x="410" y="400" width="145" height="44" rx="4" stroke="currentColor" stroke-width="1"/>
 <text x="482.5" y="418" font-size="12" text-anchor="middle" font-weight="700">table layout</text>
 <g class="acc"><text x="482.5" y="434" font-size="11" text-anchor="middle">chapter 7</text></g></a>
@@ -142,7 +142,7 @@ zram calls `seqlz_decode()` with the compressed page, the 4096 bytes to fill, an
 
 - [`seqlz_compat.h`](#ch-compat): the kernel's types and helpers, so that the same code
   builds outside the kernel.
-- [Chapter 6](#ch-header), `seqlz_format.h` and `seqlz.h`: the format as constants, the token, the
+- [`seqlz_format.h`](#ch-header) and [`seqlz.h`](#f-seqlz-h): the format as constants, the token, the
   offset classes and the caps, and the functions for userspace.
 - [Chapter 7](#ch-internal), `seqlz_tables.h`: the layout of the tables, shaped so that the decoder
   needs one lookup per token.

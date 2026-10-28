@@ -204,7 +204,7 @@ Each row is a decision of [chapter 4](#ch-format), against the other way in the 
 ### The token: 4 bits, 5 bits and 6 classes
 
 A token is `min(ll, 15) + 16 × min(ml − 4, 31) + 512 × class`, $16 \times 32 \times 6 = 3072$ values
-([chapter 6](#ch-header--token)). Before the escape, with 3 classes, 3 and 5 bits gave 26.9% at 8599
+([the token's fields](#ch-header--token-bits)). Before the escape, with 3 classes, 3 and 5 bits gave 26.9% at 8599
 decode cycles and 4 and 4 bits 27.0% at 8482; the escape let 4 and 5 fit, 26.8% at 8480
 ([explored-designs.md](https://github.com/martinus/seqlz/blob/main/docs/explored-designs.md#seqlz-third-decoder-round-one-repeat-offset-offset-class-in-the-token-and-why-cold-is-slow)).
 A fifth bit for `ll` was not tried: it would double the alphabet, and codes of at most 11 bits have room
@@ -746,7 +746,7 @@ as before, within the run's spread
 Before it was merged, the XOR became a subtraction. The fields of records often differ from the same
 field of the record before by a little, counters, sizes, addresses of objects in a row, and a small
 difference is a small delta, while a XOR spreads it over every bit a carry flips; the page of pointers
-shows it ([chapter 6](#ch-header--literals)). On 21st October the subtraction stored 873.6 bytes per
+shows it ([the page of pointers](#ch-header--deltas)). On 21st October the subtraction stored 873.6 bytes per
 page instead of the XOR's 881.0, 0.84% less. It cost reads 0.13 to 0.24 µs on the A76 and 0.34 to 0.46
 µs on the A55, as the decoder's fast path restored 16 bytes per sequence in 3 to 4 dependent steps,
 each 3 instructions longer than with the XOR ([chapter 13](#ch-literals-dec--undelta)), and writes 0.12

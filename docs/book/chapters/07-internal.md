@@ -29,7 +29,7 @@ a token into one 32-bit number, so that the loop over the sequences never takes 
 @listing src/seqlz_tables.h 1-11
 
 The kernel's copy renames the guard to `_LIB_SEQLZ_SEQLZ_TABLES_H`, after its place in `lib/seqlz/`.
-The constants come from `seqlz_format.h` ([chapter 6](#ch-header)); this chapter uses their values for
+The constants come from [`seqlz_format.h`](#ch-header); this chapter uses their values for
 4 KiB blocks.
 
 ## A decode table is indexed by the next bits {#ch-internal--decode-tables}
@@ -225,7 +225,7 @@ no longer pick the table.
 @listing src/seqlz_tables.h 80-88
 
 `SEQLZ_DELTA_LAST` stores a literal as its delta to the byte as far back as the offset of the sequence
-before ([chapter 6](#ch-header--literals)), and the encoder's `seqlz_delta_literals()` and the decoder's
+before ([the deltas](#ch-header--deltas)), and the encoder's `seqlz_delta_literals()` and the decoder's
 `undelta_literals()` and `undelta_fast()` both need that distance, so it is here, in the header both
 include. An offset of 4 or more is the distance as it is; below 4 it is the smallest multiple of the
 offset that is at least 4:
@@ -242,7 +242,7 @@ already be the page's own, so none of them may lie in the word it writes.
 
 @listing src/seqlz_tables.h 90-91
 
-`LIT_STREAM_MAX` in `seqlz_internal.h` ([chapter 6](#ch-header--literals)) is the largest stream,
+`LIT_STREAM_MAX` in [`seqlz_internal.h`](#f-seqlz_internal-h-b42) is the largest stream,
 every 8th literal with a code of 10 bits, $(512 \cdot 10 + 7) / 8 = {{ch07.lit_stream_max}}$ bytes in a
 4 KiB block and {{k16.ch07.lit_stream_max}} in a 16 KiB one, and its assert proves that a size of 12
 bits holds it, so the encoder can write the sizes whatever the literals are. The assert here guards
@@ -326,7 +326,7 @@ complete code, or leave out a symbol the encoder may write, stop the build inste
 The asserts check the fields of the entry described next. The 5 bits of `DROP` hold up to 31, and the
 most a token with a code of its own moves the bitstream is an 11-bit code plus class 3's offset bits,
 $11 + 12 = 23$, 25 on 16 KiB pages. `ll` has 4 bits, `ml` 6 bits for at most 35, the shift 2 bits;
-`SEQLZ_OFF_SHIFT()` reads a whole nibble ([chapter 6](#ch-header--offsets)), so a shift of 4 would fail
+`SEQLZ_OFF_SHIFT()` reads a whole nibble ([the nibbles](#ch-header--offsets)), so a shift of 4 would fail
 here instead of being cut to 0. And 12 bits must hold every token.
 
 @listing src/seqlz_tables.h 138-154

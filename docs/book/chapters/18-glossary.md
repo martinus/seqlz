@@ -33,7 +33,7 @@ sense given here.
   $\sum p \log_2 \frac{1}{p}$. [Chapter 2](#ch-compression--entropy)
 - **escape**: the one code of all tokens without a code of their own, followed by the token in
   {{ch17.escape_bits}} bits; {{ch17.tok_own}} of {{const.TOKEN_SYMBOLS}} tokens have one.
-  [Chapter 6](#ch-header--escape)
+  [The escape](#ch-header--escape)
 - **fast path**: the decoder's path for a sequence without a length value and with room at every end:
   fixed copies, no loop, no checks. [Chapter 14](#ch-decode--fast)
 - **greedy, lazy matching**: a greedy matcher takes the first match it finds; lazy matching checks whether
@@ -41,7 +41,7 @@ sense given here.
 - **hash table**: the matcher's {{ch17.hash_slots}} slots of 2 bytes, cleared for each page, the newest
   position per hash of 5 bytes. [Chapter 9](#ch-matcher--hash)
 - **header**: the u16 with the literal count and a flag, and with coded literals byte 2, with deltas the
-  byte that says which, and the stream sizes: $3 + w$ bytes, and with deltas one byte more. [Chapter 6](#ch-header--literals)
+  byte that says which, and the stream sizes: $3 + w$ bytes, and with deltas one byte more. [Byte 2](#ch-header--header)
 - **Huffman code**: the prefix code with the fewest bits for given frequencies; seqlz's are limited to
   {{ch18.bits.token}}, {{ch18.bits.lit}} and {{ch18.bits.len}} bits. [Chapter 2](#ch-compression--huffman)
 - **k-means**: the trainer's clustering for the literal tables: each page goes to the table that codes it
@@ -72,7 +72,7 @@ sense given here.
   offset in 0 bits, offset 2 in {{ch18.class_bits.1}}, below 256 and below the page size in
   {{ch18.class_bits.2}} and {{ch18.class_bits.3}}, multiples of 8 below 256 and 2048, divided by 8, in
   {{ch18.class_bits.4}} and {{ch18.class_bits.5}}. The offset bits follow the token.
-  [Chapter 6](#ch-header--offsets)
+  [`seqlz_off_class()`](#ch-header--off-class)
 - **optimal parser**: a matcher that searches for the sequences that make a page smallest; seqlz's was
   `seqlz-opt`, removed. [Chapter 17](#ch-decisions--not-kept)
 - **prefix code**: codes of which none is the start of another, so a decoder knows where each ends.
@@ -112,7 +112,7 @@ sense given here.
 - **`EXPORT_SYMBOL_GPL`**: makes a function callable from modules with a GPL-compatible licence.
   [Chapter 15](#ch-zram-glue--interface)
 - **`FORTIFY_SOURCE`**: a kernel option that checks the sizes of `memcpy()` and its relatives, and can
-  make each a call; seqlz's short copies use `__builtin_memcpy()`. [Chapter 6](#ch-header--summary)
+  make each a call; seqlz's short copies use `__builtin_memcpy()`. [Why](#f-seqlz_internal-h-b12)
 - **fuzz target**: a function's entry point for a fuzzer, libFuzzer or AFL++, which feeds it millions of
   mutated inputs. [Chapter 15](#ch-zram-glue--fuzzing)
 - **host program**: a program that the kernel's build compiles for the build machine and runs, e.g. to
@@ -182,7 +182,7 @@ sense given here.
 - **kernel VM**: `tools/zram-vm/run.sh`, a kernel with the codecs in a virtual machine on one core of a
   Ryzen 9 7950X fixed at 4.5 GHz; its times decide. [Chapter 17](#ch-decisions)
 - **level**: zram's knob per device for how hard a codec works; seqlz has 1 to 3, `seqlz-1` to
-  `seqlz-3`, 2 the default, all in one format. [Chapter 6](#ch-header--compressor)
+  `seqlz-3`, 2 the default, all in one format. [The levels](#ch-header--compressor)
 - **`lz4`, `lz4hc`, `lzo`, `lzo-rle`, `zstd`**: zram's codecs: `lz4` the fastest, `lz4hc` its slow
   compressor for the same format, `lzo-rle` zram's default, `zstd` the smallest, level 3 its default in
   zram. [Chapter 1](#ch-zram--codecs)

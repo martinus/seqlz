@@ -485,7 +485,7 @@ streams take {{own.enc.own_coded}} bytes with a width of {{own.enc.own_width}} b
 ## Level 3: the literals as deltas, priced like the tables {#ch-literals-enc--deltas}
 
 The format lets a page store each literal as its delta to an earlier byte, the literal minus that
-byte modulo 256, one of three ways for the whole page ([chapter 6](#ch-header--literals)). Which way
+byte modulo 256, one of three ways for the whole page ([the deltas](#ch-header--deltas)). Which way
 codes a page's literals in the fewest bits is a question of the same kind as which fixed table does,
 and `seqlz_delta_literals()` answers it the same way, with the sums of `lit_cost` of
 [above](#ch-literals-enc--pricing): four sums, the literals as they are and with each delta, in all 8
@@ -565,7 +565,7 @@ they differ only in the first sequence, which `SEQLZ_DELTA_LAST` takes 4 back, a
 fixed tables underrate the deltas: the deltas are
 {{delta.ptr.distinct.deltas}} values, {{delta.ptr.h.10}} of them `0x10`, which no fixed table codes in
 few bits, and the page's own table then takes the page from {{delta.ptr.l3plain.len}} bytes without
-deltas to {{delta.ptr.l3.len}} with them ([chapter 6](#ch-header--literals)).
+deltas to {{delta.ptr.l3.len}} with them ([the page of pointers](#ch-header--deltas)).
 
 @listing src/seqlz_compress_literals.c 143-157
 

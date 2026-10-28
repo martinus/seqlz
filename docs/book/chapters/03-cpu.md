@@ -229,7 +229,7 @@ that every predictor gets right ([chapter 14](#ch-decode--next-token)).
 
 The other way around a misprediction is arithmetic instead of a branch. `seqlz_off_class()` picks a
 match's offset class from comparisons added and masked, without an `if`, because the classes come in
-no order a predictor could learn ([chapter 6](#ch-header--offsets)). It is not always faster: it runs
+no order a predictor could learn ([how](#ch-header--off-class)). It is not always faster: it runs
 the work of both outcomes, and a branch the predictor gets right costs almost nothing. An early
 version of the decoder that replaced its branches with masks mispredicted 68 instead of 155 times per
 page, ran 15 000 more instructions, and took 12 000 instead of 9400 cycles. "At 3.4 to 3.9

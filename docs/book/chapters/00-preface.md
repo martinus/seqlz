@@ -60,9 +60,9 @@ produces, and collects [the design decisions](#ch-decisions) with what they were
 | file | lines | what it is | chapter |
 | --- | --- | --- | --- |
 | [`src/seqlz_compat.h`](#f-seqlz_compat-h) | {{ch00.lines.seqlz_compat_h}} | the kernel's types and helpers, also outside the kernel | Part II |
-| [`src/seqlz_format.h`](#f-seqlz_format-h) | {{ch00.lines.seqlz_format_h}} | the format's constants | [6](#ch-header) |
-| [`src/seqlz_internal.h`](#f-seqlz_internal-h) | {{ch00.lines.seqlz_internal_h}} | what the compressor's and decompressor's files share: work memory, levels | [6](#ch-header) |
-| [`src/seqlz.h`](#f-seqlz-h) | {{ch00.lines.seqlz_h}} | the functions for userspace: tests, tools, the harness | [6](#ch-header) |
+| [`src/seqlz_format.h`](#f-seqlz_format-h) | {{ch00.lines.seqlz_format_h}} | the format's constants | Part II |
+| [`src/seqlz_internal.h`](#f-seqlz_internal-h) | {{ch00.lines.seqlz_internal_h}} | what the compressor's and decompressor's files share: work memory, levels | Part II |
+| [`src/seqlz.h`](#f-seqlz-h) | {{ch00.lines.seqlz_h}} | the functions for userspace: tests, tools, the harness | Part II |
 | [`src/seqlz_tables.h`](#f-seqlz_tables-h) | {{ch00.lines.seqlz_tables_h}} | the layout of the tables in memory, the token table's entries | [7](#ch-internal) |
 | [`src/seqlz_codes.c`](#f-seqlz_codes-c) | {{ch00.lines.seqlz_codes_c}} | builds codes and decode tables from code lengths | [8](#ch-codes) |
 | `src/seqlz_default_tables.c`, `src/seqlz_lit_sets.c` and their `.inc` files | ${{ch00.lines.seqlz_default_tables_c}} + {{ch00.lines.seqlz_lit_sets_c}} + 2 \times {{ch00.lines.seqlz_default_tables_4k_inc}} + 2 \times {{ch00.lines.seqlz_lit_sets_4k_inc}}$ | the trained code lengths, part of the format | [8](#ch-codes) |

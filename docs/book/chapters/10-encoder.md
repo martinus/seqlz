@@ -118,7 +118,7 @@ compresses to {{pointers.len}} bytes and needs a `dst` of {{ch10.ptr.min_dst}}.
 
 **Why two pages are always enough.** Every sequence but the last covers at least 4 bytes, and its
 token and offset take at most `SEQLZ_SEQ_BITS`, 31 bits: 11 bits of code and 12 of offset, or an escaped token, whose
-escape code `SEQLZ_MAX_ESCAPE_LEN` holds to 7 bits ([chapter 6](#ch-header--escape)); with today's
+escape code `SEQLZ_MAX_ESCAPE_LEN` holds to 7 bits ([the escape](#ch-header--escape)); with today's
 {{tok.len.3072}}-bit escape the real maximum is {{ch10.max_tok_off}}. Length values come only with long
 sequences: an `ll` value, at most $8 + {{ch10.len_extra_max}} = {{ch10.len_bits_max}}$ bits, only with
 15 literals or more, which alone are worth $15 / 4 \times 31 = 116$ bits of the budget, and an `ml`
@@ -175,7 +175,7 @@ page, which the encoder does not need for anything else.
 
 @listing src/seqlz_internal.h 97-106
 
-Level 3 stores the literals as deltas to earlier bytes of the page ([chapter 6](#ch-header--literals)),
+Level 3 stores the literals as deltas to earlier bytes of the page ([the deltas](#ch-header--deltas)),
 one choice for the whole page, and which one is cheapest is known only when all literals are there.
 For a literal's delta, the encoder needs where it is in the page and the offset of the sequence before it,
 and neither is in the literals. So at level 3 the encoder writes that next to them, a record of
@@ -308,7 +308,7 @@ Most sequences have few literals, 1 in the page of pointers, so the first 16 byt
 without a loop, whose exit branch would depend on `ll` and could mispredict. The bytes past `ll` fit
 into `ENC_ROOM`, and the next sequence's literals overwrite them. The byte loop runs only near
 `src_end`, where a 16-byte read would go past it. `__builtin_memcpy()` with a constant 16 is always
-inlined, also with `CONFIG_FORTIFY_SOURCE` ([chapter 6](#ch-header--summary)). The last sequence, `ml`
+inlined, also with `CONFIG_FORTIFY_SOURCE` ([why the builtin](#f-seqlz_internal-h-b12)). The last sequence, `ml`
 0, has only its literals and no bits; until 11th October 2026 it had a token and possibly an `ll`
 value, about 9 bits per page ([chapter 4](#ch-format--end)).
 
@@ -509,7 +509,7 @@ is cut to `SEQLZ_COMPRESS_BOUND` as in `seqlz_compress()`, below.
 At level 3, `encode_raw()` gets the page and the matcher's state, writes the literals' deltas there, and
 `seqlz_code_own()` codes them. The level is checked before anything is written, so a level outside 1 to
 `SEQLZ_LEVELS`, or level 3 without the state, returns 0 as the header's kernel-doc says
-([chapter 6](#ch-header--compressor)).
+([`seqlz_encode()`](#f-seqlz-h-b83)).
 
 @listing src/seqlz_compress.c 409-425
 

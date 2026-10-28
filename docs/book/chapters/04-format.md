@@ -372,7 +372,7 @@ written so far; class 1 with the bit `0` gives offset 0, and that page is invali
 The format does not care which class a compressor uses, as long as the offset comes out: class 3 can
 send offset 5, class 2 can send 2 and 8. `seqlz_compress()` uses class 0 for the offset before, else
 the class with the fewest offset bits that holds it, chosen in `seqlz_off_class()` without a branch
-([chapter 6](#ch-header--offsets)):
+([how](#ch-header--off-class)):
 
 | offset | offset before | class | offset bits |
 | --- | --- | --- | --- |

@@ -303,7 +303,7 @@ exactly {{ch01.union_kib}} KiB. With the split streams they are two allocations,
 KiB. The tables, {{size.tables|grp}} bytes, are not per CPU: they are generated when the kernel is
 built, and are part of its read-only data.
 @assert ch01.union == 1024 * ch01.union_kib and ch01.cctx_kib == ch01.dctx_kib and ch01.split_kib < 20
-[Chapter 6](#ch-header) and [chapter 15](#ch-zram-glue) have the details, and why 16 KiB pages need
+[`struct seqlz_state`](#ch-header--state) and [chapter 15](#ch-zram-glue) have the details, and why 16 KiB pages need
 twice `lz4`'s work memory.
 
 ## The decoder must survive any input {#ch-zram--safety}

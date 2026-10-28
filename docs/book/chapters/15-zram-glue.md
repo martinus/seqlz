@@ -65,7 +65,7 @@ the split; the harness's `lz4`, `lzo` and `zstd` are copies of the kernel's glue
 
 @listing src/zram_seqlz.c 1-8
 
-The three codecs are the three levels of `seqlz_compress()` ([chapter 6](#ch-header--compressor)); they
+The three codecs are the three levels of `seqlz_compress()` ([the levels](#ch-header--compressor)); they
 write the same format and are read by the same decoder. `seqlz-2` lets `seqlz_code_literals()`
 ([chapter 11](#ch-literals-enc)) code the literals where that saves $\frac{1}{16}$ of them and
 {{ch15.coded_min}} bytes, `seqlz-3` adds the lazy matcher, a literal table of the page's own and the
@@ -74,8 +74,8 @@ kernel they are levels 1 to 3 of one backend, `seqlz`, with 2 the default; the h
 three codecs to compare them side by side. A dictionary could have carried other
 tables, e.g. tables trained on one phone's pages, and measured, those saved too little
 ([chapter 8](#ch-codes--fixed)). So since commit `87a0ba4` the tables are part of the format, and the
-dictionary is ignored here; the kernel's backend refuses one. The file includes `seqlz.h`, the
-userspace interface ([chapter 6](#ch-header--tables)).
+dictionary is ignored here; the kernel's backend refuses one. The file includes
+[`seqlz.h`](#f-seqlz-h), the userspace interface.
 
 ## Setting up a device: one block size {#ch-zram-glue--setup}
 
@@ -104,7 +104,7 @@ parameter; later that day it built the global in every `setup()`, and then nowhe
 @listing src/zram_seqlz.c 29-38
 
 `struct seqlz_state` is a union of the matcher's hash table and a page of bytes
-([chapter 6](#ch-header--compressor)): {{ch17.hash_slots}} entries of 2 bytes, {{size.state}} bytes, and
+([what lies where](#ch-header--state)): {{ch17.hash_slots}} entries of 2 bytes, {{size.state}} bytes, and
 `seqlz_code_literals()` copies the raw literals into the same memory once the matcher is done
 ([chapter 11](#ch-literals-enc--in-place)). Both codecs compress with it. The zeroing is not needed, since
 the matcher clears its table for every page; `kzalloc()` zeroes in the kernel, and the harness does the

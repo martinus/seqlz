@@ -42,6 +42,24 @@ page.
 No function takes the tables as a parameter. They are one global `const` struct, `seqlz_tables`,
 generated as C during the build ([chapter 8](book:#ch-codes--kernel)). Tests that build other tables
 pass a struct of their own.
+@more {#ch-header--tables} One global table for every CPU
+The codes for the encoder and the decode tables are {{size.tables|grp}} bytes on both page sizes, one
+global `const` struct, `seqlz_tables` ([its layout](#ch-internal--tables)), which every CPU reads. So
+they are no part of the work memory per CPU. A program for the build machine writes the struct as C
+when seqlz is built, in userspace as in the kernel, so a program that compresses calls nothing first.
+@assert size.tables == k16.size.tables
+@end
+@more {#ch-header--refused} The ways `seqlz_tables_build()` refuses lengths
+Four failures are the ways lengths are no complete prefix code
+([complete codes](#ch-compression--complete)): a code longer than its table, e.g. a token code of 12
+bits; a sum of $2^{-l}$ above 1, where codes would share entries; below 1, a gap; or no code at all.
+The fifth is the encoder's, a symbol it may have to write without a code: for a token that means
+neither a code nor the escape, for a length value or a literal no code.
+
+`-EINVAL` is the kernel's convention, a negative error number, 0 for success. The tests pass made-up
+lengths to check that bad ones are refused, into a struct of their own: the global is `const`,
+nothing can replace it.
+@end
 
 @@ 41-48
 The format's tables as code lengths, one byte per symbol: the sequences' tables, the 8 fixed literal
@@ -51,20 +69,22 @@ arrays are the format; everything else is computed from them ([tables as code le
 ## Decoding
 
 @@ 49-64
+@anchor ch-header--encode-decode
 Lines 56 to 58 are the most important promise of the codec. zram stores no checksum, so a page damaged
 in memory reaches the decoder as it is. A decoder that wrote outside its buffers would turn a damaged
 page into a damaged kernel ([how the decoder keeps it](book:#ch-decode--safety)).
 
 `scratch` may be `NULL` for a device at level 1, whose compressor never codes literals; that saves
 the scratch per CPU ([chapter 15](book:#ch-zram-glue--backend)). There is no partial result: either
-`dst` holds the page, or `-EINVAL`.
+`dst` holds the page, or `-EINVAL`. The page does not say which tables wrote it.
 
 ## Compressing
 
 @@ 65-67
 Every sequence with a match covers at least 4 bytes, so a 4 KiB block has at most 1024 of them, plus
-the last one, which only has literals: 1025. `seqlz_find()` needs room for that many and
-`seqlz_encode()` rejects more.
+the last one, which only has literals: 1025, and {{k16.const.MAX_SEQUENCES}} on 16 KiB pages.
+`seqlz_find()` needs room for that many and `seqlz_encode()` rejects more, and the decoder's work per
+page is bounded by the same count.
 
 @@ 68-82
 The matcher alone, without the encoder. The table trainer counts the symbols of exactly these
@@ -78,17 +98,21 @@ writes valid pages the matcher would never produce, to find the slowest ones to 
 
 It checks the rules of lines 100 to 103 before it writes anything. It did not always: a match shorter
 than 4 bytes made `ml - 4` wrap to a huge number, and 1025 such sequences wrote past the two pages of
-`dst` (fixed in commit `256768e`). Nothing checks that `block` matches the sequences: a wrong one gives
+`dst` (fixed in commit `256768e`, with `fuzz/seqlz_encode_fuzz.c`, a fuzzer that feeds the encoder
+raw sequences). Nothing checks that `block` matches the sequences: a wrong one gives
 a page that decodes to something else. 0 can mean failure because every page has at least its 2-byte
 header.
 
 @@ 114-139
-What zram calls, through the glue. A `dst` smaller than two blocks also works, e.g. one page for zswap,
-but a page that does not fit fails up to 32 bytes early: before each sequence the encoder checks for
-its literals plus 32 bytes of slack, not for the exact bytes.
+What zram calls, through the glue. A `dst` smaller than two blocks also works, e.g. the single page of
+zswap, the kernel's other compressed swap, a cache in RAM in front of a swap device. But a page that
+does not fit fails up to 32 bytes early: before each sequence the encoder checks for its literals plus
+`ENC_ROOM`, 32 bytes, not for the exact bytes.
 
 The literals are written raw first, so the page must fit raw even if coding would shrink it. Level 3
 also needs a 6-byte record per sequence with literals, for its deltas
 ([records](book:#ch-encoder--records)); if they do not fit, it matches the page again without them.
-In the kernel copy this is the `static` `seqlz_compress_block()`, and a failure is `-E2BIG`, not 0.
+In the kernel copy this is the `static` `seqlz_compress_block()`; the public `seqlz_compress()` of
+`include/linux/seqlz.h` calls it, returns `-EINVAL` for a level outside 1 to 3, and `-E2BIG` instead
+of 0 ([the interface](book:#ch-zram-glue--interface)).
 @anim ends The buffer dst during a real page, from both ends, then turned around

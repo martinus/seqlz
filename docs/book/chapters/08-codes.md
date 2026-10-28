@@ -27,7 +27,7 @@ half of the chapter is where the lengths come from.
 
 @listing src/seqlz_codes.c 1-7
 
-The file includes `seqlz.h`, the userspace interface ([chapter 6](#ch-header--tables)), for the one
+The file includes [`seqlz.h`](#f-seqlz-h), the userspace interface, for the one
 function it defines there, `seqlz_tables_build()`. In the kernel's copy it
 includes `seqlz_tables.h` and the generated `seqlz_lengths.h` instead, and the C library's headers,
 as it is a program for the build machine ([below](#ch-codes--kernel)).
@@ -39,7 +39,7 @@ as it is a program for the build machine ([below](#ch-codes--kernel)).
 The part of a length value's decode entry that depends only on the symbol, in the layout of
 [chapter 7](#ch-internal--decode-tables): symbols below 16 are their value with no extra bits, a symbol
 $s$ from 16 on has the base $2^{s - 12}$ and $s - 12$ extra bits
-([chapter 6](#ch-header--length-values)). Symbol 18 gives `{{ch08.le.18}}`, base 64 and 6 extra bits;
+([length values](#ch-header--length-values)). Symbol 18 gives `{{ch08.le.18}}`, base 64 and 6 extra bits;
 the last symbol, {{ch08.le_last_symbol}}, has {{ch08.le_last_extra}} extra bits, and on 16 KiB pages
 symbol {{k16.ch08.le_last_symbol}} has {{k16.ch08.le_last_extra}}, which still fit the field's 4 bits.
 @assert ch08.le_last_symbol == 23
@@ -300,7 +300,7 @@ also where the entry has no second length, and then it must move by the first's 
 The decoder can use any complete prefix code: a symbol left out cannot be in a valid page. The encoder
 gets whatever page zram hands it and needs a code for every symbol that page might need: each token a
 code of its own or the escape one; the escape's code at most `SEQLZ_MAX_ESCAPE_LEN` bits, so that an
-escaped token with a class 3 offset takes at most 31 bits ([chapter 6](#ch-header--escape)); every
+escaped token with a class 3 offset takes at most 31 bits ([the escape](#ch-header--escape)); every
 length value a code, as they have no escape; every byte a code in every literal table. A byte without
 one would count 0 bits in `lit_cost`, so its table would look cheapest for exactly the pages it cannot
 code. So `seqlz_tables_build()` refuses lengths that leave one out, also when they are a complete
@@ -435,7 +435,7 @@ The escape's {{tok.len.3072}}-bit code is as short as the most frequent token's.
 {{ch08.tok.escaped}} tokens without a code is rare, but together they are about 15 of about 205
 sequences per page on desktop pages and 10 of 170 on phone pages, 16 bits each before the offset
 (20 000 pages of each dump, `seqlz_find()` and the tables of 14th October 2026, same-filled pages left
-out, measured on 14th October). [Chapter 6](#ch-header--escape) has why they do not all get a code.
+out, measured on 14th October). [The escape](#ch-header--escape) has why they do not all get a code.
 
 ## The literal tables {#ch-codes--lit-sets-file}
 
