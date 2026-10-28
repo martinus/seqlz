@@ -43,7 +43,15 @@ static void ch14_slow(void);
 #undef SEQLZ_LL_CAP
 #define SEQLZ_LL_CAP (ch14_on ? ch14_slow() : (void)0, (1U << SEQLZ_LL_BITS) - 1U)
 
+/*
+ * The static_assert of the fast path's room uses SEQLZ_LL_CAP too, which is not a constant here: off
+ * for this file, the codec's own build checks it.
+ */
+#pragma push_macro("static_assert")
+#undef static_assert
+#define static_assert(...) struct ch14_no_static_assert
 #include "seqlz_decompress.c"
+#pragma pop_macro("static_assert")
 #include "seqlz_decompress_literals.c"
 
 /* a key made with printf's format */
