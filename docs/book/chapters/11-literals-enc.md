@@ -434,8 +434,9 @@ second loop has more to do.
 
 @listing src/seqlz_compress_literals.c 659-670
 
-The [canonical codes](#ch-compression--canonical-codes), as `first_codes()` makes them for the fixed
-tables ([chapter 8](#ch-codes--first-codes)), and in the same loop the bits all literals will take,
+The [canonical codes](#ch-compression--canonical-codes), as
+[`first_codes()`](#ch-codes--first-codes) makes them for the fixed tables, and in the same loop the
+bits all literals will take,
 `bits`, {{own.enc.bits}} on the text page, {{own.enc.bits_per_lit}} bits per literal: close to the
 entropy's {{own.enc.h_bits}}. `enc[]` has the layout of `struct lit_table`'s, so `lit_streams()` takes
 either. The `& 15U` and `& 255U` masks change no valid value; they keep every index inside its array

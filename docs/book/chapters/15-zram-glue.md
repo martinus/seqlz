@@ -73,7 +73,7 @@ literals as deltas to earlier bytes of the page. In the
 kernel they are levels 1 to 3 of one backend, `seqlz`, with 2 the default; the harness names them as
 three codecs to compare them side by side. A dictionary could have carried other
 tables, e.g. tables trained on one phone's pages, and measured, those saved too little
-([chapter 8](#ch-codes--fixed)). So since commit `87a0ba4` the tables are part of the format, and the
+([fixed tables](#ch-codes--fixed)). So since commit `87a0ba4` the tables are part of the format, and the
 dictionary is ignored here; the kernel's backend refuses one. The file includes
 [`seqlz.h`](#f-seqlz-h), the userspace interface.
 
@@ -83,7 +83,7 @@ dictionary is ignored here; the kernel's backend refuses one. The file includes
 
 `setup()` is `setup_params()`. seqlz is compiled for one block size, so a 4 KiB build given a corpus of
 16 KiB pages fails here instead of reading past each page. It builds no tables: they are compiled in,
-and lengths from a bad training stop the build that generates them ([chapter 8](#ch-codes--kernel)),
+and lengths from a bad training stop the build that generates them ([at build time](#ch-codes--kernel)),
 not a benchmark.
 
 ::: why One set of tables for all devices, here and in the kernel
@@ -272,7 +272,7 @@ The diff between `src/seqlz_decompress.c` and its copy, on the tree CI uses, `98
   function is renamed and `static`, without its test of the level, which the interface does; a
   one-line comment says that it is for the interface below, which checked the level.
 - **`seqlz_codes.c` as a program for the build machine**, `gen_seqlz_tables.c`
-  ([chapter 8](#ch-codes--kernel)), the one that writes the tables of `src/` too, with
+  ([at build time](#ch-codes--kernel)), the one that writes the tables of `src/` too, with
   `seqlz_tables_build()` `static`.
 - **The matcher inside `seqlz_compress.c`**, right before its callers, `compress_block()` and
   `compress_own()`, with its `emit` callback a direct call of `encode_seq(e, ..., lazy)`: the lazy copy,
@@ -344,7 +344,7 @@ its file says `EXPORT_SYMBOL()` or `EXPORT_SYMBOL_GPL()`. The `_GPL` variant ser
 
 `seqlz_tables.c` is written into the build directory by `gen_seqlz_tables`, a program that the
 kernel's build compiles for the build machine and runs, from the code lengths of
-`lib/seqlz/seqlz_lengths.h` ([chapter 8](#ch-codes--kernel)). `port.py` writes that header with the
+`lib/seqlz/seqlz_lengths.h` ([at build time](#ch-codes--kernel)). `port.py` writes that header with the
 tree's own `scripts/gen-seqlz-lengths.py` from `lib/seqlz/seqlz_counts.txt`, so anybody can make it
 again from the counts, and the patch carries counts, lengths and two generators, not
 {{size.tables|grp}} bytes of tables. The result is `const struct seqlz_tables seqlz_tables`, the

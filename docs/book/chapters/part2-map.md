@@ -86,7 +86,7 @@ step marked, and a box "In short" of its main points, each a link to the section
 <g class="acc"><text x="482.5" y="434" font-size="11" text-anchor="middle">seqlz_tables.h</text></g></a>
 <a href="#ch-codes"><rect class="fill-sheet" x="565" y="400" width="145" height="44" rx="4" stroke="currentColor" stroke-width="1"/>
 <text x="637.5" y="418" font-size="12" text-anchor="middle" font-weight="700">tables built</text>
-<g class="acc"><text x="637.5" y="434" font-size="11" text-anchor="middle">chapter 8</text></g></a>
+<g class="acc"><text x="637.5" y="434" font-size="11" text-anchor="middle">seqlz_codes.c</text></g></a>
 </svg>
 </div>
 <figcaption>The code by the path of a page: writing left to right, reading right to left, and what both use below. Each box links to its chapter.</figcaption>
@@ -146,8 +146,8 @@ zram calls `seqlz_decode()` with the compressed page, the 4096 bytes to fill, an
   offset classes and the caps, and the functions for userspace.
 - [`seqlz_tables.h`](#ch-internal): the layout of the tables, shaped so that the decoder
   needs one lookup per token.
-- [Chapter 8](#ch-codes), `seqlz_codes.c`: the tables built from the trained code lengths, once, at the
-  start of a program, or when the kernel is built ([at build time](#ch-codes--kernel)).
+- [`seqlz_codes.c`](#ch-codes): the tables built from the trained code lengths, once, when seqlz is
+  built ([at build time](#ch-codes--kernel)).
 
 The encoders take their codes from these tables and the decoders their decode tables; neither path
 changes them.

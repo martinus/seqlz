@@ -40,7 +40,7 @@ so a bad table fails when the tables are generated at build time, and the encode
 page.
 
 No function takes the tables as a parameter. They are one global `const` struct, `seqlz_tables`,
-generated as C during the build ([chapter 8](book:#ch-codes--kernel)). Tests that build other tables
+generated as C during the build ([at build time](book:#ch-codes--kernel)). Tests that build other tables
 pass a struct of their own.
 @more {#ch-header--tables} One global table for every CPU
 The codes for the encoder and the decode tables are {{size.tables|grp}} bytes on both page sizes, one

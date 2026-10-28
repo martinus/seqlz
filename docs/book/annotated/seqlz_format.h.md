@@ -23,7 +23,7 @@ A reading order:
 @anchor ch-header
 In the kernel's copy this `#include` becomes `linux/types.h` and nothing else: a program that runs on
 the build machine and writes the tables includes this file too, and may only use the few headers the
-kernel has for such programs ([chapter 8](book:#ch-codes--kernel)).
+kernel has for such programs ([at build time](book:#ch-codes--kernel)).
 @more {#ch-header--summary} The kernel's copy: four headers, and no `static_assert()` here
 The kernel's copy has four headers: `include/linux/seqlz.h`, the interface zram calls, which
 `port.py` writes from `tools/kernel-port/seqlz.h`, and in `lib/seqlz/` this file, `seqlz_tables.h`
@@ -584,7 +584,7 @@ A run's symbol says how many bits its number has. E.g. a run of 32 is `0b100000`
 symbols; with the 10 lengths, 19 in all, `SEQLZ_OWN_SYMBOLS`. A code of at most
 `SEQLZ_OWN_CODE_BITS`, 8 bits, makes the decoder's table for these symbols 256 entries, which one byte
 of the description indexes. `seqlz_own_lengths` is generated into `seqlz_lit_sets_4k.inc` and
-`_16k.inc`, after the 8 literal tables ([the file](book:#ch-codes--lit-sets-file)).
+`_16k.inc`, after the 8 literal tables ([the file](seqlz_lit_sets_4k.inc.html#b156)).
 
 The last paragraph is why a block's own table costs the decoder no memory. Its decode table needs
 2 KiB, and work memory per CPU is what the project counts. The output page is still free while the

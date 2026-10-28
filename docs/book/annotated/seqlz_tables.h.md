@@ -24,7 +24,7 @@ fields are wide enough. A reading order:
 @anchor ch-internal
 @anchor ch-internal--head
 It includes only `seqlz_format.h`, so a program on the build machine can include it too: that program
-generates the tables as C when seqlz is built ([chapter 8](book:#ch-codes--kernel)). The kernel's copy
+generates the tables as C when seqlz is built ([at build time](book:#ch-codes--kernel)). The kernel's copy
 renames the guard to `_LIB_SEQLZ_SEQLZ_TABLES_H`, after its place in `lib/seqlz/`.
 
 @@ 12-27
@@ -300,7 +300,7 @@ are in the next byte, get only bit 31, `{{own.q.fc.entry}}`: the decoder then ta
 @@ 113-118
 The three forms of `OWN`. `decode[]` is indexed by the next 8 bits, as the token table by the next 11.
 Here the code's length is in the high byte of both `decode[]` and `enc[]`, the other way round from
-`struct lit_table`'s `enc[]`. [Chapter 8](book:#ch-codes--own) builds all three.
+`struct lit_table`'s `enc[]`. [`build_own()`](seqlz_codes.c.html#b142) builds all three.
 
 ## All tables in one global
 
@@ -308,7 +308,7 @@ Here the code's length is in the high byte of both `decode[]` and `enc[]`, the o
 One `const` global, written as C when seqlz is built, in the kernel as in userspace. It sits in
 read-only data, nothing writes it at run time, and nothing has to build it before the first page.
 Lengths that are no complete code, or that leave out a symbol the encoder may write, stop the build
-instead ([chapter 8](book:#ch-codes--all-symbols)).
+instead ([`has_all_symbols()`](seqlz_codes.c.html#b214)).
 
 A page reads much less than all of it. The decoder reads `token.decode` (8 KiB), the `decode` of `ll`
 and `ml` (1 KiB each), and with coded literals one literal table's `decode` (2 KiB): 12 KiB, which fits

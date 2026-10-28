@@ -231,7 +231,7 @@ Every table is [complete](#ch-compression--complete). For the token table that i
 and {{tok.codes_of.11}} of 11 bits, {{tok.with_code}} codes, and in units of $\frac{1}{2048}$:
 ${{tok.codes_of.4}} \cdot 128 + {{tok.codes_of.5}} \cdot 64 + {{tok.codes_of.6}} \cdot 32 + {{tok.codes_of.7}} \cdot 16 + {{tok.codes_of.8}} \cdot 8 + {{tok.codes_of.9}} \cdot 4 + {{tok.codes_of.10}} \cdot 2 + {{tok.codes_of.11}} = 2048$.
 So `seqlz_decode()` can look up 11 bits in a table of 2048 entries without checking the entry; the
-table is built in [chapter 8](#ch-codes).
+table is built by [`seqlz_codes.c`](#ch-codes).
 @assert tok.codes_of[4] * 128 + tok.codes_of[5] * 64 + tok.codes_of[6] * 32 + tok.codes_of[7] * 16 + tok.codes_of[8] * 8 + tok.codes_of[9] * 4 + tok.codes_of[10] * 2 + tok.codes_of[11] == 2048 and tok.with_code == tok.codes_of[4] + tok.codes_of[5] + tok.codes_of[6] + tok.codes_of[7] + tok.codes_of[8] + tok.codes_of[9] + tok.codes_of[10] + tok.codes_of[11]
 
 ## The bitstream {#ch-format--bitstream}
@@ -968,5 +968,5 @@ enough, and on the Mi 9T's Cortex-A76 it got zram's pages to the size of `zstd` 
 its time to write a page
 ([explored-designs.md](https://github.com/martinus/seqlz/blob/main/docs/explored-designs.md#level-3-a-lazy-matcher-and-a-literal-table-of-the-pages-own-zstd-3s-memory-in-less-than-half-its-time-on-the-phone-kept)),
 [chapter 17](#ch-decisions--level3) has the numbers.
-How the code lengths become the encoder's codes and the decoder's tables at run time is
-[chapter 8](#ch-codes).
+[`seqlz_codes.c`](#ch-codes) turns the code lengths into the encoder's codes and the decoder's
+tables when seqlz is built.
