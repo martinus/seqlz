@@ -71,7 +71,7 @@ produces, and collects [the design decisions](#ch-decisions) with what they were
 | [`src/seqlz_compress_literals.c`](#f-seqlz_compress_literals-c) | {{ch00.lines.seqlz_compress_literals_c}} | the coding of literals | Part II |
 | [`src/seqlz_decompress.c`](#f-seqlz_decompress-c) | {{ch00.lines.seqlz_decompress_c}} | the decoder | Part II |
 | [`src/seqlz_decompress_literals.c`](#f-seqlz_decompress_literals-c) | {{ch00.lines.seqlz_decompress_literals_c}} | the decoding of literals | Part II |
-| [`src/zram_seqlz.c`](#f-zram_seqlz-c) | {{ch00.lines.zram_seqlz_c}} | seqlz as a zram backend, for the benchmarks | [15](#ch-zram-glue) |
+| [`src/zram_seqlz.c`](#f-zram_seqlz-c) | {{ch00.lines.zram_seqlz_c}} | seqlz as a zram backend, for the benchmarks | Part II |
 @assert len(ch00.lines) == 18
 @assert ch00.lines.seqlz_default_tables_4k_inc == ch00.lines.seqlz_default_tables_16k_inc and ch00.lines.seqlz_lit_sets_4k_inc == ch00.lines.seqlz_lit_sets_16k_inc
 
@@ -130,5 +130,5 @@ spends on the pages ([chapter 1](#ch-zram--size-classes)). A number like
 **`src/` is not exactly what the kernel gets.** A script, `tools/kernel-port/port.py`, generates the
 kernel's copy from `src/`: it replaces the compatibility header with the kernel's own headers, drops
 what only the benchmarks and tests use, and adds the kernel's interface around it
-([chapter 15](#ch-zram-glue)). The codec's files are kernel C already, without libc, floating point
+([how `port.py` writes it](#ch-zram-glue--port)). The codec's files are kernel C already, without libc, floating point
 or inline assembly, so that copy is a mechanical step.

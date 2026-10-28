@@ -25,7 +25,7 @@ A reading order that follows the call:
 @@ 1-12
 @anchor ch-matcher--file
 A header of inline functions with one includer, `seqlz_compress.c`. The kernel copy, made by
-[`port.py`](book:#ch-zram-glue), pastes the matcher right into that file, before its one caller.
+[`port.py`](book:#ch-zram-glue--what-portpy-changes-in-the-code), pastes the matcher right into that file, before its one caller.
 
 @@ 13-23
 5 bytes into a slot of 4096 (12 bits). `v << 24` drops 3 of the 8 bytes loaded and puts the 5 at the

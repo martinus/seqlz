@@ -3,7 +3,7 @@
 The interface of the codec for this repository's own programs: the tests, the benchmark harness, the
 fuzzers and the tools. The kernel does not get this file; zram calls the two functions of
 `include/linux/seqlz.h`, written from `tools/kernel-port/seqlz.h`
-([chapter 15](book:#ch-zram-glue--interface)). The `/**` comments are kernel-doc, the kernel's format
+([the kernel's interface](book:#ch-zram-glue--interface)). The `/**` comments are kernel-doc, the kernel's format
 for documenting a function.
 
 A reading order:
@@ -75,7 +75,7 @@ in memory reaches the decoder as it is. A decoder that wrote outside its buffers
 page into a damaged kernel ([how the decoder keeps it](book:#ch-decode--safety)).
 
 `scratch` may be `NULL` for a device at level 1, whose compressor never codes literals; that saves
-the scratch per CPU ([chapter 15](book:#ch-zram-glue--backend)). There is no partial result: either
+the scratch per CPU ([the backend](book:#ch-zram-glue--backend)). There is no partial result: either
 `dst` holds the page, or `-EINVAL`. The page does not say which tables wrote it.
 
 ## Compressing

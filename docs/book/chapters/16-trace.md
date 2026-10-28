@@ -370,7 +370,7 @@ the loop leaves without a token. The bit reader has read every byte, and the {{c
 the zero padding of the last byte ([chapter 4](#ch-format--validity)). `seqlz_decode()` returns 0, and
 `dst` holds the page we started with. Without the scratch the same bytes are `-EINVAL`, which is why
 `seqlz-2` has a decompression context and `seqlz-1` does not
-([chapter 15](#ch-zram-glue--fast-lit)).
+([the scratch](#ch-zram-glue--fast-lit)).
 @assert ch16.pad == 3 and ch16.pad_bits == 5
 
 ## The program {#ch-trace--program}

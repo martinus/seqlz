@@ -17,7 +17,7 @@ step marked, and a box "In short" of its main points, each a link to the section
 <defs><marker id="map-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0 L10 5 L0 10 z" fill="currentColor"/></marker></defs>
 <a href="#ch-zram-glue"><rect class="fill-paper" x="10" y="8" width="700" height="34" rx="4" stroke="currentColor" stroke-width="1"/>
 <text x="20" y="30" font-size="12.5" text-anchor="start" font-weight="700">zram, through backend_seqlz.c</text>
-<g class="acc"><text x="268" y="30" font-size="11">chapter 15</text></g>
+<g class="acc"><text x="268" y="30" font-size="11">zram_seqlz.c</text></g>
 <text x="700" y="30" font-size="11.5" text-anchor="end">write: seqlz_compress()   read: seqlz_decode()</text>
 </a>
 <text x="10" y="64" font-size="11.5" text-anchor="start">write a page</text>
@@ -95,7 +95,7 @@ step marked, and a box "In short" of its main points, each a link to the section
 ## Writing a page {#map--write}
 
 zram calls `seqlz_compress()` with the page, a buffer for the result and the level, through the
-backend of [chapter 15](#ch-zram-glue--backend). At levels 1 and 2 three steps follow:
+[backend](#ch-zram-glue--backend). At levels 1 and 2 three steps follow:
 
 1. **The matcher** ([`seqlz_match.h`](#ch-matcher)), `seqlz_match_block()`, walks the page once and cuts it
    into sequences: `ll` literals, bytes it found no match for, then a match of `ml` bytes copied from

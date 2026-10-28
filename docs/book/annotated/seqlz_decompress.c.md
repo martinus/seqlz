@@ -55,7 +55,7 @@ token escaped, 1022 sequences. It takes 107 099 instructions on arm64 and 71 468
 pages with `seqlz-2`, against 2.58 times for `lz4`; timed on the A55, 1.33 against 1.57
 ([explored-designs.md](https://github.com/martinus/seqlz/blob/main/docs/explored-designs.md#the-worst-case-the-slowest-pages-found-cost-13-times-the-p99-of-real-ones-as-for-lz4)).
 The argument is checked by fuzz targets under the sanitizers and a second decoder written from
-`docs/format.md` alone ([chapter 15](#ch-zram-glue--fuzzing)). On 9th October 2026, 12 instances of AFL++
+`docs/format.md` alone ([the fuzzers](#ch-zram-glue--fuzzing)). On 9th October 2026, 12 instances of AFL++
 ran for 2 hours: 1.42 billion inputs on the decoder, 1.94 billion on the decoder against the reference,
 nothing found
 ([plan.md](https://github.com/martinus/seqlz/blob/main/docs/plan.md#phase-4-reference-implementation-format-spec-fuzzing-20-weeks)).
@@ -881,7 +881,7 @@ Bit 15 of the header picks the layout. Coded literals are decoded into the scrat
 with a literal table of its own has that table built in the output page, before the loop overwrites
 it ([own table](book:#ch-literals-dec--own)). Only a page with coded literals needs the scratch: zram
 at level 1 writes only raw literals and may call the decoder without one
-([the backend](book:#ch-zram-glue)).
+([the backend](book:#ch-zram-glue--backend)).
 
 Raw literals are right after the header, with the bitstream behind them. Reading the bitstream as
 literals is allowed, it is inside the input, so `lit_bound` is the end of the input.

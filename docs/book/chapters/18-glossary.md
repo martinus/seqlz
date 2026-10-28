@@ -28,7 +28,7 @@ sense given here.
   literal at least that far into the page; bit 7 of byte 2 says the page has deltas. The decoder
   adds the byte back. [Chapter 4](#ch-format--deltas)
 - **dictionary**: data compressor and decoder share before the first byte; zram can pass one, seqlz's
-  kernel backend refuses it. [Chapter 15](#ch-zram-glue--head)
+  kernel backend refuses it. [Why](#ch-zram-glue--head)
 - **entropy**: the fewest bits per symbol any code can reach for given frequencies,
   $\sum p \log_2 \frac{1}{p}$. [Chapter 2](#ch-compression--entropy)
 - **escape**: the one code of all tokens without a code of their own, followed by the token in
@@ -108,36 +108,36 @@ sense given here.
 
 - **backend**: a codec as zram calls it, through `struct zcomp_ops`. [Chapter 1](#ch-zram--zcomp)
 - **checkpatch**: `scripts/checkpatch.pl`, the kernel's style checker for patches.
-  [Chapter 15](#ch-zram-glue--check)
+  [`check.sh`](#ch-zram-glue--check)
 - **`EXPORT_SYMBOL_GPL`**: makes a function callable from modules with a GPL-compatible licence.
-  [Chapter 15](#ch-zram-glue--interface)
+  [The export](#ch-zram-glue--api)
 - **`FORTIFY_SOURCE`**: a kernel option that checks the sizes of `memcpy()` and its relatives, and can
   make each a call; seqlz's short copies use `__builtin_memcpy()`. [Why](#f-seqlz_internal-h-b12)
 - **fuzz target**: a function's entry point for a fuzzer, libFuzzer or AFL++, which feeds it millions of
-  mutated inputs. [Chapter 15](#ch-zram-glue--fuzzing)
+  mutated inputs. [seqlz's fuzzers](#ch-zram-glue--fuzzing)
 - **host program**: a program that the kernel's build compiles for the build machine and runs, e.g. to
   write tables as C; the kernel copy's tables come from one. [At build time](#ch-codes--kernel),
-  [chapter 15](#ch-zram-glue--init)
-- **KASAN**: the kernel's address sanitizer. [Chapter 15](#ch-zram-glue--check)
+  [the kernel's tables](#ch-zram-glue--init)
+- **KASAN**: the kernel's address sanitizer. [The KUnit tests](#ch-zram-glue--kunit-tests-in-uml)
 - **kernel copy**: the code `tools/kernel-port/port.py` writes into a kernel tree from `src/`, generated,
-  never edited. [Chapter 15](#ch-zram-glue--port)
+  never edited. [How `port.py` writes it](#ch-zram-glue--port)
 - **kernel-doc**: the kernel's comment format for functions, which `scripts/kernel-doc` checks.
-  [Chapter 15](#ch-zram-glue--interface)
+  [The kernel's interface](#ch-zram-glue--interface)
 - **`kmalloc()`, `vmalloc()`, `kvzalloc()`**: `kmalloc()` hands out objects of powers of 2 up to 2 pages,
   {{const.SCRATCH}} bytes as 8 KiB; `vmalloc()` whole pages, contiguous in virtual addresses only;
   `kvzalloc()` tries the first, falls back to the second, and zeroes. [Chapter 1](#ch-zram--work-memory)
 @assert ch15.mem.dctx_gets == 8192
 - **KUnit, UML**: the kernel's unit test framework, run in User-Mode Linux, the kernel as an ordinary
-  program. [Chapter 15](#ch-zram-glue--check)
+  program. [seqlz's KUnit tests](#ch-zram-glue--kunit-tests-in-uml)
 - **module**: kernel code built as a file of its own and loaded into a running kernel.
-  [Chapter 15](#ch-zram-glue--init)
+  [The kernel's tables](#ch-zram-glue--init)
 - **page, page fault**: the unit of memory the kernel maps and swaps, 4096 bytes on x86-64 and on phones
   today, and Android is moving to 16 KiB; a page fault is a touch of a page that is not mapped, e.g.
   swapped out. [Chapter 1](#ch-zram--swap)
 - **per-CPU**: data the kernel keeps once per CPU; zram's streams, with the codec's work memory, are.
   [Chapter 1](#ch-zram--work-memory)
 - **read-only data**: `const` data, which the kernel maps read-only, so that a stray write faults; the
-  kernel copy's tables are such data. [Chapter 15](#ch-zram-glue--init)
+  kernel copy's tables are such data. [The kernel's tables](#ch-zram-glue--init)
 - **same-filled page**: a page of one repeated 8-byte value, which zram stores without the codec.
   [Chapter 1](#ch-zram)
 - **size class**: one of zsmalloc's fixed slot sizes; bytes saved within a class save nothing, and from
@@ -147,7 +147,7 @@ sense given here.
 - **UBSan**: the undefined behaviour sanitizer; the kernel's `CONFIG_UBSAN_BOUNDS` and
   `CONFIG_UBSAN_SHIFT` add a check to each index and shift the compiler cannot prove in range.
   [Chapter 3](#ch-cpu--ubsan)
-- **`W=1`**: a kernel build with extra warnings. [Chapter 15](#ch-zram-glue--check)
+- **`W=1`**: a kernel build with extra warnings. [`check.sh`](#ch-zram-glue--check)
 - **zram, zsmalloc, zswap**: zram is a block device in RAM that stores pages compressed, mostly as swap,
   in zsmalloc's size classes; zswap is a compressed cache in front of a swap device, which gives a codec
   one page of output where zram gives two. [Chapter 1](#ch-zram)

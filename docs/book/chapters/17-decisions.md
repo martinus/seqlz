@@ -615,7 +615,7 @@ What counts is what `kmalloc()` and `vmalloc()` hand out ([chapter 1](#ch-zram--
 `vmalloc()` for 16 416 bytes and gets 5 pages, 20 480 bytes. seqlz needs {{size.state}} bytes of hash
 table to compress and {{const.SCRATCH}} bytes of scratch to decompress, never at the same time and keeping
 nothing from one page to the next, so the kernel's backend gives each CPU one union of
-{{ch15.mem.union}} bytes ([chapter 15](#ch-zram-glue--backend)). As one struct of
+{{ch15.mem.union}} bytes ([the backend](#ch-zram-glue--backend)). As one struct of
 {{ch15.state_plus_scratch|grp}} bytes it would have come as 16 KiB. With zram's contexts split, as a series
 of 5th October 2026 proposes, it is two allocations of 8 KiB each, a split that changed no codec's time in
 the VM

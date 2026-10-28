@@ -641,5 +641,5 @@ pages did not change.
 
 The kernel's copy keeps `compress_block()`, `compress_own()` and `seqlz_compress()`, renamed to
 `seqlz_compress_block()`, as the kernel's interface function is called `seqlz_compress()`, which tests
-the level instead ([the backend](#ch-zram-glue)).
+the level instead ([the interface](#ch-zram-glue--api)).
 @end
