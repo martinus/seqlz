@@ -36,7 +36,7 @@ kbd { border: 1px solid var(--rule); border-bottom-width: 2px; border-radius: 3p
 
 /* the map of the file: a section per cell, as wide as its lines */
 .fmap { display: flex; gap: 2px; margin: 0.4rem 0 1.6rem; font-family: var(--display); }
-.fmap .cell { min-width: 0; display: flex; flex-direction: column; gap: 0.1rem; padding: 0.45rem 0.5rem 0.4rem; background: var(--sheet);
+.fmap .cell { display: flex; flex-direction: column; gap: 0.1rem; padding: 0.45rem 0.5rem 0.4rem; background: var(--sheet);
               border-top: 3px solid var(--rule); color: var(--ink); text-decoration: none; flex-basis: 0; min-width: 7.5rem; }
 .fmap .cell:hover { border-top-color: var(--muted); }
 .fmap .cell.cur { border-top-color: var(--accent); }
@@ -64,11 +64,11 @@ body.nocm .cmline { display: none; }
 .blk.cur .ninner { border-left-color: var(--accent); }
 .bnote p, .bnote ul, .bnote ol { margin: 0 0 0.6rem; }
 .bnote ul, .bnote ol { padding-left: 1.2rem; }
-.nrange { font-family: var(--display); font-size: 0.76rem; font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase; margin-bottom: 0.25rem !important; }
+.bnote .nrange { font-family: var(--display); font-size: 0.76rem; font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase; margin-bottom: 0.25rem; }
 .nrange a { color: var(--muted); text-decoration: none; font-variant-numeric: tabular-nums; }
 .nrange a:hover { color: var(--accent); }
-.rhead { font-family: var(--display); font-size: 0.72rem; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; color: var(--muted); margin: 0.8rem 0 0.2rem !important; }
-.refs { list-style: none; padding: 0 !important; margin: 0 !important; font-family: var(--display); font-size: 0.82rem; line-height: 1.3; }
+.bnote .rhead { font-family: var(--display); font-size: 0.72rem; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; color: var(--muted); margin: 0.8rem 0 0.2rem; }
+.bnote .refs { list-style: none; padding: 0; margin: 0; font-family: var(--display); font-size: 0.82rem; line-height: 1.3; }
 .refs li { margin: 0 0 0.3rem; }
 .refs a { text-decoration: none; }
 .refs a:hover { text-decoration: underline; }
@@ -87,7 +87,7 @@ body.nocm .cmline { display: none; }
   .blk { grid-template-columns: minmax(0, 1fr); }
   .bnote { order: -1; padding-block: 1rem 0.6rem; }
   .ninner { position: static; padding-left: 0.7rem; }
-  .fmap { flex-direction: column; gap: 2px; }
+  .fmap { flex-direction: column; }
   .fmap .cell { flex-direction: row; justify-content: space-between; gap: 1rem; flex-grow: 0 !important; flex-basis: auto; border-top: 0; border-left: 3px solid var(--rule); }
   .fmap .cell.cur { border-left-color: var(--accent); }
   .abar .file { display: none; }
@@ -102,7 +102,7 @@ try { var t = localStorage.getItem('book-theme'); if (t === 'light' || t === 'da
 <header class="abar">
   <a class="brand" href="{{BOOK}}" title="The book: seqlz, line by line">seqlz, line by line</a>
   <span class="file">{{SRC}}</span>
-  <span class="here" id="here" aria-live="off"></span>
+  <span class="here" id="here"></span>
   <div class="tools">
     <button type="button" class="cmbtn" id="cmbtn" aria-pressed="false" title="Hide the lines that are only a comment (c)">hide comments</button>
     <button type="button" class="icon themebtn" id="themebtn" aria-label="Switch theme" title="Switch theme"><svg viewBox="0 0 24 24" aria-hidden="true"><path class="i-moon" d="M20 14.5A8 8 0 1 1 9.5 4a6.5 6.5 0 0 0 10.5 10.5z"/><g class="i-sun"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></g></svg></button>
@@ -137,16 +137,16 @@ try { var t = localStorage.getItem('book-theme'); if (t === 'light' || t === 'da
 
   /* lines that are only a comment, folded away; the line at the top of the screen stays there */
   var cm = document.getElementById('cmbtn');
-  function setCm(hide, keep) {
-    var blk = keep ? current : null, y = blk ? blk.getBoundingClientRect().top : 0;
+  function setCm(hide) {
+    var blk = current, y = blk ? blk.getBoundingClientRect().top : 0;
     document.body.classList.toggle('nocm', hide);
     cm.setAttribute('aria-pressed', hide ? 'true' : 'false');
     cm.textContent = hide ? 'show comments' : 'hide comments';
     try { localStorage.setItem('annotate-comments', hide ? 'hidden' : 'shown'); } catch (e) {}
     if (blk) window.scrollBy(0, blk.getBoundingClientRect().top - y);
   }
-  cm.addEventListener('click', function () { setCm(!document.body.classList.contains('nocm'), true); });
-  try { if (localStorage.getItem('annotate-comments') === 'hidden') setCm(true, false); } catch (e) {}
+  cm.addEventListener('click', function () { setCm(!document.body.classList.contains('nocm')); });
+  try { if (localStorage.getItem('annotate-comments') === 'hidden') setCm(true); } catch (e) {}
 
   /* a figure of the book: put on the page on its first opening, so its scripts start with a stage
      that has a width */
@@ -155,7 +155,7 @@ try { var t = localStorage.getItem('book-theme'); if (t === 'light' || t === 'da
       var blk = b.closest('.blk'), box = blk.querySelector('.bfig'), id = b.getAttribute('data-fig');
       var open = b.getAttribute('aria-expanded') !== 'true';
       blk.querySelectorAll('.figbtn').forEach(function (o) { o.setAttribute('aria-expanded', 'false'); });
-      box.querySelectorAll('figure').forEach(function (f) { f.parentNode.hidden = true; });
+      box.querySelectorAll('[data-holds]').forEach(function (h) { h.hidden = true; });
       if (open) {
         var holder = box.querySelector('[data-holds="' + id + '"]');
         if (!holder) {
@@ -214,7 +214,7 @@ try { var t = localStorage.getItem('book-theme'); if (t === 'light' || t === 'da
       if (e.key === 'j' && blocks[0].getBoundingClientRect().top > window.innerHeight / 3) n = blocks[0];
       n.scrollIntoView({ block: 'start', behavior: calm.matches ? 'auto' : 'smooth' });
     } else if (e.key === 'c') {
-      setCm(!document.body.classList.contains('nocm'), true);
+      cm.click();
     }
   });
 })();

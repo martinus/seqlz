@@ -157,14 +157,8 @@ jobs:
           node-version: 22
       - run: pip install markdown pygments
       - run: cd docs/book && npm ci
-      - run: python3 docs/book/build.py --check
+      - run: python3 docs/book/build.py --check --site _site
       - run: python3 docs/book/lint.py
-      # the annotated sources link to the book's standalone page, which is index.html here: ../
-      - run: |
-          mkdir -p _site/annotated && cp docs/book/seqlz-line-by-line.standalone.html _site/index.html
-          for f in docs/book/annotated/*.standalone.html; do
-            sed 's#\.\./seqlz-line-by-line\.standalone\.html#../#g' "$f" > "_site/annotated/${f##*/}"
-          done
       - uses: actions/upload-pages-artifact@v5
         with:
           path: _site

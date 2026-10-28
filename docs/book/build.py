@@ -53,9 +53,11 @@ them at build time (math.mjs, `npm install` in docs/book first), so the page nee
 Fenced code (```c, ```text, ```python) is highlighted the same way, without
 line numbers. Raw HTML (figures with inline SVG) passes through.
 
-python3 build.py [--check] [--out DIR]
+python3 build.py [--check] [--out DIR] [--site DIR]
     --check fails if a line of src/ is in no listing, an id is twice on the page, or a link goes to
-    an id that is not; --out writes the two pages into DIR instead of next to this script
+    an id that is not; --out writes the two pages into DIR instead of next to this script, and the
+    annotated sources into DIR/annotated; --site writes the site of GitHub Pages into DIR too: the
+    standalone page as index.html, and annotated/<file>.html with links to it
 """
 import atexit
 import base64
@@ -75,12 +77,13 @@ import markdown
 from pygments.lexers import get_lexer_by_name
 from pygments.token import Token
 
-from annotate import notes_files
+import annotate
 
 HERE = pathlib.Path(__file__).resolve().parent
 REPO = HERE.parent.parent  # docs/book in the repository
 GITHUB = "https://github.com/martinus/seqlz/blob"
 OUT_DIR = pathlib.Path(sys.argv[sys.argv.index("--out") + 1]) if "--out" in sys.argv else HERE
+SITE = pathlib.Path(sys.argv[sys.argv.index("--site") + 1]) if "--site" in sys.argv else None
 
 # The book describes the code of one commit, "src" in book.json, not the checkout's: a change of the
 # code needs no change of the book until the book is brought up to date on purpose (remap.py <old
@@ -103,11 +106,13 @@ if PINNED not in os.environ:
         book = pathlib.Path(root) / "docs" / "book"
         shutil.rmtree(book, ignore_errors=True)
         shutil.copytree(HERE, book, ignore=shutil.ignore_patterns("node_modules", "__pycache__",
-                                                                  "seqlz-line-by-line*.html", "*.[ch].*html"))
+                                                                  "seqlz-line-by-line*.html"))
         if (HERE / "node_modules").exists():
             (book / "node_modules").symlink_to(HERE / "node_modules")
-        args = [a for i, a in enumerate(sys.argv[1:]) if a != "--out" and sys.argv[i] != "--out"]
-        r = subprocess.run([sys.executable, str(book / "build.py"), *args, "--out", str(OUT_DIR.resolve())],
+        dirs = ("--out", "--site")
+        args = [a for i, a in enumerate(sys.argv[1:]) if a not in dirs and sys.argv[i] not in dirs]
+        args += ["--out", str(OUT_DIR.resolve())] + (["--site", str(SITE.resolve())] if SITE else [])
+        r = subprocess.run([sys.executable, str(book / "build.py"), *args],
                            env={**os.environ, PINNED: sha, "SEQLZ_BOOK_DATE": date})
     sys.exit(r.returncode)
 
@@ -178,8 +183,8 @@ def src_lines(path):
 
 COVERED = {}  # path -> set of line numbers
 # the files with an annotated source, annotate.py: their listings link to the same lines there
-NOTES = notes_files(HERE)
-LISTINGS = []
+NOTES = annotate.notes_files(HERE)
+LISTINGS = []  # (path, first line, last line, id)
 LANG = {".c": "c", ".h": "c", ".inc": "c", ".py": "python", ".sh": "bash", ".patch": "diff", ".cpp": "cpp"}
 
 
@@ -193,7 +198,11 @@ def render_listing(path, a, b):
     if not (1 <= a <= b <= len(lines)):
         sys.exit(f"listing {path} {a}-{b}: file has {len(lines)} lines")
     COVERED.setdefault(path, set()).update(range(a, b + 1))
-    LISTINGS.append((path, a, b))
+    # a listing shown again gets an id of its own, -2, -3, ...; a link to the plain one finds the first
+    lid = f'L-{path.replace("/", "-").replace(".", "-")}-{a}'
+    again = sum(1 for p, x, *_ in LISTINGS if (p, x) == (path, a))
+    lid += f"-{again + 1}" if again else ""
+    LISTINGS.append((path, a, b, lid))
     body = "\n".join(lines[a - 1:b])
     hl = highlight_lines(body, LANG.get(pathlib.Path(path).suffix, "text"))
     rows = "".join(
@@ -201,9 +210,9 @@ def render_listing(path, a, b):
         for i, h in enumerate(hl))
     rng = f"line {a}" if a == b else f"lines {a}&ndash;{b}"
     if path in NOTES:
-        rng += (f' &middot; <a class="lnotes" href="annotated/{pathlib.Path(path).name}.standalone.html#L{a}" '
+        rng += (f' &middot; <a class="lnotes" href="annotated/{pathlib.Path(path).name}.html#L{a}" '
                 f'title="These lines in the annotated source, a short note next to each block">notes</a>')
-    return (f'<figure class="listing" id="L-{path.replace("/", "-").replace(".", "-")}-{a}">'
+    return (f'<figure class="listing" id="{lid}">'
             f'<figcaption><a class="lfile" href="{GITHUB}/{file_commit(path)}/{path}#L{a}-L{b}">{html.escape(path)}</a>'
             f'<span class="lrange">{rng}</span></figcaption>'
             f'<pre class="code numbered"><code>{rows}</code></pre></figure>')
@@ -223,7 +232,21 @@ STEP_BUTTONS = [("first", "To the start"), ("prevseq", "Previous sequence (shift
                 ("nextseq", "Next sequence (shift + right)")]
 
 
-STEPPER_CSS = [False]
+# what a kind of figure needs on the page once, before the first: the frame of the animations and of
+# the step-throughs; and every figure, for the annotated sources: id -> (its kind, its markup)
+CORES, CORES_USED, FIGURES = {}, set(), {}
+
+
+def core_once(kind):
+    if kind in CORES_USED:
+        return ""
+    CORES_USED.add(kind)
+    return CORES[kind]
+
+
+def figure(fid, kind, markup):
+    FIGURES[fid] = (kind, markup)
+    return markup
 SRC_C = ("codes", "compress", "compress_literals", "decompress", "decompress_literals", "default_tables", "lit_sets")
 
 
@@ -488,24 +511,16 @@ def render_stepper(what, where):
     k = STEPPERS[what]
     trace, path, a, b = PREBUILT[("stepper", what)].result() if ("stepper", what) in PREBUILT else run_trace(what)
     hl = highlight_lines("\n".join(src_lines(path)[a - 1:b]), "c")
-
-    def only_comment(h):
-        # a line with nothing but a comment, or blank: folded away while comments are hidden
-        return not re.sub(r'<span class="cm">.*?</span>', "", h).strip()
-    rows = "".join(f'<span class="line{" cmline" if only_comment(h) else ""}"><span class="ln" data-n="{a + i}"></span>'
+    rows = "".join(f'<span class="line{" cmline" if annotate.only_comment(h) else ""}"><span class="ln" data-n="{a + i}"></span>'
                    f'<span class="lc">{h}</span></span>' for i, h in enumerate(hl))
     pages = "".join(f'<button type="button" data-page="{pid}" aria-pressed="false">'
                     f'{html.escape(substitute(t, where))}</button>' for pid, t in k["pages"])
     buttons = "".join(f'<button type="button" class="icon" data-do="{b_}" title="{t}" aria-label="{t}">'
                       f'<svg viewBox="0 0 24 24" aria-hidden="true">{ICONS[b_]}</svg></button>' for b_, t in STEP_BUTTONS)
     sid = "stepper-" + what
-    css = ""
-    if not STEPPER_CSS[0]:
-        STEPPER_CSS[0] = True
-        css = (f'<style>{(HERE / "stepper" / "stepper.css").read_text()}</style>'
-               f'<script>{(HERE / "stepper" / "frame.js").read_text()}</script>')
-    return (css +
-            f'<figure class="stepper nocomments" id="{sid}" data-kind="{what}" tabindex="-1" aria-label="{k["label"]}">'
+    CORES.setdefault("stepper", f'<style>{(HERE / "stepper" / "stepper.css").read_text()}</style>'
+                                f'<script>{(HERE / "stepper" / "frame.js").read_text()}</script>')
+    out = (f'<figure class="stepper nocomments" id="{sid}" data-kind="{what}" tabindex="-1" aria-label="{k["label"]}">'
             f'<div class="st-bar"><div class="st-pages" role="group" aria-label="Page">{pages}</div>'
             f'<div class="st-ctl">{buttons}</div>'
             f'<input type="range" class="st-scrub" min="0" value="0" aria-label="Step">'
@@ -520,9 +535,7 @@ def render_stepper(what, where):
             f'</figure>'
             f'<script type="application/json" id="{sid}-data">{trace}</script>'
             f'<script>{(HERE / "stepper" / k["js"]).read_text()}</script>')
-
-
-ANIM_CORE = [False]
+    return core_once("stepper") + figure(sid, "stepper", out)
 
 
 def anim_data(name):
@@ -566,10 +579,8 @@ def render_anim(args, where):
     d = HERE / "anim"
     if not (d / f"{name}.js").exists():
         sys.exit(f"{where}: anim/{name}.js does not exist")
+    CORES.setdefault("anim", f'<style>{(d / "core.css").read_text()}</style><script>{(d / "core.js").read_text()}</script>')
     out = ""
-    if not ANIM_CORE[0]:
-        ANIM_CORE[0] = True
-        out += f'<style>{(d / "core.css").read_text()}</style><script>{(d / "core.js").read_text()}</script>'
     if (d / f"{name}.css").exists():
         out += f'<style>{(d / f"{name}.css").read_text()}</style>'
     data = PREBUILT[("anim", name)].result() if ("anim", name) in PREBUILT else anim_data(name)
@@ -590,7 +601,7 @@ def render_anim(args, where):
     if data is not None:
         out += f'<script type="application/json" id="{fid}-data">{data}</script>'
     out += f'<script>{(d / f"{name}.js").read_text()}</script>'
-    return out
+    return core_once("anim") + figure(fid, "anim", out)
 
 
 def render_fence(lang, body):
@@ -872,7 +883,7 @@ def build():
                 return f"<{hm.group(1)} id=\"{sid}\"{attrs}>{inner}</{hm.group(1)}>"
             body = re.sub(r"<(h[234])([^>]*)>(.*?)</\1>", add_id, body, flags=re.S)
             for im in re.finditer(r'id="([^"]+)"', body):
-                if im.group(1) in ids and not im.group(1).startswith("L-"):
+                if im.group(1) in ids:
                     warn(f"duplicate id {im.group(1)} in {ch['file']}")
                 ids.add(im.group(1))
             subs = []
@@ -898,8 +909,8 @@ def build():
                             + (f'<ol class="tocsub">{sub}</ol>' if sub else "") + "</li>")
     if NOTES:
         first = pathlib.Path(next(iter(NOTES))).name
-        toc_html.append(f'<li class="tocpart"><a href="annotated/{first}.standalone.html">Annotated source</a></li>')
-        toc_html += [f'<li class="tocchap"><a href="annotated/{pathlib.Path(p).name}.standalone.html">'
+        toc_html.append(f'<li class="tocpart"><a href="annotated/{first}.html">Annotated source</a></li>')
+        toc_html += [f'<li class="tocchap"><a href="annotated/{pathlib.Path(p).name}.html">'
                      f'<span class="tocno">Code</span><span class="toct">{html.escape(pathlib.Path(p).name)}</span></a></li>'
                      for p in NOTES]
     commit = f"{SRC_COMMIT[:7]}, {SRC_DATE}"
@@ -910,19 +921,36 @@ def build():
               .replace("{{COMMIT}}", commit))
     OUT.write_text(out)
     print(f"wrote {OUT}, {len(out) // 1024} KiB, {len(LISTINGS)} listings")
-    # the same page for a browser without the artifact host: its own skeleton, and mermaid from a CDN
-    head, body = out.split("</style>", 1)
-    STANDALONE.write_text(
-        '<!doctype html>\n<html lang="en">\n<head>\n<meta charset="utf-8">\n'
-        '<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">\n'
-        '<style>body { margin: 0; }</style>\n' + head + '</style>\n</head>\n<body>\n' + body
-        + '\n<script src="https://cdn.jsdelivr.net/npm/mermaid@11.4.1/dist/mermaid.min.js"></script>\n'
-        + MERMAID_SCRIPT + '</body>\n</html>\n')
+    # the same page for a browser without the artifact host: mermaid from a CDN
+    page = standalone(out, '<script src="https://cdn.jsdelivr.net/npm/mermaid@11.4.1/dist/mermaid.min.js"></script>\n'
+                      + MERMAID_SCRIPT)
+    STANDALONE.write_text(page)
     print(f"wrote {STANDALONE}")
-    # the annotated sources, from the page just written
-    if NOTES and subprocess.run([sys.executable, str(HERE / "annotate.py"), "--out", str(OUT_DIR),
-                                 *map(str, NOTES.values())]).returncode:
-        sys.exit("annotate.py failed")
+    # the annotated sources, standalone pages only: they link to the book's standalone page, which on
+    # the site is index.html
+    notes = {}
+    for src, path in NOTES.items():
+        lines = highlight_lines("\n".join(src_lines(src)).rstrip("\n"), LANG.get(pathlib.Path(src).suffix, "text"))
+        notes[pathlib.Path(src).name] = standalone(annotate.render(
+            path, src, lines, [(lid, a, b) for p, a, b, lid in LISTINGS if p == src], allhtml, ids, FIGURES,
+            CORES, md, SRC_COMMIT))
+    sites = [(OUT_DIR, STANDALONE.name)] + ([(SITE, "")] if SITE else [])
+    for d, book in sites:
+        (d / "annotated").mkdir(parents=True, exist_ok=True)
+        for name, notes_page in notes.items():
+            (d / "annotated" / f"{name}.html").write_text(notes_page.replace("{{BOOK}}", f"../{book}"))
+    if SITE:
+        (SITE / "index.html").write_text(page)
+    print(f"wrote {len(notes)} annotated sources" + (f", and the site in {SITE}" if SITE else ""))
+
+
+def standalone(page, tail=""):
+    """a page for the artifact host as a page for a browser: its own skeleton"""
+    head, body = page.split("</style>", 1)
+    return ('<!doctype html>\n<html lang="en">\n<head>\n<meta charset="utf-8">\n'
+            '<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">\n'
+            '<style>body { margin: 0; }</style>\n' + head + '</style>\n</head>\n<body>\n' + body
+            + '\n' + tail + '</body>\n</html>\n')
 
 
 # the charts drawn again in the other theme when the reader switches it, from their source

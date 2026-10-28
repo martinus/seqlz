@@ -18,6 +18,8 @@ import re
 import subprocess
 import sys
 
+from annotate import BLOCK, notes_files
+
 ROOT = pathlib.Path(__file__).resolve().parent.parent.parent
 BOOK_JSON = ROOT / "docs" / "book" / "book.json"
 args = [a for a in sys.argv[1:] if a != "--write"]
@@ -58,6 +60,16 @@ def near(m, a, direction):
                 return m[c] + (a - c)
     return None
 
+
+def kept(m, a, b):
+    """whether lines a to b kept their text and stayed together"""
+    return all(k in m for k in range(a, b + 1)) and m[b] - m[a] == b - a
+
+
+def show(f, idx, old, new):
+    print(f"{f.name}:{idx+1}: {old.strip()[:110]}\n{'':>{len(f.name)+len(str(idx+1))+2}}  -> {new.strip()[:110]}")
+
+
 for ch in sorted((ROOT / "docs/book/chapters").glob("*.md")):
     lines = ch.read_text().split("\n")
     cur = None  # the file of the last listing: what "line N" in the prose refers to
@@ -69,7 +81,7 @@ for ch in sorted((ROOT / "docs/book/chapters").glob("*.md")):
             cur = path
             mp = linemap(path)
             na, nb = near(mp, a, 1), near(mp, b, -1)
-            same = all(k in mp for k in range(a, b + 1)) and mp[b] - mp[a] == b - a
+            same = kept(mp, a, b)
             if (na, nb) != (a, b) or not same:
                 tag = "" if same else "  CHANGED"
                 print(f"{ch.name}:{idx+1}: @listing {path} {a}-{b} -> {na}-{nb}{tag}")
@@ -93,7 +105,7 @@ for ch in sorted((ROOT / "docs/book/chapters").glob("*.md")):
                 return re.sub(r"\d+", lambda d: str(near(mp, int(d.group(0)), 1) or d.group(0)), mm.group(0))
             nl = re.sub(r"\b[Ll]ines? \d+(?:(?:, | to | and |-|–)\d+)*", lineref, nl)
         if nl != line:
-            print(f"{ch.name}:{idx+1}: {line.strip()[:110]}\n{'':>{len(ch.name)+len(str(idx+1))+2}}  -> {nl.strip()[:110]}")
+            show(ch, idx, line, nl)
             lines[idx] = nl
             changed = True
     if write and changed:
@@ -101,16 +113,12 @@ for ch in sorted((ROOT / "docs/book/chapters").glob("*.md")):
 
 # the notes of annotate.py: each block starts where its first line went and ends before the next one,
 # so they still cover the file; links to a block (#b<first line>) move with it
-for nf in sorted((ROOT / "docs/book/annotated").glob("*.md")):
+for path, nf in notes_files(ROOT / "docs/book").items():
     lines = nf.read_text().split("\n")
-    m = re.match(r"#\s+(\S+)\s*$", lines[0])
-    if not m:
-        continue
-    path = m.group(1)
     mp = linemap(path)
     n_new = len(newtext[path]) - (newtext[path][-1] == "")
     blocks = [(idx, int(b.group(1)), int(b.group(2))) for idx, line in enumerate(lines)
-              if (b := re.match(r"@@\s+(\d+)-(\d+)\s*$", line))]
+              if (b := BLOCK.match(line))]
     starts = [1] + [near(mp, a, 1) for _, a, _ in blocks[1:]]
     if None in starts:
         sys.exit(f"{nf.name}: block {blocks[starts.index(None)][1]}: no line near it kept its text, move it by hand")
@@ -118,7 +126,7 @@ for nf in sorted((ROOT / "docs/book/annotated").glob("*.md")):
     for k, (idx, a, b) in enumerate(blocks):
         na, nb = starts[k], (starts[k + 1] - 1 if k + 1 < len(blocks) else n_new)
         moved[a] = na
-        same = all(j in mp for j in range(a, b + 1)) and mp[b] - mp[a] == b - a
+        same = kept(mp, a, b)
         if (na, nb) != (a, b) or not same:
             tag = "" if same else "  CHANGED" if nb >= na else "  EMPTY, remove it"
             print(f"{nf.name}:{idx+1}: @@ {a}-{b} -> {na}-{nb}{tag}")
@@ -127,7 +135,7 @@ for nf in sorted((ROOT / "docs/book/annotated").glob("*.md")):
     for idx, line in enumerate(lines):
         nl = re.sub(r"\(#b(\d+)\)", lambda r: f"(#b{moved.get(int(r.group(1)), r.group(1))})", line)
         if nl != line:
-            print(f"{nf.name}:{idx+1}: {line.strip()[:110]}\n{'':>{len(nf.name)+len(str(idx+1))+2}}  -> {nl.strip()[:110]}")
+            show(nf, idx, line, nl)
             lines[idx], changed = nl, True
     if write and changed:
         nf.write_text("\n".join(lines))
