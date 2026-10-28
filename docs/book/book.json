@@ -28,7 +28,6 @@
       "chapters": [
         {"file": "part2-map.md", "numbered": false, "label": "Map"},
         {"code": true},
-        {"file": "14-decode.md"},
         {"file": "15-zram-glue.md"}
       ]
     },

@@ -69,7 +69,7 @@ produces, and collects [the design decisions](#ch-decisions) with what they were
 | [`src/seqlz_match.h`](#f-seqlz_match-h) | {{ch00.lines.seqlz_match_h}} | the matcher: finds the repeats in a page | Part II |
 | [`src/seqlz_compress.c`](#f-seqlz_compress-c) | {{ch00.lines.seqlz_compress_c}} | the encoder | Part II |
 | [`src/seqlz_compress_literals.c`](#f-seqlz_compress_literals-c) | {{ch00.lines.seqlz_compress_literals_c}} | the coding of literals | Part II |
-| [`src/seqlz_decompress.c`](#f-seqlz_decompress-c) | {{ch00.lines.seqlz_decompress_c}} | the decoder | [14](#ch-decode) |
+| [`src/seqlz_decompress.c`](#f-seqlz_decompress-c) | {{ch00.lines.seqlz_decompress_c}} | the decoder | Part II |
 | [`src/seqlz_decompress_literals.c`](#f-seqlz_decompress_literals-c) | {{ch00.lines.seqlz_decompress_literals_c}} | the decoding of literals | Part II |
 | [`src/zram_seqlz.c`](#f-zram_seqlz-c) | {{ch00.lines.zram_seqlz_c}} | seqlz as a zram backend, for the benchmarks | [15](#ch-zram-glue) |
 @assert len(ch00.lines) == 18

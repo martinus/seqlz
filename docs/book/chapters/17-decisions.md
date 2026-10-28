@@ -181,7 +181,7 @@ cycles per page, 22%
 ([explored-designs.md](https://github.com/martinus/seqlz/blob/main/docs/explored-designs.md#seqlz-lz4s-matches-huffman-coded-sequences-with-static-tables));
 the offset class in the token as well, from 8758 to 8168, 7%
 ([explored-designs.md](https://github.com/martinus/seqlz/blob/main/docs/explored-designs.md#seqlz-third-decoder-round-one-repeat-offset-offset-class-in-the-token-and-why-cold-is-slow)).
-Since then a sequence costs the decoder one lookup, a shift and the next lookup ([chapter 14](#ch-decode)).
+Since then a sequence costs the decoder one lookup, a shift and the next lookup ([`decode_block()`](#ch-decode)).
 
 ## The format {#ch-decisions--format}
 
@@ -491,7 +491,7 @@ gives the same output in 42 349 instead of 43 841 cycles per page
 ## The decoder {#ch-decisions--decoder}
 
 The decoder ([`seqlz_decompress.c`](#f-seqlz_decompress-c), [`seqlz_decompress_literals.c`](#ch-literals-dec),
-[chapter 14](#ch-decode)) runs while a program waits. It runs 2.1 times `lz4`'s
+[`decode_block()`](#ch-decode)) runs while a program waits. It runs 2.1 times `lz4`'s
 instructions, 25 284 against 11 899 per page, at 3.3 instructions per cycle against 2.4: 7609 against 4992
 cycles in a hot loop on the PC
 ([explored-designs.md](https://github.com/martinus/seqlz/blob/main/docs/explored-designs.md#the-numbers-again-with-the-format-as-it-is-now-reads-03-µs-faster-than-on-29th-september)).
@@ -517,7 +517,7 @@ value saved instructions but no cycles. The other three changes of that step wer
 checks, the prefetch of 8 lines per iteration and the match copied from `d - off`
 ([explored-designs.md](https://github.com/martinus/seqlz/blob/main/docs/explored-designs.md#seqlzs-decoder-for-an-in-order-core-15-fewer-instructions-07-to-08-µs-less-at-cold-p99-on-the-a55-kept)).
 The next token's lookup before the copies lets the copies fill the time of its load on an in-order core
-([chapter 14](#ch-decode--next-token)).
+([the next token first](#ch-decode--next-token-first)).
 
 ### The fast path: fixed copies, and the branches that stay
 
@@ -543,7 +543,7 @@ per page more than right after decoding the same page, and `zcomp_decompress()` 
 The largest source was the check for fewer than {{ch17.refill_below}} bits left
 ([explored-designs.md](https://github.com/martinus/seqlz/blob/main/docs/explored-designs.md#which-branches-three-in-the-sequence-loop-are-58-of-the-130-misses-of-a-page-seen-once)).
 Two fast sequences take at most $2 \times (11 + 14) = 50$ of the 56 bits of a refill, so a fast sequence
-refills every second time without asking ([chapter 14](#ch-decode--next-token)): `zcomp_decompress()` went
+refills every second time without asking ([why the bits never run short](#ch-decode--bits-left)): `zcomp_decompress()` went
 from 1995 to 2008 ns to 1936 to 1942 ns in 3 boots with gcc, and on the A76 a page seen once decoded about
 70 ns faster. A refill on every fast sequence took out as many misses, but its loads cost 500 cycles more
 on a page the predictor knows
@@ -590,7 +590,7 @@ on pages without coded literals ([why `noinline`](#ch-literals-dec--main)).
 ### Bounded work for any input
 
 Every offset and length is checked against the room, and a page has at most `PAGE / 4 + 1` sequences
-([chapter 14](#ch-decode--safety)). A fuzzer that rewards cost found pages that take 1.14 times the
+([why no input can break the decoder](#ch-decode--safety)). A fuzzer that rewards cost found pages that take 1.14 times the
 instructions of the real p99 to compress and 1.59 times to decode, the smallest ratio of the four codecs;
 `lz4`'s decode worst case is 2.58 times its p99. Timed on the A55, 1.26 and 1.33 times the p99. The slowest
 decode found, every token escaped with 4-byte matches at offsets below 8, takes about 107 000 arm64
@@ -774,7 +774,7 @@ within the noise
 | priced with the fixed tables' sums of `lit_cost`, every 5th literal | every literal | every literal made pages almost no smaller and the encoder slower ([`DELTA_STEP`](#f-seqlz_compress_literals-c-b9)) |
 | every 5th literal | every 4th | every 4th is the same byte of each 4- or 8-byte field, and made pages 1.0 byte larger |
 | where the deltas stay raw, the literals stay raw | a second try of the literals as they are, with the fixed tables and a table of their own | it saved 0.71 bytes per page, for writes 0.39 µs slower on the A76 and 0.93 µs on the A55 in zram in the Mi 9T's kernel, 24th October 2026 ([`seqlz_code_own()`](#ch-literals-enc--code-own)) |
-| the records and the deltas in copies of the loops for level 3 | a test for every sequence in the loops all levels share | the test made levels 1 and 2 about 6% slower to write on the A76, and slower to read ([the two receivers](#ch-encoder--wrappers), [chapter 14](#ch-decode--deltas)) |
+| the records and the deltas in copies of the loops for level 3 | a test for every sequence in the loops all levels share | the test made levels 1 and 2 about 6% slower to write on the A76, and slower to read ([the two receivers](#ch-encoder--wrappers), [the two copies of the loop](#ch-decode--deltas)) |
 | records in `dst` | a second buffer | no byte of work memory; the matcher's state is its hash table until the page is matched ([the records](#ch-encoder--records)) |
 | for an offset below 4, the smallest multiple of it that is 4 or more, 4 or 6 | the offset as it is | the decoder adds 4 or 8 bytes at a time ([`seqlz_delta_last()`](#ch-internal--delta-last)) |
 

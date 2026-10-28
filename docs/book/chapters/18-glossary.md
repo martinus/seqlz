@@ -35,7 +35,7 @@ sense given here.
   {{ch17.escape_bits}} bits; {{ch17.tok_own}} of {{const.TOKEN_SYMBOLS}} tokens have one.
   [The escape](#ch-header--escape)
 - **fast path**: the decoder's path for a sequence without a length value and with room at every end:
-  fixed copies, no loop, no checks. [Chapter 14](#ch-decode--fast)
+  fixed copies, no loop, no checks. [The fast path](#ch-decode--fast)
 - **greedy, lazy matching**: a greedy matcher takes the first match it finds; lazy matching checks whether
   the next position starts a longer one, which seqlz does at level 3 only. [The matcher](#ch-matcher--plan)
 - **hash table**: the matcher's {{ch17.hash_slots}} slots of 2 bytes, cleared for each page, the newest

@@ -62,10 +62,10 @@ step marked, and a box "In short" of its main points, each a link to the section
 </a>
 <a href="#ch-decode"><rect class="fill-sheet" x="112" y="300" width="330" height="92" rx="4" stroke="currentColor" stroke-width="1"/>
 <text x="277.0" y="318" font-size="12.5" text-anchor="middle" font-weight="700">sequence loop</text>
-<g class="acc"><text x="277.0" y="333" font-size="11" text-anchor="middle">chapter 14</text></g>
+<g class="acc"><text x="277.0" y="333" font-size="11" text-anchor="middle">seqlz_decompress.c</text></g>
 <text x="277.0" y="350" font-size="11" text-anchor="middle">decode_block(): tokens, offsets, copies</text>
 </a>
-<a href="#ch-dec-basics"><g class="acc"><text x="277" y="378" font-size="11" text-anchor="middle">with copies and bit reader: seqlz_decompress.c</text></g></a>
+<a href="#ch-dec-basics"><g class="acc"><text x="277" y="378" font-size="11" text-anchor="middle">with the copies and the bit reader at its top</text></g></a>
 <rect x="10" y="300" width="80" height="92" rx="4" fill="none" stroke="currentColor" stroke-width="1"/>
 <text x="50.0" y="343.0" font-size="11.5" text-anchor="middle">4096</text>
 <text x="50.0" y="357.0" font-size="11.5" text-anchor="middle">bytes</text>
@@ -127,7 +127,7 @@ zram calls `seqlz_decode()` with the compressed page, the 4096 bytes to fill, an
    `seqlz_decode_literals()` reads the header, takes one of the 8 fixed tables or builds the page's own,
    and decodes the 8 streams side by side into the scratch ([from the header to the
    bitstream](#ch-literals-dec)).
-2. **The sequence loop** ([chapter 14](#ch-decode)), `decode_block()`: one lookup in the token table
+2. **The sequence loop** ([`seqlz_decompress.c`](#ch-decode)), `decode_block()`: one lookup in the token table
    gives a sequence's `ll`, `ml` and how to read its offset, then the literals are copied from the
    scratch or the input and the match from the page itself. Most sequences take the fast path, with
    copies of a fixed size and no checks of room ([fast path](#ch-decode--fast)), the others the slow

@@ -508,7 +508,7 @@ the loop all levels share, and the decoder its XOR the same way. Levels 1 and 2 
 6% slower on the Mi 9T's Cortex-A76 and read them slower too, userspace, 21st October 2026
 ([explored-designs.md](https://github.com/martinus/seqlz/blob/main/docs/explored-designs.md#level-3-xors-its-literals-with-an-earlier-byte-of-the-page-38-fewer-bytes-than-seqlz-3-of-15-october-kept)).
 With the records only in the lazy matcher's copy, and the decoder's loop copied for pages with deltas
-([chapter 14](#ch-decode--deltas)), levels 1 and 2 write and read as fast as before, within the
+([the decoder's two copies](#ch-decode--deltas)), levels 1 and 2 write and read as fast as before, within the
 run's spread.
 @end
 

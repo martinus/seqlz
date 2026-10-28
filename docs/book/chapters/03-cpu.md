@@ -216,14 +216,14 @@ each page in once per pass, with 20 000 other pages in between.
 
 Three branches of the sequence loop made 58% of the mispredictions of a page seen once: whether the
 bit register needs a refill, 32 per page; whether the sequence takes the **fast path**, the common
-case of a short sequence away from the end of the page ([chapter 14](#ch-decode)), 24; and whether
+case of a short sequence away from the end of the page ([the fast path](#ch-decode--fast)), 24; and whether
 the match's offset is below 8, 20 to 22
 ([explored-designs.md](https://github.com/martinus/seqlz/blob/main/docs/explored-designs.md#which-branches-three-in-the-sequence-loop-are-58-of-the-130-misses-of-a-page-seen-once)).
 The first one is gone. Whether {{ch03.refill_at}} bits are left depends on the lengths of the codes
 before, which no predictor knows for a new page. But a refill leaves at least 56 bits, and two fast
 sequences take at most {{ch03.two_fast}} of them on 4 KiB pages, {{k16.ch03.two_fast}} on 16 KiB, so
 `next_token_fast()` refills every second fast sequence without asking, a branch that alternates and
-that every predictor gets right ([chapter 14](#ch-decode--next-token)).
+that every predictor gets right ([the refill without its branch](#ch-decode--refill-branch)).
 
 ### Code without a branch
 
@@ -499,7 +499,7 @@ moves on by the real length; the next sequence writes over the rest:
 Such a **wild copy** writes past the last byte the sequence needs and reads past the last literal. So
 `seqlz_decode()` takes the fast path only where there is room in the page, in the literals and in the
 input, one compare per buffer against limits computed once per page
-([chapter 14](#ch-decode--rooms)); near the end of the page the slow path copies less at a time. The
+([the three rooms](#ch-decode--rooms)); near the end of the page the slow path copies less at a time. The
 encoder keeps such room too ([the room check](#ch-encoder--room-check)).
 
 ::: measured 16 bytes, not 32
@@ -525,7 +525,7 @@ CPUs with `tzcnt` and nothing defined on older ones; `seqlz_match_len()` ORs in 
 could be 0 ([why](#ch-matcher--match-len)), and the literal streams' marker bit is never shifted
 out. And the limits of the decoder's fast path, `lit_fast` for the literals and `in_fast` for the input,
 are `unsigned long`, not pointers, because "16 bytes before the end" of a short input would be a pointer
-before the buffer ([chapter 14](#ch-decode--setup)).
+before the buffer ([`lit_fast` and `in_fast`](#ch-decode--fast-limits)).
 
 The kernel can check for undefined behaviour at run time with **UBSan**. `CONFIG_UBSAN_SHIFT` checks
 every shift whose count the compiler cannot prove to be in range, `CONFIG_UBSAN_BOUNDS` every array

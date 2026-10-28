@@ -12,7 +12,7 @@ stretch of English text, and zeros to the end. It compresses to {{ch16.coded.len
 {{ch16.coded.pct}}% of the page, and with raw literals to {{ch16.raw.len}}. Four figures of the book show
 it sequence by sequence: the matcher finding it ([`seqlz_match.h`](#stepper-match)), the encoder writing it
 ([`seqlz_compress.c`](#f-seqlz_compress-c-b43)), the cache line of each token's lookup ([chapter 3](#anim-lines)) and the
-decoder reading it ([chapter 14](#stepper-decode)). A row of links under each one's sentence jumps the
+decoder reading it ([`seqlz_decompress.c`](#stepper-decode)). A row of links under each one's sentence jumps the
 others to the same sequence.
 
 ## The page {#ch-trace--page}
@@ -322,7 +322,7 @@ counters of [the deltas' animation](#anim-undelta) is {{counter.coded.len}} byte
 ## seqlz_decode(): the literals first {#ch-trace--decode}
 
 The backend calls `seqlz_decode(src, {{ch16.coded.len}}, dst, scratch)` with the per-CPU scratch of
-{{const.SCRATCH}} bytes ([chapter 14](#ch-decode)). Bit 7 of byte 2 is 0, so it runs the copy of
+{{const.SCRATCH}} bytes ([`decode_block()`](#ch-decode)). Bit 7 of byte 2 is 0, so it runs the copy of
 `decode_block()` without deltas. That prefetches the token and length tables, finds the
 top bit of `{{ch16.coded.u16}}` set and `n_lit = {{ch16.lits}}`, and [`seqlz_decode_literals()`](#ch-literals-dec)
 reads table {{ch16.lt.set}} and width {{ch16.lt.width}} from byte 2,

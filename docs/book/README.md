@@ -22,7 +22,7 @@ python3 docs/book/lint.py            # dashes, banned words, measurements withou
   `facts=<prefix>,...` after the name adds the facts under those prefixes, the same values the text
   quotes. `shot.py <name> --steps 0,5,last [--narrow] [--dark]` takes screenshots of the built
   animation with headless Chrome and fails if a step scrolls sideways.
-  `@stepper decode` and `@stepper match` are the step-throughs of chapters 14 and 9:
+  `@stepper decode` and `@stepper match` are the step-throughs in the notes of `seqlz_decompress.c` and `seqlz_match.h`:
   `stepper/instrument.py` puts a hook in front of the statements of a copy of `seqlz_decode()` or
   `seqlz_match_block()`, on the same line, `stepper/trace.c` and `trace_match.c` run the copy on the
   pages, and `stepper.js` and `match.js` play the trace. Both need a C compiler.

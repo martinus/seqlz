@@ -3,7 +3,7 @@
 A page compressed by seqlz is a string of bytes, and zram stores it together with its length. This
 chapter is about those bytes, as
 [`docs/format.md`](https://github.com/martinus/seqlz/blob/main/docs/format.md) specifies them, and
-it is the map for Part II: when `seqlz_decode()` in [chapter 14](#ch-decode) checks the top bit of the
+it is the map for Part II: when [`seqlz_decode()`](#ch-decode) checks the top bit of the
 first two bytes, or [`seqlz_decode_literals()`](#ch-literals-dec) reads 8 streams of literals, this is where the
 bytes they read are described as a whole.
 
@@ -503,7 +503,7 @@ python3 -c "import hashlib; print(hashlib.sha256(b'ab' * 2048).hexdigest())"
 
 Flip any bit of the {{ab.len}} bytes and run it again: most flips make the page invalid. The same
 bytes go through the real `seqlz_decode()` one statement at a time in
-[chapter 14](#ch-decode--example).
+[the decoder's step-through](#ch-decode--example).
 :::
 
 ## A second page: {{second.seqs}} sequences and {{second.b.pad}} bits of padding {#ch-format--example2}
@@ -873,7 +873,7 @@ A page is valid for a page size and its tables if all of these hold:
 
 A header with more literals than the sequences use breaks rule 10 or 12: the end is never reached,
 and the next token's `ll` or match does not fit. `seqlz_decode()` checks every rule, in its own order
-and often in a cheaper form ([chapter 14](#ch-decode)), and the fuzz target `fuzz/seqlz_diff_fuzz.c`
+and often in a cheaper form ([`decode_block()`](#ch-decode)), and the fuzz target `fuzz/seqlz_diff_fuzz.c`
 fails if it and `tools/seqlz-ref/seqlz_ref.c` disagree on whether any input is valid or on what it
 decodes to.
 

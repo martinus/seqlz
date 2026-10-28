@@ -323,7 +323,7 @@ Eric Biggers's words: *"You cannot just ignore fuzz-safety in the decompressor e
 ([`docs/plan.md` §2.2](https://github.com/martinus/seqlz/blob/main/docs/plan.md#22-the-failure-zbewalgo-benjamin-warnke-2018-reached-v7-never-merged)).
 seqlz's decoder checks every length and offset against the room left before it uses them, stops
 after at most `PAGE / 4 + 1` sequences, and requires that a page ends exactly where its bits end
-([chapter 14](#ch-decode)). Fuzzers, programs that feed a function random and damaged inputs and
+([the end checks](#ch-decode--end)). Fuzzers, programs that feed a function random and damaged inputs and
 report every crash and every access out of bounds ([chapter 15](#ch-zram-glue--fuzzing)), fed it
 billions of pages. On the Mi 9T's small core, a Cortex-A55, the slowest page the project built to
 be slow decodes in 1.33 times the p99 time of real pages; for `lz4` the same is 1.57

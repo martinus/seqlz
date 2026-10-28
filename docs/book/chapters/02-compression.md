@@ -281,7 +281,7 @@ branch from one sequence to the next. When the project made all its codes comple
 6% fewer instructions
 ([`docs/seqlz.md`](https://github.com/martinus/seqlz/blob/main/docs/seqlz.md#the-choices-with-their-numbers)).
 A damaged page then decodes to wrong symbols, not to an error, and the checks on lengths, offsets and
-the end of the page catch it ([chapter 14](#ch-decode)).
+the end of the page catch it ([`decode_block()`](#ch-decode)).
 
 ## Table-driven decoding {#ch-compression--table-decoding}
 
