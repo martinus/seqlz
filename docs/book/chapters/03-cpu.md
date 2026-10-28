@@ -176,7 +176,7 @@ significant bit first, with the same bytes of the pages
 The same count for the {{slab.tokens}} token lookups of [chapter 16](#ch-trace)'s page, one for each
 sequence but the last, which has no token:
 
-@anim lines wide The token lookups of chapter 16's page, found with the real codec, and the line of the token table each one reads: most significant bit first as seqlz reads, and the same bits reversed. One page, so the counts are its own, not the mean of 20 000 pages.
+@anim lines wide The token lookups of chapter {{chapter:ch-trace}}'s page, found with the real codec, and the line of the token table each one reads: most significant bit first as seqlz reads, and the same bits reversed. One page, so the counts are its own, not the mean of 20 000 pages.
 
 ::: measured The bit order on the phone
 On the Mi 9T's big core, a Cortex-A76, with the token table not prefetched on that core as it was

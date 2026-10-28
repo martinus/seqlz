@@ -36,6 +36,10 @@ Directives, each on a line of its own, outside fenced code:
   @output <name> [lines]
       what the program <name> printed, as a text block; lines is e.g. 3-4 or 1-2,24-25
 
+  {{chapter:<id>}}
+      the number of the chapter with that id, anywhere on the page; a link whose text is "chapter 13"
+      or only "13" gets the number of the chapter it goes to, by itself
+
   {{key}}, {{key|grp}}
       a value the facts programs compute, anywhere in a chapter, also in code and figures: each
       facts/*.c is built with src/ and prints a JSON object, nested objects give dotted keys, list
@@ -55,12 +59,14 @@ line numbers. Raw HTML (figures with inline SVG) passes through.
 
 python3 build.py [--check] [--out DIR] [--site DIR]
     --check fails if a line of src/ without notes is in no listing, an id is twice on the page, or a link goes to
-    an id that is not; --out writes the two pages into DIR instead of next to this script, and the
-    annotated sources into DIR/annotated; --site writes the site of GitHub Pages into DIR too: the
-    standalone page as index.html, and annotated/<file>.html with links to it
+    an id that is not, or a link that says 'chapter N' goes into a file of Part II; --out writes the
+    two pages into DIR instead of next to this script; --site writes the site of GitHub Pages into DIR
+    too: the standalone page as index.html. Both get annotated/<file>.html, where each file of Part II
+    had a page of its own until October 2026: a redirect to the same place in the book
 """
 import atexit
 import base64
+import bisect
 import html
 import json
 import os
@@ -182,9 +188,11 @@ def src_lines(path):
 
 
 COVERED = {}  # path -> set of line numbers
-# the files with an annotated source, annotate.py: their listings link to the same lines there
+# the files of src/ with notes, annotate.py: each is a chapter of Part II, the code with a note next
+# to each block, and every listing of it links to the same lines there
 NOTES = annotate.notes_files(HERE)
-# the annotated sources in the order a part of book.json reads them, "code": (group, its title, file)
+# those files in the order a part of book.json reads them, "code": (group, its title, file); the
+# part's chapter {"code": true} is where they go
 CODE = [(g["group"], g["title"], f) for part in BOOK["parts"] for g in part.get("code", []) for f in g["files"]]
 if set(f for *_, f in CODE) != set(NOTES):
     sys.exit(f"book.json's code and annotated/*.md differ: in book.json only {sorted(set(f for *_, f in CODE) - set(NOTES))}, "
@@ -194,12 +202,12 @@ LANG = {".c": "c", ".h": "c", ".inc": "c", ".py": "python", ".sh": "bash", ".pat
 
 
 def notes_href(path, line=None):
-    """the annotated source of path, at a line of it"""
-    return f"annotated/{pathlib.Path(path).name}.html" + (f"#L{line}" if line else "")
+    """path's chapter in Part II, at a line of it"""
+    return f"#{annotate.file_id(path)}" + (f"-L{line}" if line else "")
 
 
 def render_code_list():
-    """the annotated sources in their order, by group, each with the first sentence of its notes"""
+    """the files of Part II in their order, by group, each with the first sentence of its notes"""
     out, group = [], None
     for g, title, f in CODE:
         if g != group:
@@ -235,7 +243,7 @@ def render_listing(path, a, b):
     rng = f"line {a}" if a == b else f"lines {a}&ndash;{b}"
     if path in NOTES:
         rng += (f' <a class="lnotes" href="{notes_href(path, a)}" '
-                f'title="These lines in the annotated source, a short note next to each block">notes &rarr;</a>')
+                f'title="These lines in Part II, with a short note next to each block">notes &rarr;</a>')
     return (f'<figure class="listing" id="{lid}">'
             f'<figcaption><a class="lfile" href="{GITHUB}/{file_commit(path)}/{path}#L{a}-L{b}">{html.escape(path)}</a>'
             f'<span class="lrange">{rng}</span></figcaption>'
@@ -256,21 +264,19 @@ STEP_BUTTONS = [("first", "To the start"), ("prevseq", "Previous sequence (shift
                 ("nextseq", "Next sequence (shift + right)")]
 
 
-# what a kind of figure needs on the page once, before the first: the frame of the animations and of
-# the step-throughs; and every figure, for the annotated sources: id -> (its kind, its markup)
-CORES, CORES_USED, FIGURES = {}, set(), {}
+# what the figures need on the page once: their styles before the first, their scripts at the end of
+# the page, when every figure that they start is there. A figure can be on the page more than once, in
+# a chapter and next to its code: the second is anim-<name>-2, and shares the first one's data.
+ASSET_CSS, ASSET_JS, INSTANCES, DATA_OF = {}, {}, {}, {}
 
 
-def core_once(kind):
-    if kind in CORES_USED:
-        return ""
-    CORES_USED.add(kind)
-    return CORES[kind]
+def instance(base, data):
+    """the id of one more figure base on the page, and the id whose -data it reads"""
+    n = INSTANCES[base] = INSTANCES.get(base, 0) + 1
+    fid = base if n == 1 else f"{base}-{n}"
+    return fid, DATA_OF.setdefault((base, data), fid)
 
 
-def figure(fid, kind, markup):
-    FIGURES[fid] = (kind, markup)
-    return markup
 SRC_C = ("codes", "compress", "compress_literals", "decompress", "decompress_literals", "default_tables", "lit_sets")
 
 
@@ -500,13 +506,13 @@ STEPPERS = {
     "decode": {
         "src": "src/seqlz_decompress.c", "copy": "dec_inst.c", "trace": "trace.c",
         "link": ("codes", "compress", "compress_literals", "decompress_literals", "default_tables", "lit_sets"),
-        "pages": [("ab", "ab \u00d7 2048, {{ab.len}} bytes"), ("slab", "chapter 16\u2019s page, {{ch16.coded.len}} bytes")],
+        "pages": [("ab", "ab \u00d7 2048, {{ab.len}} bytes"), ("slab", "chapter {{chapter:ch-trace}}\u2019s page, {{ch16.coded.len}} bytes")],
         "label": "decode_block() step by step", "fn": "decode_block()", "js": "stepper.js",
         "what": "decoding two pages", "seq": "a sequence",
     },
     "match": {
         "src": "src/seqlz_match.h", "copy": "seqlz_match.h", "trace": "trace_match.c", "link": (),
-        "pages": [("pointers", "512 pointers"), ("slab", "chapter 16\u2019s page")],
+        "pages": [("pointers", "512 pointers"), ("slab", "chapter {{chapter:ch-trace}}\u2019s page")],
         "label": "seqlz_match_block() step by step", "fn": "seqlz_match_block()", "js": "match.js",
         "what": "finding the sequences of two pages", "seq": "the next sequence emitted",
     },
@@ -541,10 +547,11 @@ def render_stepper(what, where):
                     f'{html.escape(substitute(t, where))}</button>' for pid, t in k["pages"])
     buttons = "".join(f'<button type="button" class="icon" data-do="{b_}" title="{t}" aria-label="{t}">'
                       f'<svg viewBox="0 0 24 24" aria-hidden="true">{ICONS[b_]}</svg></button>' for b_, t in STEP_BUTTONS)
-    sid = "stepper-" + what
-    CORES.setdefault("stepper", f'<style>{(HERE / "stepper" / "stepper.css").read_text()}</style>'
-                                f'<script>{(HERE / "stepper" / "frame.js").read_text()}</script>')
-    out = (f'<figure class="stepper nocomments" id="{sid}" data-kind="{what}" tabindex="-1" aria-label="{k["label"]}">'
+    sid, src = instance("stepper-" + what, trace)
+    ASSET_CSS.setdefault("stepper", (HERE / "stepper" / "stepper.css").read_text())
+    ASSET_JS.setdefault("stepper", (HERE / "stepper" / "frame.js").read_text())
+    ASSET_JS.setdefault(k["js"], (HERE / "stepper" / k["js"]).read_text())
+    out = (f'<figure class="stepper nocomments" id="{sid}" data-kind="{what}"{f' data-src="{src}"' if src != sid else ""} tabindex="-1" aria-label="{k["label"]}">'
             f'<div class="st-bar"><div class="st-pages" role="group" aria-label="Page">{pages}</div>'
             f'<button type="button" class="st-cm" aria-pressed="false" title="Show the comment lines of the code">comments</button>'
             f'<input type="range" class="st-scrub" min="0" value="0" aria-label="Step">'
@@ -557,9 +564,8 @@ def render_stepper(what, where):
             f'a copy of the function with a hook in front of its statements recorded every step when this book was built. '
             f'The highlighted line is the one about to run. Keys: left and right step, with shift {k["seq"]}.</figcaption>'
             f'</figure>'
-            f'<script type="application/json" id="{sid}-data">{trace}</script>'
-            f'<script>{(HERE / "stepper" / k["js"]).read_text()}</script>')
-    return core_once("stepper") + figure(sid, "stepper", out)
+            + (f'<script type="application/json" id="{sid}-data">{trace}</script>' if src == sid else ""))
+    return out
 
 
 def anim_data(name):
@@ -603,10 +609,11 @@ def render_anim(args, where):
     d = HERE / "anim"
     if not (d / f"{name}.js").exists():
         sys.exit(f"{where}: anim/{name}.js does not exist")
-    CORES.setdefault("anim", f'<style>{(d / "core.css").read_text()}</style><script>{(d / "core.js").read_text()}</script>')
-    out = ""
+    ASSET_CSS.setdefault("anim", (d / "core.css").read_text())
+    ASSET_JS.setdefault("anim", (d / "core.js").read_text())
     if (d / f"{name}.css").exists():
-        out += f'<style>{(d / f"{name}.css").read_text()}</style>'
+        ASSET_CSS.setdefault(f"anim-{name}", (d / f"{name}.css").read_text())
+    ASSET_JS.setdefault(f"anim-{name}", (d / f"{name}.js").read_text())
     data = PREBUILT[("anim", name)].result() if ("anim", name) in PREBUILT else anim_data(name)
     if m.group(3):
         # the facts under these prefixes, as data.facts, so the figure shows the numbers the text does
@@ -618,14 +625,14 @@ def render_anim(args, where):
         obj = json.loads(data) if data is not None else {}
         obj["facts"] = picked
         data = json.dumps(obj)
-    fid = f"anim-{name}"
-    out += (f'<figure class="anim{" wide" if wide else ""}" id="{fid}" data-anim="{name}" tabindex="-1">'
+    fid, src = instance(f"anim-{name}", data)
+    out = (f'<figure class="anim{" wide" if wide else ""}" id="{fid}" data-anim="{name}"'
+           + (f' data-src="{src}"' if src != fid else "") + ' tabindex="-1">'
             f'<div class="an-bar"></div><p class="an-say" aria-live="polite"></p><div class="an-stage"></div>'
             + (f'<figcaption>{md(caption)[3:-4]}</figcaption>' if caption else "") + '</figure>')
-    if data is not None:
+    if data is not None and src == fid:
         out += f'<script type="application/json" id="{fid}-data">{data}</script>'
-    out += f'<script>{(d / f"{name}.js").read_text()}</script>'
-    return core_once("anim") + figure(fid, "anim", out)
+    return out
 
 
 def render_fence(lang, body):
@@ -826,6 +833,8 @@ def chapter_labels():
     labels, no = {}, 0
     for part in BOOK["parts"]:
         for ch in part["chapters"]:
+            if "file" not in ch:
+                continue
             f = HERE / "chapters" / ch["file"]
             m = re.search(r"^# .*\{#([\w-]+)\}", f.read_text(), re.M) if f.exists() else None
             if ch.get("numbered", True):
@@ -864,13 +873,84 @@ def map_block(cid, labels):
     return "".join(out)
 
 
+def add_ids(body, cid):
+    """an id for every h2, h3 and h4 without one: cid--<its slug>"""
+    def one(hm):
+        attrs, inner = hm.group(2), hm.group(3)
+        if 'id="' in attrs:
+            return hm.group(0)
+        return f'<{hm.group(1)} id="{cid}--{slug(inner)}"{attrs}>{inner}</{hm.group(1)}>'
+    return re.sub(r"<(h[234])([^>]*)>(.*?)</\1>", one, body, flags=re.S)
+
+
+def collect_ids(body, where, ids):
+    for im in re.finditer(r' id="([^"]+)"', body):
+        if im.group(1) in ids:
+            warn(f"duplicate id {im.group(1)} in {where}")
+        ids.add(im.group(1))
+
+
+def chapter_numbers(page, labels):
+    """'chapter 13' in the text of a link, or a link that is only a number: the number of the chapter
+    the link goes to, so that a chapter taken out or put in does not leave numbers behind. A link into
+    a file of Part II that says 'chapter N' is a warning: the text has to say where it goes"""
+    secs = [(m.start(), bool(m.group(1)), m.group(2))
+            for m in re.finditer(r'<section class="chapter( codefile)?" data-chapter="([^"]+)"', page)]
+    starts = [p for p, *_ in secs]
+    at = {}
+    for m in re.finditer(r' id="([^"]+)"', page):
+        at.setdefault(m.group(1), m.start())
+    changed = []
+
+    def fix(m):
+        target, inner = m.group(2), m.group(3)
+        text = re.sub(r"<[^>]+>", "", inner)
+        said = re.search(r"\b[Cc]hapter (\d+)\b", text) or re.fullmatch(r"(\d+)", text)
+        k = bisect.bisect(starts, at[target]) - 1 if said and target in at else -1
+        if k < 0:
+            return m.group(0)
+        _, codefile, cid = secs[k]
+        no = labels.get(cid, "")
+        if codefile or not no.isdigit():
+            warn(f"a link to #{target} says 'chapter {said.group(1)}', but goes to "
+                 + (f"the code of {cid}" if codefile else f"{no or cid}"))
+            return m.group(0)
+        if no != said.group(1):
+            changed.append(target)
+        if text == said.group(1):
+            return m.group(1) + inner.replace(text, no) + "</a>"
+        return m.group(1) + re.sub(r"\b([Cc]hapter )\d+\b", lambda x: x.group(1) + no, inner) + "</a>"
+    page = re.sub(r'(<a href="#([^"]+)"[^>]*>)(.*?)</a>', fix, page, flags=re.S)
+    return page, changed
+
+
+def chapter_refs(page, labels):
+    """{{chapter:<id>}}, anywhere on the page, also in the figures' scripts: the number of that chapter"""
+    def one(m):
+        if m.group(1) not in labels:
+            sys.exit(f"{{{{chapter:{m.group(1)}}}}}: no chapter has that id")
+        return labels[m.group(1)]
+    return re.sub(r"\{\{chapter:([\w-]+)\}\}", one, page)
+
+
+def redirect(fid, book):
+    """the page an old link to annotated/<file>.html#L<n>, #b<n> or #s-<section> lands on: the same
+    place in the book"""
+    return ('<!doctype html>\n<meta charset="utf-8">\n<title>seqlz, line by line</title>\n'
+            f'<script>var h = location.hash.slice(1); location.replace("../{book}#{fid}" + '
+            f'(/^[Lb]\\d+$/.test(h) ? "-" + h : /^s-/.test(h) ? "--" + h.slice(2) : ""));</script>\n'
+            f'<p>This file is in <a href="../{book}#{fid}">the book</a> now.</p>\n')
+
+
 def build():
     parts_html, toc = [], []
     labels = chapter_labels()
-    prebuild([(ch["file"], (HERE / "chapters" / ch["file"]).read_text()) for part in BOOK["parts"]
-              for ch in part["chapters"] if (HERE / "chapters" / ch["file"]).exists()])
+    files = [(f"chapters/{ch['file']}", (HERE / "chapters" / ch["file"]).read_text()) for part in BOOK["parts"]
+             for ch in part["chapters"] if "file" in ch and (HERE / "chapters" / ch["file"]).exists()]
+    prebuild(files + [(str(NOTES[src].relative_to(HERE)), NOTES[src].read_text()) for src in NOTES])
     ids = set()
     chap_no = 0
+    CODE_MARK = "\0code\0"
     for part in BOOK["parts"]:
         part_items = []
         if part.get("title"):
@@ -878,6 +958,10 @@ def build():
                               f'<h1 class="parttitle">{part["title"]}</h1>'
                               f'<p class="partintro">{part.get("intro", "")}</p></div>')
         for ch in part["chapters"]:
+            if ch.get("code"):
+                parts_html.append(CODE_MARK)
+                part_items.append(None)
+                continue
             f = HERE / "chapters" / ch["file"]
             if not f.exists():
                 parts_html.append(f'<section class="chapter missing"><h1>{ch["file"]} is not written yet</h1></section>')
@@ -885,14 +969,14 @@ def build():
             text = substitute(f.read_text(), ch["file"])
             first_listing = len(LISTINGS)
             body = unstash(md(preprocess(text, ch["file"])))
-            # under the title, the annotated sources of the chapter's listings, at the first line it shows
+            # under the title, the files of Part II that the chapter shows lines of, at the first one
             notes = {}
             for path, a, *_ in LISTINGS[first_listing:]:
                 if path in NOTES:
                     notes.setdefault(path, a)
             notes_html = "".join(f'<p class="chapnotes"><a href="{notes_href(path, a)}">This chapter&rsquo;s lines of '
-                                 f'<code>{html.escape(pathlib.Path(path).name)}</code> with a short note next to each '
-                                 f'block, in the annotated source &rarr;</a></p>' for path, a in notes.items())
+                                 f'<code>{html.escape(pathlib.Path(path).name)}</code> in Part II, with a short note '
+                                 f'next to each block &rarr;</a></p>' for path, a in notes.items())
             numbered = ch.get("numbered", True)
             if numbered:
                 chap_no += 1
@@ -911,26 +995,50 @@ def build():
                       f'<h1 id="{cid}">{title}</h1>{notes_html}</header>'
                     + map_block(cid, labels)
                     + body[m.end():])
-
-            def add_id(hm):
-                attrs, inner = hm.group(2), hm.group(3)
-                if 'id="' in attrs:
-                    return hm.group(0)
-                sid = cid + "--" + slug(inner)
-                return f"<{hm.group(1)} id=\"{sid}\"{attrs}>{inner}</{hm.group(1)}>"
-            body = re.sub(r"<(h[234])([^>]*)>(.*?)</\1>", add_id, body, flags=re.S)
-            for im in re.finditer(r'id="([^"]+)"', body):
-                if im.group(1) in ids:
-                    warn(f"duplicate id {im.group(1)} in {ch['file']}")
-                ids.add(im.group(1))
+            body = add_ids(body, cid)
+            collect_ids(body, ch["file"], ids)
             subs = []
             for hm in re.finditer(r'<h2 id="([^"]+)"[^>]*>(.*?)</h2>', body, re.S):
                 subs.append((hm.group(1), re.sub(r"<[^>]+>", "", hm.group(2))))
             parts_html.append(f'<section class="chapter" data-chapter="{cid}">{body}</section>')
             part_items.append((cid, label, re.sub(r"<[^>]+>", "", title), subs))
         toc.append((part, part_items))
+    chapters = "\n".join(parts_html)
+
+    # the files of Part II, after the chapters: each block lists the chapters' listings of its lines,
+    # under the section and the chapter each one is in
+    heads = [(m.start(), re.sub(r"<[^>]+>", "", m.group(2)).strip())
+             for m in re.finditer(r'<h[123] id="([^"]+)"[^>]*>(.*?)</h[123]>', chapters, re.S)]
+    chapnos = [(m.start(), m.group(1)) for m in re.finditer(r'<span class="chapno">([^<]*)</span>', chapters)]
+    refs = {}
+    for path, a, b, lid in LISTINGS:
+        if path in NOTES:
+            pos = chapters.index(f'id="{lid}"')
+            refs.setdefault(path, []).append((a, b, f"#{lid}", chapnos[bisect.bisect(chapnos, (pos,)) - 1][1],
+                                              heads[bisect.bisect(heads, (pos,)) - 1][1]))
+    names = {pathlib.Path(f).name for f in NOTES}
+    order = [f for *_, f in CODE]
+    group_of = {f: t for _, t, f in CODE}
+    code_html, file_sections = [], {}
+    for k, src in enumerate(order):
+        where = str(NOTES[src].relative_to(HERE))
+        lines = highlight_lines("\n".join(src_lines(src)).rstrip("\n"), LANG.get(pathlib.Path(src).suffix, "text"))
+        near = (order[k - 1] if k else None, order[k + 1] if k + 1 < len(order) else None)
+        body = annotate.render(
+            NOTES[src], substitute(NOTES[src].read_text(), where), src, lines, refs.get(src, []),
+            lambda text, w, first: unstash(md(preprocess(text, w, first))),
+            lambda kind, name, w: render_anim(name, w) if kind == "anim" else render_stepper(name, w),
+            names, group_of[src], near)
+        body = add_ids(body, annotate.file_id(src))
+        collect_ids(body, where, ids)
+        code_html.append(body)
+        _, secs = annotate.parse_notes(NOTES[src])
+        file_sections[src] = [(annotate.section_id(annotate.file_id(src), s["title"]), s["title"]) for s in secs]
+    allhtml, renumbered = chapter_numbers(chapters.replace(CODE_MARK, "\n".join(code_html)), labels)
+    if renumbered:
+        print(f"{len(renumbered)} links say another chapter number now")
+
     # links to ids that do not exist
-    allhtml = "\n".join(parts_html)
     bad = sorted({m.group(1) for m in re.finditer(r'href="#([^"]+)"', allhtml)} - ids
                  - {p["id"] for p in BOOK["parts"] if "id" in p})
     for b in bad:
@@ -939,13 +1047,19 @@ def build():
     for part, items in toc:
         if part.get("title"):
             toc_html.append(f'<li class="tocpart"><a href="#{part["id"]}">{part["label"]}: {part["title"]}</a></li>')
-        # a part's annotated sources come before its chapters, the group named at its first file
-        for g in part.get("code", []):
-            for k, f in enumerate(g["files"]):
-                toc_html.append(f'<li class="tocchap tocfile"><a href="{notes_href(f)}"><span class="tocno">'
-                                f'{html.escape(g["group"]) if k == 0 else ""}</span><span class="toct">'
-                                f'<code>{html.escape(pathlib.Path(f).name).replace("_", "_<wbr>")}</code></span></a></li>')
-        for cid, label, title, subs in items:
+        for item in items:
+            if item is None:
+                # the files, the group named at its first one
+                for g in part.get("code", []):
+                    for k, f in enumerate(g["files"]):
+                        fid = annotate.file_id(f)
+                        sub = "".join(f'<li><a href="#{sid}">{html.escape(t)}</a></li>' for sid, t in file_sections[f])
+                        toc_html.append(f'<li class="tocchap tocfile" data-for="{fid}"><a href="#{fid}"><span class="tocno">'
+                                        f'{html.escape(g["group"]) if k == 0 else ""}</span><span class="toct">'
+                                        f'<code>{html.escape(pathlib.Path(f).name).replace("_", "_<wbr>")}</code></span></a>'
+                                        f'<ol class="tocsub">{sub}</ol></li>')
+                continue
+            cid, label, title, subs = item
             sub = "".join(f'<li><a href="#{sid}">{html.escape(t)}</a></li>' for sid, t in subs)
             toc_html.append(f'<li class="tocchap" data-for="{cid}"><a href="#{cid}"><span class="tocno">{label}</span>'
                             f'<span class="toct">{html.escape(title)}</span></a>'
@@ -964,8 +1078,11 @@ def build():
     out = (tpl.replace("{{KATEX_CSS}}", katex_css(allhtml))
               .replace("{{TOC}}", "\n".join(toc_html))
               .replace("{{CODE_FIRST}}", code_first)
+              .replace("{{FIG_CSS}}", "".join(f"<style>{c}</style>" for c in ASSET_CSS.values()))
               .replace("{{BODY}}", allhtml)
+              .replace("{{FIG_JS}}", "".join(f"<script>{j}</script>" for j in ASSET_JS.values()))
               .replace("{{COMMIT}}", commit))
+    out = chapter_refs(out, labels)
     OUT.write_text(out)
     print(f"wrote {OUT}, {len(out) // 1024} KiB, {len(LISTINGS)} listings")
     # the same page for a browser without the artifact host: mermaid from a CDN
@@ -973,24 +1090,15 @@ def build():
                       + MERMAID_SCRIPT)
     STANDALONE.write_text(page)
     print(f"wrote {STANDALONE}")
-    # the annotated sources, standalone pages only: they link to the book's standalone page, which on
-    # the site is index.html
-    notes = {}
-    order = [f for *_, f in CODE]
-    for k, src in enumerate(order):
-        lines = highlight_lines("\n".join(src_lines(src)).rstrip("\n"), LANG.get(pathlib.Path(src).suffix, "text"))
-        near = (order[k - 1] if k else None, order[k + 1] if k + 1 < len(order) else None)
-        notes[pathlib.Path(src).name] = standalone(annotate.render(
-            NOTES[src], src, lines, [(lid, a, b) for p, a, b, lid in LISTINGS if p == src], allhtml, ids, FIGURES,
-            CORES, md, SRC_COMMIT, near))
+    # the files had pages of their own until October 2026: their addresses go to the same place in the book
     sites = [(OUT_DIR, STANDALONE.name)] + ([(SITE, "")] if SITE else [])
     for d, book in sites:
         (d / "annotated").mkdir(parents=True, exist_ok=True)
-        for name, notes_page in notes.items():
-            (d / "annotated" / f"{name}.html").write_text(notes_page.replace("{{BOOK}}", f"../{book}"))
+        for src in order:
+            (d / "annotated" / f"{pathlib.Path(src).name}.html").write_text(redirect(annotate.file_id(src), book))
     if SITE:
         (SITE / "index.html").write_text(page)
-    print(f"wrote {len(notes)} annotated sources" + (f", and the site in {SITE}" if SITE else ""))
+        print(f"wrote the site in {SITE}")
 
 
 def standalone(page, tail=""):

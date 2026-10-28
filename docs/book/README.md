@@ -54,15 +54,18 @@ python3 docs/book/lint.py            # dashes, banned words, measurements withou
 - `"map"` in `book.json` is the path of a page through Part II, rows of chapter ids: `build.py` draws it
   at the top of each chapter it names, that chapter marked, linked to the map chapter `#map`.
 - `STYLE.md` is the brief the chapters were written to, `REVIEW.md` the one they were checked with.
-- `annotate.py` makes the annotated source of a file: the file at the book's commit, a short note
-  next to each block, links to the book's sections that explain those lines, and the book's
-  animations under the blocks they belong to. The notes are `annotated/<file>.md`. `build.py` makes
-  the page `annotated/<file>.html` from them, with the code, the listings and the figures it built,
-  and fails with a note that misses lines or links to an id the book does not have; every listing of
-  the file gets a link "notes" to its lines there. Part II's `"code"` in `book.json` is the reading
-  order of the annotated files, in groups: the contents list them at the start of Part II, each page
-  links to the file before and after it, `@code` in a chapter lists them, and the build fails when
-  that list and `annotated/*.md` differ. `remap.py` moves the blocks with their lines.
+- Part II is the code itself: `annotate.py` makes a chapter of each file of `src/` with notes,
+  `annotated/<file>.md`: the file at the book's commit, a short note next to each block, and under a
+  note buttons that open a figure or a longer explanation (`@more` ... `@end`, with everything a
+  chapter has but listings) under the block. The build fails with notes that miss lines or link to an
+  id the book does not have; every listing of the file gets a link "notes" to its lines there. Part
+  II's `"code"` in `book.json` is the reading order of the files, in groups, and `{"code": true}` in its
+  chapters is where they go; `@code` in a chapter lists them, and the build fails when that list and
+  `annotated/*.md` differ. `remap.py` moves the blocks with their lines. The files had pages of their
+  own until October 2026: `annotated/<file>.html` is now a redirect to the same place in the book.
+- A chapter folded into the notes keeps its ids as `@more {#id}` and `@anchor <id>`, so links to it
+  still work. Links that say "chapter 13", or only "13", get the number of the chapter they go to, and
+  `{{chapter:<id>}}` is a chapter's number anywhere else, so taking a chapter out renumbers the rest.
   `build.py --site DIR` writes the site of GitHub Pages, job `book` uses it.
 
 After a change of the format or the tables, build the book: what the code computes follows by

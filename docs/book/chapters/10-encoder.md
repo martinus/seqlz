@@ -90,7 +90,7 @@ toward each other. The same with a real page, the slab of task records from [cha
 one sequence per step; the buttons give `dst` the two pages of zram, the smallest size the page fits
 into, and 1 byte less.
 
-@anim ends wide The buffer dst while seqlz compresses chapter 16's page with raw literals, after each sequence, then encoder_finish(). The numbers come from the real encoder, through anim/ends.c; the close-ups show the 16 bytes at each end.
+@anim ends wide The buffer dst while seqlz compresses chapter {{chapter:ch-trace}}'s page with raw literals, after each sequence, then encoder_finish(). The numbers come from the real encoder, through anim/ends.c; the close-ups show the 16 bytes at each end.
 
 ::: why One pass, any buffer
 Two passes, the matcher into an array and then the encoder, were 6% slower
@@ -237,9 +237,9 @@ sequences of the page of pointers:
   {{ch10.ptr.f2.cnt1}}.
 @assert ch10.ptr.s1.code + ch10.ptr.s1.offbits == "10101011" + "000001" and ch10.ptr.f2.e3 == "00" and ch10.ptr.s2.code == tok.code[49] and ch10.ptr.f1.cnt1 == 6 and ch10.ptr.f2.cnt1 == 2
 
-The same, put by put and flush by flush, for the first sequences of chapter 16's page:
+The same, put by put and flush by flush, for the first sequences of chapter {{chapter:ch-trace}}'s page:
 
-@anim accum wide The accumulator acc, the value each enc_put() appends or the word enc_flush() stores, and the last bytes of dst, for the first 4 sequences of chapter 16's page. The values come from the encoder's own helpers, through anim/accum.c, which checks them against encode_emit().
+@anim accum wide The accumulator acc, the value each enc_put() appends or the word enc_flush() stores, and the last bytes of dst, for the first 4 sequences of chapter {{chapter:ch-trace}}'s page. The values come from the encoder's own helpers, through anim/accum.c, which checks them against encode_emit().
 
 For `cnt` 0 the shift would be by 64, undefined, and the mask makes it 0. That happens: a sequence with
 an `ll` value and no `ml` value flushes twice, the second time possibly with no bits. Then the old
@@ -322,8 +322,8 @@ reads them back from `dst` and checks them against the codes put.
 
 <figure class="diagram">
 <div class="scroll">
-<svg viewBox="0 0 720 340" role="img" aria-label="Sequence 176 of chapter 16's page through encode_seq(): its offset class, its token, the token's code, the offset bits, the ll value, and the 27 bits they make" font-size="12">
-  <text x="10" y="16" font-weight="bold">sequence 176 of chapter 16's page: ll = {{ch10.slab.s176.ll}}, ml = {{ch10.slab.s176.ml}}, off = {{ch10.slab.s176.off}}, e-&gt;last = {{ch10.slab.s176.last}}</text>
+<svg viewBox="0 0 720 340" role="img" aria-label="Sequence 176 of chapter {{chapter:ch-trace}}'s page through encode_seq(): its offset class, its token, the token's code, the offset bits, the ll value, and the 27 bits they make" font-size="12">
+  <text x="10" y="16" font-weight="bold">sequence 176 of chapter {{chapter:ch-trace}}'s page: ll = {{ch10.slab.s176.ll}}, ml = {{ch10.slab.s176.ml}}, off = {{ch10.slab.s176.off}}, e-&gt;last = {{ch10.slab.s176.last}}</text>
   <text x="10" y="48" class="mut" font-size="11">1</text>
   <text x="28" y="48">seqlz_off_class({{ch10.slab.s176.off}}, {{ch10.slab.s176.last}}, &amp;raw_bits)</text>
   <text x="408" y="48"><tspan class="acc" font-weight="bold">class {{ch10.slab.s176.cls}}</tspan>, raw_bits = <tspan class="mark" font-weight="bold">{{ch10.slab.s176.raw}}</tspan></text>
@@ -364,7 +364,7 @@ reads them back from `dst` and checks them against the codes put.
   <text x="545.0" y="320" text-anchor="middle" font-size="11" class="mut">the ll value, {{ch10.slab.s176.llv.n}} bits</text>
 </svg>
 </div>
-<figcaption>Sequence 176 of chapter 16's page through <code>encode_seq()</code>, from its <code>ll</code>, <code>ml</code> and offset to the bits that go into <code>acc</code>, from the real encoder's helpers.</figcaption>
+<figcaption>Sequence 176 of chapter {{chapter:ch-trace}}'s page through <code>encode_seq()</code>, from its <code>ll</code>, <code>ml</code> and offset to the bits that go into <code>acc</code>, from the real encoder's helpers.</figcaption>
 </figure>
 
 The first sequence of the page of `ab` is {{ch10.ab.s1.ll}} literals and a match at offset
@@ -447,7 +447,7 @@ with `clang -O2` for arm64 a `rev`. For the page of pointers the last 8 bytes of
 `{{ch10.ptr.last8}}`, read as `{{ch10.ptr.le64}}` and written as `{{ch10.ptr.head8}}`, the bitstream's
 first 8 bytes in order. Only a page that nearly fills `dst` has the two places overlap; then the
 bitstream is reversed in place and moved down with `memmove()`. The [animation above](#ch-encoder--layout)
-does all of this for chapter 16's page, whose smallest `dst` takes that path.
+does all of this for chapter {{chapter:ch-trace}}'s page, whose smallest `dst` takes that path.
 @assert ch10.slab.min_dst - slab.len < slab.b.bytes
 
 ## encode_raw(): sequences from outside, checked first {#ch-encoder--raw}

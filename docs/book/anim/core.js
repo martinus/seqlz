@@ -38,7 +38,7 @@
       var others = links.filter(function (l) { return l.id !== id; });
       if (seq == null || !others.length) { box.hidden = true; return; }
       box.hidden = false;
-      el('span', 'xl-head', 'Sequence ' + (seq + 1) + ' of chapter 16\u2019s page:', box);
+      el('span', 'xl-head', 'Sequence ' + (seq + 1) + ' of chapter {{chapter:ch-trace}}\u2019s page:', box);
       others.forEach(function (l) {
         var a = el('a', null, l.label, box);
         a.href = '#' + l.fig.id;
@@ -82,7 +82,8 @@
 
   function start(fig) {
     var name = fig.getAttribute('data-anim');
-    var dataEl = document.getElementById(fig.id + '-data');
+    // a second copy of a figure reads the first one's data
+    var dataEl = document.getElementById((fig.getAttribute('data-src') || fig.id) + '-data');
     var bar = fig.querySelector('.an-bar'), sayEl = fig.querySelector('.an-say'), stage = fig.querySelector('.an-stage');
     // the step buttons last, at the right edge: a right hand that taps them does not cover the stage
     var scrub = el('input', 'an-scrub', null, bar);
@@ -162,8 +163,7 @@
   window.BookAnim = {
     define: function (name, setup) {
       defs[name] = setup;
-      var fig = document.querySelector('figure.anim[data-anim="' + name + '"]');
-      if (fig) start(fig);
+      document.querySelectorAll('figure.anim[data-anim="' + name + '"]').forEach(start);
     }
   };
 })();

@@ -51,7 +51,7 @@ BookAnim.define('pricing', function (ctx) {
     function widen() {
       for (var q = 0; q < 4; q++) { ev[q] += x[2 * q]; od[q] += x[2 * q + 1]; }
     }
-    snap({ say: 'lit_cost[b] is one u64: the code length of byte b in table 0 in its lowest byte, table 7 in its top byte. Stream 0 of chapter 16\'s page gets every 8th literal, ' + M + ' of them; we follow its sum x[0], 8 lanes of 8 bits, one per table.' });
+    snap({ say: 'lit_cost[b] is one u64: the code length of byte b in table 0 in its lowest byte, table 7 in its top byte. Stream 0 of chapter {{chapter:ch-trace}}\'s page gets every 8th literal, ' + M + ' of them; we follow its sum x[0], 8 lanes of 8 bits, one per table.' });
     for (i = 0; i < 4; i++) {
       var b = S0[done];
       add(1);

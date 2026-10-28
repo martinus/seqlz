@@ -27,6 +27,7 @@
       ],
       "chapters": [
         {"file": "part2-map.md", "numbered": false, "label": "Map"},
+        {"code": true},
         {"file": "05-compat.md"},
         {"file": "06-seqlz-h.md"},
         {"file": "07-internal.md"},

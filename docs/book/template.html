@@ -87,7 +87,10 @@ body.railhidden .showrail { display: block; }
 
 .topbar { display: none; }
 main { min-width: 0; padding-inline: 1.5rem; padding-block: 0 6rem; }
-.col { max-width: var(--col); margin-inline: auto; overflow-wrap: break-word; }
+/* the chapters as wide as a column of text, the files of Part II as wide as code and notes */
+.col { max-width: 84rem; margin-inline: auto; overflow-wrap: break-word; }
+.col > * { max-width: var(--col); margin-inline: auto; }
+.col > .codefile { max-width: none; }
 
 /* ---- title page ---- */
 .title { padding-block: 4.5rem 3rem; border-bottom: 1px solid var(--rule); margin-bottom: 1rem; }
@@ -216,6 +219,94 @@ figure.diagram .scroll > svg, pre.mermaid > svg { min-width: 600px; }
 .bits { font-family: var(--mono); letter-spacing: 0.04em; }
 .endnote { margin-top: 5rem; padding-top: 1.5rem; border-top: 1px solid var(--rule); font-family: var(--display); font-size: 0.85rem; color: var(--muted); }
 
+/* ---- Part II: a file of src/, the code down the left, a note next to each block that stays in view
+   while its block scrolls by; under a note, buttons that open a figure or a longer explanation under
+   the block. Code and note side by side where the file's column has room for both, else the code
+   first and its note under it ---- */
+.codefile { --note: 23rem; container-type: inline-size; }
+.codefile .chapterhead h1 code { font-size: 0.92em; background: none; padding: 0; overflow-wrap: anywhere; }
+.fmeta { display: flex; flex-wrap: wrap; align-items: center; gap: 0.3rem 1.4rem; margin: 0.7rem 0 0; font-family: var(--display); font-size: 0.84rem; color: var(--muted); }
+kbd { border: 1px solid var(--rule); border-bottom-width: 2px; border-radius: 3px; padding: 0 0.3em; background: var(--sheet); }
+.cmbtn { font-family: var(--display); font-size: 0.8rem; color: var(--muted); background: transparent; border: 1px solid var(--rule);
+         border-radius: 4px; padding: 0.2rem 0.55rem; cursor: pointer; }
+.cmbtn:hover { color: var(--accent); }
+.cmbtn[aria-pressed="true"] { color: var(--paper); background: var(--accent); border-color: var(--accent); }
+.fintro { max-width: var(--col); margin-bottom: 2rem; }
+.fintro ol { padding-left: 1.4rem; }
+/* the map of the file: a section per cell, as wide as its lines */
+.fmap { display: flex; gap: 2px; margin: 0 0 1.6rem; font-family: var(--display); }
+.fmap .cell { display: flex; flex-direction: column; gap: 0.1rem; padding: 0.45rem 0.5rem 0.4rem; background: var(--sheet);
+              border-top: 3px solid var(--rule); color: var(--ink); text-decoration: none; flex-basis: 0; min-width: 7.5rem; }
+.fmap .cell:hover { border-top-color: var(--muted); }
+.fmap .cell.cur { border-top-color: var(--accent); }
+.fmap .ct { font-weight: 600; font-size: 0.8rem; line-height: 1.2; overflow-wrap: anywhere; }
+.fmap .cr { font-size: 0.72rem; color: var(--muted); font-variant-numeric: tabular-nums; }
+.sech { display: flex; align-items: baseline; gap: 0.7rem; font-size: 1.35rem; margin: 2.6rem 0 0.7rem; padding-bottom: 0.4rem; border-bottom: 1.5px solid var(--ink); }
+.secno { font-stretch: 75%; color: var(--muted); font-size: 0.9rem; font-variant-numeric: tabular-nums; }
+.blk { display: grid; grid-template-columns: minmax(0, 1fr) var(--note); column-gap: 1.75rem; border-top: 1px solid var(--rule); }
+.sec .blk:first-of-type { border-top: 0; }
+.anchor { position: absolute; }
+.bcode { min-width: 0; background: var(--sheet); }
+.bcode pre.code { background: transparent; padding-block: 0.55rem; box-shadow: inset 3px 0 0 transparent; transition: box-shadow 0.15s; }
+.blk.cur .bcode pre.code { box-shadow: inset 3px 0 0 var(--accent); }
+a.ln { color: var(--muted); text-decoration: none; }
+a.ln:hover { color: var(--accent); opacity: 1; }
+.line:target { background: color-mix(in srgb, var(--mark) 22%, transparent); }
+body.nocm .codefile .cmline { display: none; }
+.bnote { min-width: 0; padding-block: 0.6rem 1rem; font-size: 0.93rem; line-height: 1.55; }
+.ninner { position: sticky; top: calc(env(safe-area-inset-top, 0px) + 0.75rem); padding-left: 0.9rem; border-left: 3px solid transparent; transition: border-color 0.15s; }
+.blk.cur .ninner { border-left-color: var(--accent); }
+.bnote p, .bnote ul, .bnote ol { margin: 0 0 0.6rem; }
+.bnote ul, .bnote ol { padding-left: 1.2rem; }
+.bnote .nrange { font-family: var(--display); font-size: 0.76rem; font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase; margin-bottom: 0.25rem; }
+.nrange a { color: var(--muted); text-decoration: none; font-variant-numeric: tabular-nums; }
+.nrange a:hover { color: var(--accent); }
+.bnote .rhead { font-family: var(--display); font-size: 0.72rem; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; color: var(--muted); margin: 0.8rem 0 0.2rem; }
+.bnote .refs { list-style: none; padding: 0; margin: 0; font-family: var(--display); font-size: 0.82rem; line-height: 1.3; }
+.refs li { margin: 0 0 0.3rem; }
+.refs a { text-decoration: none; }
+.refs a:hover { text-decoration: underline; }
+.refs .rc { color: var(--muted); font-stretch: 85%; }
+/* the buttons under a note, and what they open */
+.pbtns { display: flex; flex-direction: column; align-items: stretch; gap: 0.35rem; margin-top: 0.7rem; }
+.pbtn { display: flex; align-items: flex-start; gap: 0.45rem; text-align: left; font-family: var(--display); font-size: 0.86rem; line-height: 1.3;
+        color: var(--ink); background: var(--why); border: 1px solid var(--rule); border-radius: 4px; padding: 0.45rem 0.65rem 0.45rem 0.5rem; cursor: pointer; }
+.pbtn-more { background: var(--paper); border-color: var(--accent); color: var(--accent); font-weight: 600; }
+.pbtn:hover { border-color: var(--accent); }
+.pbtn svg { width: 15px; height: 15px; flex: none; margin-top: 0.1rem; fill: none; stroke: currentColor; stroke-width: 2.2; stroke-linecap: round; stroke-linejoin: round; transition: transform 0.15s; }
+.pbtn[aria-expanded="true"] svg { transform: rotate(90deg); }
+.pbtn[aria-expanded="true"] { background: var(--accent); border-color: var(--accent); color: var(--paper); }
+.fk { font-weight: 700; }
+.bpanel { grid-column: 1 / -1; min-width: 0; margin: 0.4rem 0 1.4rem; padding: 0.2rem 0 0 1.1rem; border-left: 3px solid var(--accent); }
+.bpanel[hidden] { margin: 0; padding: 0; border: 0; }
+.phead { display: flex; align-items: flex-start; justify-content: space-between; gap: 1rem; }
+.ptitle { font-family: var(--display); font-weight: 700; font-size: 1.15rem; line-height: 1.25; margin: 0.35rem 0 0.8rem; text-wrap: balance; }
+.bpanel-anim .ptitle, .bpanel-stepper .ptitle { font-size: 0.95rem; font-weight: 600; }
+.pclose { flex: none; }
+.pbody > * { max-width: var(--col); }
+.pbody > figure, .pbody > .stepper, .pbody > .katex-display { max-width: none; }
+.pbody > :last-child { margin-bottom: 0.4rem; }
+.pbody figure.anim.wide, .pbody .stepper { --animw: 100%; --stepw: 100%; width: 100%; margin-left: 0; }
+.pbody > figure:first-child { margin-top: 0; }
+/* the files before and after in Part II's reading order */
+.filenav { display: flex; justify-content: space-between; gap: 1rem; flex-wrap: wrap; margin-top: 2.5rem; padding-top: 1rem;
+           border-top: 1.5px solid var(--ink); font-family: var(--display); }
+.filenav a { display: flex; flex-direction: column; gap: 0.15rem; text-decoration: none; min-width: 0; }
+.filenav .fnext { margin-left: auto; text-align: right; }
+.filenav .fnk { font-size: 0.75rem; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); }
+.filenav code { font-size: 1rem; overflow-wrap: anywhere; background: none; }
+@container (max-width: 58rem) {
+  .blk { grid-template-columns: minmax(0, 1fr); }
+  .bnote { padding-block: 0.7rem 1rem; }
+  .ninner { position: static; padding-left: 0.7rem; border-left-color: var(--rule); }
+  .bpanel { padding-left: 0.8rem; }
+  .fmap { flex-direction: column; }
+  .fmap .cell { flex-direction: row; justify-content: space-between; gap: 1rem; flex-grow: 0 !important; flex-basis: auto; min-width: 0;
+                border-top: 0; border-left: 3px solid var(--rule); }
+  .fmap .cell.cur { border-left-color: var(--accent); }
+}
+@media (prefers-reduced-motion: reduce) { .ninner, .bcode pre.code, .pbtn svg { transition: none; } }
+
 /* ---- narrow screens ---- */
 @media (max-width: 62rem) {
   .layout { display: block; }
@@ -273,11 +364,13 @@ try { var z = +localStorage.getItem('book-size'); if (z >= 0.8 && z <= 2) docume
   <p class="hexcap">A page of <code>ab</code> 2048 times, 4096 bytes, compressed by seqlz: a 2-byte header, the 2 literals <code>a</code> and <code>b</code>, and 40 bits that say "copy the rest". <a href="#ch-format">Chapter 4</a> reads it bit by bit.</p>
   <div class="meta"><span>Source: <code>martinus/seqlz</code> at <code>{{COMMIT}}</code></span><span>Every listing is taken from the repository at build time and links to its lines on GitHub</span></div>
 </header>
+{{FIG_CSS}}
 {{BODY}}
 <p class="endnote">This book describes the code at commit <code>{{COMMIT}}</code>; the code on <code>main</code> may be newer. The listings are the files as they are at that commit, with their real line numbers.</p>
 </div>
 </main>
 </div>
+{{FIG_JS}}
 <script>
 (function () {
   var btn = document.getElementById('navbtn');
@@ -406,6 +499,90 @@ try { var z = +localStorage.getItem('book-size'); if (z >= 0.8 && z <= 2) docume
   });
   window.addEventListener('hashchange', markHere);
   markHere();
+
+  /* ---- Part II's files ---- */
+  /* a panel under a block, a figure or a longer explanation: its button under the note opens it.
+     Closed it is hidden="until-found", so that the browser's search finds its text and opens it */
+  function setPanel(p, open) {
+    if (open) p.removeAttribute('hidden'); else p.setAttribute('hidden', 'until-found');
+    var b = document.querySelector('.pbtn[aria-controls="' + p.id + '"]');
+    if (b) b.setAttribute('aria-expanded', open ? 'true' : 'false');
+    /* a figure in it had no width while it was closed */
+    if (open) window.dispatchEvent(new Event('resize'));
+  }
+  var calm = matchMedia('(prefers-reduced-motion: reduce)');
+  document.querySelectorAll('.pbtn').forEach(function (b) {
+    b.addEventListener('click', function () {
+      var p = document.getElementById(b.getAttribute('aria-controls')), open = p.hasAttribute('hidden');
+      setPanel(p, open);
+      /* beside a long block the panel opens far below the note: go there */
+      if (open && p.getBoundingClientRect().top > window.innerHeight * 0.8)
+        p.scrollIntoView({ block: 'start', behavior: calm.matches ? 'auto' : 'smooth' });
+    });
+  });
+  document.querySelectorAll('.bpanel').forEach(function (p) {
+    p.querySelector('.pclose').addEventListener('click', function () { setPanel(p, false); });
+    p.addEventListener('beforematch', function () { setPanel(p, true); });
+  });
+  /* a link to something in a closed panel, or to a line folded away with the comments, shows it first */
+  function reveal(el) {
+    if (!el) return;
+    for (var p = el.closest('.bpanel[hidden]'); p; p = p.parentElement.closest('.bpanel[hidden]')) setPanel(p, true);
+    if (el.closest('.cmline') && document.body.classList.contains('nocm')) setCm(false);
+  }
+  function hashTarget(h) { return h.length > 1 ? document.getElementById(decodeURIComponent(h.slice(1))) : null; }
+  document.addEventListener('click', function (e) {
+    var a = e.target.closest && e.target.closest('a[href^="#"]');
+    if (a) reveal(hashTarget(a.getAttribute('href')));
+  }, true);
+  window.addEventListener('hashchange', function () { reveal(hashTarget(location.hash)); });
+
+  /* the lines that are only a comment, folded away; the block at the top of the screen stays there */
+  var cmBtns = document.querySelectorAll('.cmbtn');
+  function setCm(hide) {
+    var blk = curBlock, y = blk ? blk.getBoundingClientRect().top : 0;
+    document.body.classList.toggle('nocm', hide);
+    cmBtns.forEach(function (b) { b.setAttribute('aria-pressed', hide ? 'true' : 'false'); b.textContent = hide ? 'show comments' : 'hide comments'; });
+    try { localStorage.setItem('book-comments', hide ? 'hidden' : 'shown'); } catch (e) {}
+    if (blk) window.scrollBy(0, blk.getBoundingClientRect().top - y);
+  }
+  cmBtns.forEach(function (b) { b.addEventListener('click', function () { setCm(!document.body.classList.contains('nocm')); }); });
+
+  /* the block at a third of the screen's height is the current one: its note and its section are
+     marked; the blocks are in page order, so a binary search finds it */
+  var blocks = Array.prototype.slice.call(document.querySelectorAll('.blk')), curBlock = null;
+  function blockAt(y) {
+    var lo = 0, hi = blocks.length - 1, k = -1;
+    while (lo <= hi) {
+      var mid = (lo + hi) >> 1;
+      if (blocks[mid].getBoundingClientRect().top <= y) { k = mid; lo = mid + 1; } else hi = mid - 1;
+    }
+    return k >= 0 && blocks[k].getBoundingClientRect().bottom > y ? blocks[k] : null;
+  }
+  function updateBlock() {
+    var b = blockAt(window.innerHeight / 3);
+    if (b === curBlock) return;
+    if (curBlock) {
+      curBlock.classList.remove('cur');
+      curBlock.closest('.codefile').querySelectorAll('.fmap .cell.cur').forEach(function (c) { c.classList.remove('cur'); });
+    }
+    curBlock = b;
+    if (b) {
+      b.classList.add('cur');
+      var sec = b.getAttribute('data-sec'), cell = b.closest('.codefile').querySelector('.fmap .cell[data-sec="' + sec + '"]');
+      if (cell) cell.classList.add('cur');
+    }
+  }
+  try { if (localStorage.getItem('book-comments') === 'hidden') setCm(true); } catch (e) {}
+  document.addEventListener('keydown', function (e) {
+    if (e.ctrlKey || e.metaKey || e.altKey || /INPUT|SELECT|TEXTAREA/.test(e.target.tagName) || e.target.closest('figure')) return;
+    if (!curBlock || (e.key !== 'j' && e.key !== 'k' && e.key !== 'c')) return;
+    if (e.key === 'c') { setCm(!document.body.classList.contains('nocm')); return; }
+    var k = blocks.indexOf(curBlock) + (e.key === 'j' ? 1 : -1);
+    if (k >= 0 && k < blocks.length) blocks[k].scrollIntoView({ block: 'start', behavior: calm.matches ? 'auto' : 'smooth' });
+  });
+  reveal(hashTarget(location.hash));
+
   /*
    * After a load with a title in the address: fonts, charts and animations change the height of
    * what is above it while the page loads, so it is put back on top until the reader scrolls
@@ -430,16 +607,21 @@ try { var z = +localStorage.getItem('book-size'); if (z >= 0.8 && z <= 2) docume
     var y = window.scrollY + 120, c = null, s = null;
     for (var i = 0; i < chaps.length; i++) if (chaps[i].getBoundingClientRect().top + window.scrollY <= y) c = chaps[i];
     for (var j = 0; j < subs.length; j++) if (subs[j].getBoundingClientRect().top + window.scrollY <= y) s = subs[j];
+    updateBlock();
     if (c !== curChap) {
       curChap = c;
       document.querySelectorAll('.tocchap.current').forEach(function (el) { el.classList.remove('current'); });
       if (c) {
         var li = document.querySelector('.tocchap[data-for="' + c.id + '"]');
         if (li) { li.classList.add('current'); }
-        var no = c.parentNode.querySelector('.chapno');
-        where.textContent = (no ? no.textContent + ': ' : '') + c.textContent;
-      } else where.textContent = '';
+      }
     }
+    /* the top bar on a phone: the chapter, or in a file of Part II the file and the section */
+    var t = '';
+    if (curBlock) t = curBlock.closest('.codefile').querySelector('h1').textContent + ' \u00b7 ' +
+                      document.getElementById(curBlock.getAttribute('data-sec')).lastChild.textContent;
+    else if (c) { var no = c.parentNode.querySelector('.chapno'); t = (no ? no.textContent + ': ' : '') + c.textContent; }
+    if (where.textContent !== t) where.textContent = t;
     if (s !== curSub) {
       curSub = s;
       document.querySelectorAll('.tocsub a.current').forEach(function (el) { el.classList.remove('current'); });

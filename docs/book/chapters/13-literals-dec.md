@@ -427,7 +427,7 @@ Stream `i` in step `j` of the round at `k` holds literal `k + 8 * j + i`, so the
 in page order with no shuffle. The loops have constant bounds, and the compiler unrolls them into 8
 refills and 40 lookups, where each `b[i]` depends only on the `b[i]` before it: 8 chains.
 
-@anim streams wide The {{slab.lits}} literals of chapter 16's page, dealt out to 8 streams and decoded a round at a time, or in one stream. Literals, code lengths and stream sizes come from the real codec; the count of dependent steps is a model, one step per decoded literal.
+@anim streams wide The {{slab.lits}} literals of chapter {{chapter:ch-trace}}'s page, dealt out to 8 streams and decoded a round at a time, or in one stream. Literals, code lengths and stream sizes come from the real codec; the count of dependent steps is a model, one step per decoded literal.
 
 ### The rest: the same steps for all 8 streams
 

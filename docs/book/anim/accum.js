@@ -206,7 +206,7 @@ BookAnim.define('accum', function (ctx) {
     var s = steps[k];
     if (s.kind === 'start') {
       return 'encoder_init(): acc = 0, cnt = 0, and p at the end of dst. Next: the bits of the first ' + nSeq +
-        ' sequences of chapter 16\'s page, put by put and flush by flush.';
+        ' sequences of chapter {{chapter:ch-trace}}\'s page, put by put and flush by flush.';
     }
     var o = s.o, q = seqOf[o.seq];
     if (s.kind === 'put' && o.what === 'token') {
