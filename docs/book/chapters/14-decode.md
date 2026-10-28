@@ -84,7 +84,7 @@ step 8, for offsets 1, 2 and 4, they cover {{ch14.cmf.five_stores_8}}, every mat
 loop runs only for a longer match with a smaller step, e.g. `off = 5, len = 34` stores at 25 and 30.
 Run on all offsets 1 to 7 and lengths 4 to {{ch14.fast_len}} when the book is built, the furthest byte
 written is `d + {{ch14.cmf.max_byte}}`: that is the {{ch14.cmf.room}} bytes of room. The caller has
-rejected offset 0, so `repeat_step[off]` needs no `& 7U` here. A loop instead of the 5 stores, tried
+rejected offset 0, so `repeat_step[off]` never reads the placeholder entry 0. A loop instead of the 5 stores, tried
 again for simpler code before 10th October 2026, was 0.5 to 0.7% slower in the kernel VM with gcc and
 clang
 ([explored-designs.md](https://github.com/martinus/seqlz/blob/main/docs/explored-designs.md#five-simplifications-measured-in-the-vm-and-on-the-phone-the-literal-streams-as-arrays-kept-four-not)).
@@ -166,6 +166,13 @@ the {{ch14.room.page}} of `FAST_BLOCK_ROOM`. One `copy16()` reads 16 bytes of li
 `next_token_fast()` loads 8 bytes of input.
 @assert ch14.room.page == 64 and ch14.room.lit == 16 and ch14.room.input == 8 and ch14.cmf.max_write == 54 and ch14.fast_nl == 14
 
+@listing src/seqlz_decompress.c 392-404
+
+The compiler checks the first room: with at most {{ch14.fast_nl}} literals and a match of at most
+{{ch14.fast_len}} bytes, both ways `copy_match_fast()` can end, its five stores of 8 bytes or its loop
+up to `len + 7`, stay within the {{ch14.room.page}} bytes.
+@assert ch14.fast_nl + 40 <= ch14.room.page and ch14.fast_nl + ch14.fast_len + 7 <= ch14.room.page and ch14.fast_len <= 40
+
 <figure class="diagram">
 <div class="scroll">
 <svg viewBox="0 0 720 330" role="img" aria-label="The three rooms of the fast path: in the page it starts no later than 64 bytes before the end and writes at most 54 bytes; in the literals it reads 16 bytes and starts no later than 16 bytes before lit_bound; in the input a refill loads 8 bytes and starts no later than 8 bytes before the end">
@@ -206,13 +213,13 @@ the {{ch14.room.page}} of `FAST_BLOCK_ROOM`. One `copy16()` reads 16 bytes of li
 
 ## Two copies of the loop: decode_block() {#ch-decode--deltas}
 
-@listing src/seqlz_decompress.c 392-400
+@listing src/seqlz_decompress.c 405-413
 
 `decode_block()` is the whole decoder, with one parameter more than `seqlz_decode()`: `deltas`, whether
 the page's literals are deltas ([chapter 6](#ch-header--literals)). `seqlz_decode()` comes last in the
 file, and is the only caller:
 
-@listing src/seqlz_decompress.c 588-599
+@listing src/seqlz_decompress.c 601-612
 
 It reads byte 2 only for a page with coded literals, and only if there is a byte 2, `src_len > 2`; a
 page with raw literals never has deltas, and bit 7 of its byte 2 is a literal. Each call passes a
@@ -237,7 +244,7 @@ the deltas read another 0.13 to 0.24 µs slower on the A76 and 0.34 to 0.46 µs 
 
 ## Setup: the header, the tables, and where the literals are {#ch-decode--setup}
 
-@listing src/seqlz_decompress.c 401-412
+@listing src/seqlz_decompress.c 414-425
 
 The parameters and the return values, 0 or `-EINVAL`, are those of `seqlz.h`
 ([chapter 6](#ch-header--encode-decode)). `delta` is which delta the page's literals are, which
@@ -245,7 +252,7 @@ The parameters and the return values, 0 or `-EINVAL`, are those of `seqlz.h`
 the literals are, which is more than `lit_end`. `last`, the repeat offset, starts at 1, as the format
 says ([chapter 4](#ch-format--offsets)), and `skip = 0` has the first fast sequence refill.
 
-@listing src/seqlz_decompress.c 413-423
+@listing src/seqlz_decompress.c 426-436
 
 The tables are prefetched before the header is read, {{ch14.pf.token}} prefetches for the token table
 and {{ch14.pf.len}} for each length table ([why](#ch-dec-basics--prefetch)), so that the header
@@ -258,7 +265,7 @@ literals; a raw page with more was rejected too, but only because the loop never
 (commit `3ae2e09`). `seqlz_decode_literals()` still checks it, for the compiler's sake
 ([chapter 13](#ch-literals-dec--main)).
 
-@listing src/seqlz_decompress.c 424-446
+@listing src/seqlz_decompress.c 437-459
 
 `SEQLZ_LIT_CODED` says whether the literals are raw or coded ([chapter 4](#ch-format--layout)). A page with coded literals needs a
 scratch; zram at level 1 writes only raw literals and may call the decoder without one
@@ -270,7 +277,7 @@ the end of the scratch, 16 bytes more, for the 16-byte copies. Raw literals are 
 is not literals. The `u64` sum cannot wrap; with 15 bits of `n_lit` neither could a 32-bit one, but then
 the reader would have to know that.
 
-@listing src/seqlz_decompress.c 448-471
+@listing src/seqlz_decompress.c 461-484
 
 `lit_fast` and `in_fast` are numbers because with a short input `lit_bound - 16` would be a pointer
 before the buffer, which C does not allow even unused; `unsigned long` has the size of a pointer on every
@@ -290,7 +297,7 @@ it can be smaller than a page. The first `next_token()` finds `count = 0` and re
 
 ## The loop: escape, then the offset without a branch {#ch-decode--offset}
 
-@listing src/seqlz_decompress.c 472-487
+@listing src/seqlz_decompress.c 485-500
 
 The loop ends with the `break` when the literals left fill the page, or with `return -EINVAL`. Only
 {{ch14.tokens_coded}} of the {{const.TOKEN_SYMBOLS}} tokens have a code of their own in the 4 KiB tables;
@@ -305,7 +312,7 @@ like any other. E.g. token 513, {{ch14.t513.ll}} literal and a match of {{ch14.t
 {{ch14.t513.raw_bits}} offset bit; `token_entry(513, 0)` is `{{ch14.t513.entry}}`.
 @assert tok.len[513] == 0 and ch14.t513.N == 0
 
-@listing src/seqlz_decompress.c 488-499
+@listing src/seqlz_decompress.c 501-512
 
 This is what [chapter 7](#ch-internal--token-entry) built the entry for: the offset in three shifts and a
 select. `<< TOK_N` shifts the code out, `>> back`, with `back = 64 - raw_bits`, brings the offset bits to
@@ -337,7 +344,7 @@ flag in bit 30 to 15 129
 
 ## The fast path {#ch-decode--fast}
 
-@listing src/seqlz_decompress.c 500-533
+@listing src/seqlz_decompress.c 513-546
 
 Each part of the condition lets the body skip a check. Bit 30 of the entry, `TOK_VALUE_AT`, says that no
 length value follows, so `nl` is at most 14 and `len` at most 34; one test instead of two compares, and
@@ -375,7 +382,7 @@ it, AddressSanitizer reported a heap overflow in that test
 
 ## The slow path: length values, and every check {#ch-decode--slow}
 
-@listing src/seqlz_decompress.c 534-545
+@listing src/seqlz_decompress.c 547-558
 
 An `ll` of 15 means a literal length value follows the offset bits
 ([chapter 4](#ch-format--length-values)); the refill makes sure of the 20 or 22 bits `seqlz_br_value()`
@@ -387,7 +394,7 @@ Until 11th October 2026 the last sequence had a token too, with a match of nothi
 for it here; it said what the decoder knew already and cost about 1.2 bytes per page
 ([explored-designs.md](https://github.com/martinus/seqlz/blob/main/docs/explored-designs.md#the-last-sequence-without-a-token-12-bytes-per-page-less-kept)).
 
-@listing src/seqlz_decompress.c 546-567
+@listing src/seqlz_decompress.c 559-580
 
 With 4 KiB pages a match length value is at most {{ch14.max_value}}, so `len` can be {{ch14.max_len}},
 more than a page, which the check of room catches. `last` is set before the checks; if they fail, it does
@@ -397,7 +404,7 @@ left.
 
 ## The end: a page must end where its bits end {#ch-decode--end}
 
-@listing src/seqlz_decompress.c 568-586
+@listing src/seqlz_decompress.c 581-599
 
 When the loop is left, the literals left are exactly the bytes the page still needs, so the copy fills the
 page and uses every literal. A page with deltas restores them as any sequence's literals, the last
