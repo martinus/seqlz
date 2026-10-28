@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """remap.py [<commit>] [--write]: the book brought up to the code of <commit>, HEAD if not given.
-The book describes the code of one commit, "src" in book.json; this moves its @listing lines and the
-line numbers its prose quotes ("line 24", "lines 21 to 26", "seqlz_decompress.c:17") from the files at
-that commit to the files at <commit>. The old and the new file are matched line by line (difflib); a
+The book describes the code of one commit, "src" in book.json; this moves its @listing lines, the
+line numbers its prose quotes ("line 24", "lines 21 to 26", "seqlz_decompress.c:17") and the blocks of
+the annotated sources, annotated/*.md, from the files at that commit to the files at <commit>. The old and the new file are matched line by line (difflib); a
 number moves with its line, or with the nearest line that kept its text. --write also sets "src" to
 <commit>, so a second run finds nothing to move.
 
@@ -17,6 +17,8 @@ import pathlib
 import re
 import subprocess
 import sys
+
+from annotate import BLOCK, notes_files
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent.parent
 BOOK_JSON = ROOT / "docs" / "book" / "book.json"
@@ -58,6 +60,16 @@ def near(m, a, direction):
                 return m[c] + (a - c)
     return None
 
+
+def kept(m, a, b):
+    """whether lines a to b kept their text and stayed together"""
+    return all(k in m for k in range(a, b + 1)) and m[b] - m[a] == b - a
+
+
+def show(f, idx, old, new):
+    print(f"{f.name}:{idx+1}: {old.strip()[:110]}\n{'':>{len(f.name)+len(str(idx+1))+2}}  -> {new.strip()[:110]}")
+
+
 for ch in sorted((ROOT / "docs/book/chapters").glob("*.md")):
     lines = ch.read_text().split("\n")
     cur = None  # the file of the last listing: what "line N" in the prose refers to
@@ -69,7 +81,7 @@ for ch in sorted((ROOT / "docs/book/chapters").glob("*.md")):
             cur = path
             mp = linemap(path)
             na, nb = near(mp, a, 1), near(mp, b, -1)
-            same = all(k in mp for k in range(a, b + 1)) and mp[b] - mp[a] == b - a
+            same = kept(mp, a, b)
             if (na, nb) != (a, b) or not same:
                 tag = "" if same else "  CHANGED"
                 print(f"{ch.name}:{idx+1}: @listing {path} {a}-{b} -> {na}-{nb}{tag}")
@@ -93,11 +105,40 @@ for ch in sorted((ROOT / "docs/book/chapters").glob("*.md")):
                 return re.sub(r"\d+", lambda d: str(near(mp, int(d.group(0)), 1) or d.group(0)), mm.group(0))
             nl = re.sub(r"\b[Ll]ines? \d+(?:(?:, | to | and |-|–)\d+)*", lineref, nl)
         if nl != line:
-            print(f"{ch.name}:{idx+1}: {line.strip()[:110]}\n{'':>{len(ch.name)+len(str(idx+1))+2}}  -> {nl.strip()[:110]}")
+            show(ch, idx, line, nl)
             lines[idx] = nl
             changed = True
     if write and changed:
         ch.write_text("\n".join(lines))
+
+# the notes of annotate.py: each block starts where its first line went and ends before the next one,
+# so they still cover the file; links to a block (#b<first line>) move with it
+for path, nf in notes_files(ROOT / "docs/book").items():
+    lines = nf.read_text().split("\n")
+    mp = linemap(path)
+    n_new = len(newtext[path]) - (newtext[path][-1] == "")
+    blocks = [(idx, int(b.group(1)), int(b.group(2))) for idx, line in enumerate(lines)
+              if (b := BLOCK.match(line))]
+    starts = [1] + [near(mp, a, 1) for _, a, _ in blocks[1:]]
+    if None in starts:
+        sys.exit(f"{nf.name}: block {blocks[starts.index(None)][1]}: no line near it kept its text, move it by hand")
+    moved, changed = {}, False
+    for k, (idx, a, b) in enumerate(blocks):
+        na, nb = starts[k], (starts[k + 1] - 1 if k + 1 < len(blocks) else n_new)
+        moved[a] = na
+        same = kept(mp, a, b)
+        if (na, nb) != (a, b) or not same:
+            tag = "" if same else "  CHANGED" if nb >= na else "  EMPTY, remove it"
+            print(f"{nf.name}:{idx+1}: @@ {a}-{b} -> {na}-{nb}{tag}")
+            lines[idx] = f"@@ {na}-{nb}"
+            changed = True
+    for idx, line in enumerate(lines):
+        nl = re.sub(r"\(#b(\d+)\)", lambda r: f"(#b{moved.get(int(r.group(1)), r.group(1))})", line)
+        if nl != line:
+            show(nf, idx, line, nl)
+            lines[idx], changed = nl, True
+    if write and changed:
+        nf.write_text("\n".join(lines))
 if write:
     book = BOOK_JSON.read_text()
     BOOK_JSON.write_text(book.replace(f'"src": "{old_rev}"', f'"src": "{new_rev}"', 1))

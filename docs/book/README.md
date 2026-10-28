@@ -53,6 +53,13 @@ python3 docs/book/lint.py            # dashes, banned words, measurements withou
 - `"map"` in `book.json` is the path of a page through Part II, rows of chapter ids: `build.py` draws it
   at the top of each chapter it names, that chapter marked, linked to the map chapter `#map`.
 - `STYLE.md` is the brief the chapters were written to, `REVIEW.md` the one they were checked with.
+- `annotate.py` makes the annotated source of a file: the file at the book's commit, a short note
+  next to each block, links to the book's sections that explain those lines, and the book's
+  animations under the blocks they belong to. The notes are `annotated/<file>.md`. `build.py` makes
+  the page `annotated/<file>.html` from them, with the code, the listings and the figures it built,
+  and fails with a note that misses lines or links to an id the book does not have; every listing of
+  the file gets a link "notes" to its lines there, the contents an entry. `remap.py` moves the
+  blocks with their lines. `build.py --site DIR` writes the site of GitHub Pages, job `book` uses it.
 
 After a change of the format or the tables, build the book: what the code computes follows by
 itself, and a false `@assert` names the paragraph to read again. Prose that explains a value in words

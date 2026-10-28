@@ -157,9 +157,8 @@ jobs:
           node-version: 22
       - run: pip install markdown pygments
       - run: cd docs/book && npm ci
-      - run: python3 docs/book/build.py --check
+      - run: python3 docs/book/build.py --check --site _site
       - run: python3 docs/book/lint.py
-      - run: mkdir _site && cp docs/book/seqlz-line-by-line.standalone.html _site/index.html
       - uses: actions/upload-pages-artifact@v5
         with:
           path: _site

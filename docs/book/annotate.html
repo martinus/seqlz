@@ -1,0 +1,221 @@
+<title>{{NAME}} annotated</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+{{FONTS}}
+<style>
+{{BOOK_CSS}}
+/* Layout: the source file down the page as one continuous listing on the left, a short note beside
+   each block on the right that stays in view while its block scrolls by; the book's colours and faces. */
+:root { --bar: 3.1rem; --note: 23rem; }
+html { scroll-padding-top: calc(var(--bar) + 0.5rem); }
+body { padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px));
+       padding-block: 0 5rem; }
+body::before { content: ""; position: fixed; inset: 0 0 auto; height: env(safe-area-inset-top, 0px); z-index: 10; background: var(--paper); }
+.wrap { max-width: 82rem; margin-inline: auto; }
+.wrap main { padding: 0; }
+
+/* the bar: where the book is, which file, the switches */
+.abar { position: sticky; top: env(safe-area-inset-top, 0px); z-index: 9; background: var(--paper); border-bottom: 1px solid var(--rule);
+        display: flex; align-items: center; gap: 0.6rem; min-height: var(--bar); font-family: var(--display); font-size: 0.86rem;
+        margin-inline: calc(-1 * max(16px, env(safe-area-inset-left, 0px))); padding-inline: max(16px, env(safe-area-inset-left, 0px)); }
+.abar .brand { font-weight: 800; font-stretch: 75%; font-size: 1.05rem; color: var(--ink); text-decoration: none; white-space: nowrap; }
+.abar .file { font-family: var(--mono); font-size: 0.8rem; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+.abar .here { color: var(--accent); font-family: var(--display); font-size: 0.84rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; flex: 1; }
+.tools { display: flex; gap: 0.15rem; margin-left: auto; flex: none; }
+.cmbtn { font-family: var(--display); font-size: 0.8rem; color: var(--muted); background: transparent; border: 1px solid var(--rule);
+         border-radius: 4px; padding: 0.2rem 0.55rem; cursor: pointer; height: 2rem; }
+.cmbtn:hover { color: var(--accent); }
+.cmbtn[aria-pressed="true"] { color: var(--paper); background: var(--accent); border-color: var(--accent); }
+
+/* the head */
+.ahead { padding-block: 2.6rem 1.4rem; max-width: 52rem; }
+.kicker { font-family: var(--display); font-size: 0.8rem; font-weight: 700; font-stretch: 75%; letter-spacing: 0.12em; text-transform: uppercase; color: var(--muted); margin: 0; }
+.ahead h1 { font-family: var(--mono); font-weight: 700; font-size: clamp(1.7rem, 5vw, 2.6rem); line-height: 1.1; margin: 0.5rem 0 0.8rem; letter-spacing: -0.01em; overflow-wrap: anywhere; }
+.ahead .sub { margin: 0 0 0.6rem; max-width: 44rem; }
+.ahead .meta { font-family: var(--display); font-size: 0.84rem; color: var(--muted); display: flex; flex-wrap: wrap; gap: 0.3rem 1.4rem; margin: 0; }
+kbd { border: 1px solid var(--rule); border-bottom-width: 2px; border-radius: 3px; padding: 0 0.3em; background: var(--sheet); }
+
+/* the map of the file: a section per cell, as wide as its lines */
+.fmap { display: flex; gap: 2px; margin: 0.4rem 0 1.6rem; font-family: var(--display); }
+.fmap .cell { display: flex; flex-direction: column; gap: 0.1rem; padding: 0.45rem 0.5rem 0.4rem; background: var(--sheet);
+              border-top: 3px solid var(--rule); color: var(--ink); text-decoration: none; flex-basis: 0; min-width: 7.5rem; }
+.fmap .cell:hover { border-top-color: var(--muted); }
+.fmap .cell.cur { border-top-color: var(--accent); }
+.fmap .ct { font-weight: 600; font-size: 0.8rem; line-height: 1.2; overflow-wrap: anywhere; }
+.fmap .cr { font-size: 0.72rem; color: var(--muted); font-variant-numeric: tabular-nums; }
+
+.intro { max-width: 46rem; margin-bottom: 2.2rem; }
+.intro ol { padding-left: 1.4rem; }
+
+/* sections and blocks */
+.sech { display: flex; align-items: baseline; gap: 0.7rem; font-size: 1.35rem; margin: 2.6rem 0 0.7rem; padding-bottom: 0.4rem; border-bottom: 1.5px solid var(--ink); }
+.secno { font-stretch: 75%; color: var(--muted); font-size: 0.9rem; font-variant-numeric: tabular-nums; }
+.blk { display: grid; grid-template-columns: minmax(0, 1fr) var(--note); column-gap: 1.75rem; border-top: 1px solid var(--rule); scroll-margin-top: calc(var(--bar) + 0.5rem); }
+.sec .blk:first-of-type { border-top: 0; }
+.bcode { min-width: 0; background: var(--sheet); }
+.bcode pre.code { background: transparent; padding-block: 0.55rem; box-shadow: inset 3px 0 0 transparent; transition: box-shadow 0.15s; }
+.blk.cur .bcode pre.code { box-shadow: inset 3px 0 0 var(--accent); }
+a.ln { color: var(--muted); text-decoration: none; }
+a.ln:hover { color: var(--accent); opacity: 1; }
+.line:target { background: color-mix(in srgb, var(--mark) 22%, transparent); }
+body.nocm .cmline { display: none; }
+
+.bnote { min-width: 0; padding-block: 0.6rem 1rem; font-size: 0.93rem; line-height: 1.55; }
+.ninner { position: sticky; top: calc(env(safe-area-inset-top, 0px) + var(--bar) + 0.6rem); padding-left: 0.9rem; border-left: 3px solid transparent; transition: border-color 0.15s; }
+.blk.cur .ninner { border-left-color: var(--accent); }
+.bnote p, .bnote ul, .bnote ol { margin: 0 0 0.6rem; }
+.bnote ul, .bnote ol { padding-left: 1.2rem; }
+.bnote .nrange { font-family: var(--display); font-size: 0.76rem; font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase; margin-bottom: 0.25rem; }
+.nrange a { color: var(--muted); text-decoration: none; font-variant-numeric: tabular-nums; }
+.nrange a:hover { color: var(--accent); }
+.bnote .rhead { font-family: var(--display); font-size: 0.72rem; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; color: var(--muted); margin: 0.8rem 0 0.2rem; }
+.bnote .refs { list-style: none; padding: 0; margin: 0; font-family: var(--display); font-size: 0.82rem; line-height: 1.3; }
+.refs li { margin: 0 0 0.3rem; }
+.refs a { text-decoration: none; }
+.refs a:hover { text-decoration: underline; }
+.refs .rc { color: var(--muted); font-stretch: 85%; }
+.figs { display: flex; flex-direction: column; align-items: flex-start; gap: 0.35rem; margin-top: 0.7rem; }
+.figbtn { display: inline-flex; align-items: flex-start; gap: 0.45rem; text-align: left; font-family: var(--display); font-size: 0.84rem; line-height: 1.3;
+          color: var(--ink); background: var(--why); border: 1px solid var(--rule); border-radius: 4px; padding: 0.4rem 0.65rem 0.4rem 0.5rem; cursor: pointer; }
+.figbtn:hover { border-color: var(--accent); }
+.figbtn svg { width: 14px; height: 14px; flex: none; margin-top: 0.12rem; fill: var(--accent); transition: transform 0.15s; }
+.figbtn[aria-expanded="true"] svg { transform: rotate(90deg); }
+.figbtn .fk { font-weight: 700; }
+.bfig { grid-column: 1 / -1; min-width: 0; padding-block: 0.4rem 1.2rem; }
+.bfig > figure { margin-block: 0.6rem 0; }
+
+@media (max-width: 60rem) {
+  .blk { grid-template-columns: minmax(0, 1fr); }
+  .bnote { order: -1; padding-block: 1rem 0.6rem; }
+  .ninner { position: static; padding-left: 0.7rem; }
+  .fmap { flex-direction: column; }
+  .fmap .cell { flex-direction: row; justify-content: space-between; gap: 1rem; flex-grow: 0 !important; flex-basis: auto; border-top: 0; border-left: 3px solid var(--rule); }
+  .fmap .cell.cur { border-left-color: var(--accent); }
+  .abar .file { display: none; }
+}
+@media (prefers-reduced-motion: reduce) { .ninner, .bcode pre.code, .figbtn svg { transition: none; } }
+</style>
+{{ASSETS}}
+<script>
+try { var t = localStorage.getItem('book-theme'); if (t === 'light' || t === 'dark') document.documentElement.setAttribute('data-theme', t); } catch (e) {}
+</script>
+<div class="wrap">
+<header class="abar">
+  <a class="brand" href="{{BOOK}}" title="The book: seqlz, line by line">seqlz, line by line</a>
+  <span class="file">{{SRC}}</span>
+  <span class="here" id="here"></span>
+  <div class="tools">
+    <button type="button" class="cmbtn" id="cmbtn" aria-pressed="false" title="Hide the lines that are only a comment (c)">hide comments</button>
+    <button type="button" class="icon themebtn" id="themebtn" aria-label="Switch theme" title="Switch theme"><svg viewBox="0 0 24 24" aria-hidden="true"><path class="i-moon" d="M20 14.5A8 8 0 1 1 9.5 4a6.5 6.5 0 0 0 10.5 10.5z"/><g class="i-sun"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></g></svg></button>
+  </div>
+</header>
+<section class="ahead">
+  <p class="kicker">seqlz, line by line &middot; annotated source</p>
+  <h1>{{NAME}}</h1>
+  <p class="sub">The file as it is, {{LINES}} lines in {{BLOCKS}} blocks, with a short note next to each block. The links under a note go to the sections of the book that explain those lines in full.</p>
+  <p class="meta"><span>At commit <a href="{{GITHUB}}" target="_blank" rel="noopener"><code>{{COMMIT}}</code></a>, the book&rsquo;s</span><span>Keys: <kbd>j</kbd> <kbd>k</kbd> next and previous block, <kbd>c</kbd> comments</span></p>
+</section>
+<nav class="fmap" aria-label="Sections of the file">{{MAP}}</nav>
+<section class="intro">{{INTRO}}</section>
+<main id="code">{{BODY}}</main>
+</div>
+{{TEMPLATES}}
+<script>
+(function () {
+  /* light and dark: the system's until the button sets one, shared with the book */
+  var dark = matchMedia('(prefers-color-scheme: dark)'), tb = document.getElementById('themebtn');
+  function isDark() { var t = document.documentElement.getAttribute('data-theme'); return t ? t === 'dark' : dark.matches; }
+  function label() { tb.classList.toggle('isdark', isDark()); var t = isDark() ? 'Switch to light mode' : 'Switch to dark mode'; tb.title = t; tb.setAttribute('aria-label', t); }
+  tb.addEventListener('click', function () {
+    var t = isDark() ? 'light' : 'dark';
+    document.documentElement.setAttribute('data-theme', t);
+    try { localStorage.setItem('book-theme', t); } catch (e) {}
+    label();
+    document.dispatchEvent(new CustomEvent('book-theme', { detail: t }));
+  });
+  dark.addEventListener('change', label);
+  label();
+
+  /* lines that are only a comment, folded away; the line at the top of the screen stays there */
+  var cm = document.getElementById('cmbtn');
+  function setCm(hide) {
+    var blk = current, y = blk ? blk.getBoundingClientRect().top : 0;
+    document.body.classList.toggle('nocm', hide);
+    cm.setAttribute('aria-pressed', hide ? 'true' : 'false');
+    cm.textContent = hide ? 'show comments' : 'hide comments';
+    try { localStorage.setItem('annotate-comments', hide ? 'hidden' : 'shown'); } catch (e) {}
+    if (blk) window.scrollBy(0, blk.getBoundingClientRect().top - y);
+  }
+  cm.addEventListener('click', function () { setCm(!document.body.classList.contains('nocm')); });
+  try { if (localStorage.getItem('annotate-comments') === 'hidden') setCm(true); } catch (e) {}
+
+  /* a figure of the book: put on the page on its first opening, so its scripts start with a stage
+     that has a width */
+  document.querySelectorAll('.figbtn').forEach(function (b) {
+    b.addEventListener('click', function () {
+      var blk = b.closest('.blk'), box = blk.querySelector('.bfig'), id = b.getAttribute('data-fig');
+      var open = b.getAttribute('aria-expanded') !== 'true';
+      blk.querySelectorAll('.figbtn').forEach(function (o) { o.setAttribute('aria-expanded', 'false'); });
+      box.querySelectorAll('[data-holds]').forEach(function (h) { h.hidden = true; });
+      if (open) {
+        var holder = box.querySelector('[data-holds="' + id + '"]');
+        if (!holder) {
+          holder = document.createElement('div');
+          holder.setAttribute('data-holds', id);
+          box.appendChild(holder);
+          var frag = document.getElementById('t-' + id).content.cloneNode(true);
+          frag.querySelectorAll('script').forEach(function (old) {
+            var s = document.createElement('script');
+            if (old.type) s.type = old.type;
+            if (old.id) s.id = old.id;
+            s.textContent = old.textContent;
+            old.parentNode.replaceChild(s, old);
+          });
+          box.hidden = false;
+          holder.appendChild(frag);
+        }
+        holder.hidden = false;
+        b.setAttribute('aria-expanded', 'true');
+      }
+      box.hidden = !open;
+    });
+  });
+
+  /* the block at a third of the screen's height is the current one: its note and its section
+     are marked */
+  var blocks = Array.prototype.slice.call(document.querySelectorAll('.blk'));
+  var cells = document.querySelectorAll('.fmap .cell'), here = document.getElementById('here');
+  var current = null;
+  function update() {
+    var y = window.innerHeight / 3, c = blocks[0];
+    for (var i = 0; i < blocks.length; i++) { if (blocks[i].getBoundingClientRect().top <= y) c = blocks[i]; else break; }
+    if (c === current) return;
+    if (current) current.classList.remove('cur');
+    current = c;
+    c.classList.add('cur');
+    var sec = c.getAttribute('data-sec');
+    cells.forEach(function (x) { x.classList.toggle('cur', x.getAttribute('data-sec') === sec); });
+    var h = document.querySelector('#' + sec + ' .sech');
+    here.textContent = h ? h.lastChild.textContent : '';
+  }
+  var pending = false;
+  window.addEventListener('scroll', function () {
+    if (!pending) { pending = true; requestAnimationFrame(function () { pending = false; update(); }); }
+  }, { passive: true });
+  window.addEventListener('resize', update);
+  update();
+
+  var calm = matchMedia('(prefers-reduced-motion: reduce)');
+  document.addEventListener('keydown', function (e) {
+    if (e.ctrlKey || e.metaKey || e.altKey || /INPUT|SELECT|TEXTAREA/.test(e.target.tagName) || e.target.closest('figure')) return;
+    var k = blocks.indexOf(current);
+    if (e.key === 'j' || e.key === 'k') {
+      var n = blocks[Math.max(0, Math.min(blocks.length - 1, k + (e.key === 'j' ? 1 : -1)))];
+      /* the first j from above the code goes to the first block */
+      if (e.key === 'j' && blocks[0].getBoundingClientRect().top > window.innerHeight / 3) n = blocks[0];
+      n.scrollIntoView({ block: 'start', behavior: calm.matches ? 'auto' : 'smooth' });
+    } else if (e.key === 'c') {
+      cm.click();
+    }
+  });
+})();
+</script>
