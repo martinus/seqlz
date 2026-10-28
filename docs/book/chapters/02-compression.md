@@ -110,7 +110,7 @@ the source as it was before the copy, bytes that were not written yet.
 @anim overlap A match of 10 bytes at offset 1, 2 or 3, one byte per step. The byte loop copies what it wrote itself a moment before; memmove() copies the source as it was before the copy, and gets bytes that were not written yet.
 
 A fast decoder copies 8 or 16 bytes at a time, and then has to take care with offsets below 8 or 16;
-[chapter 12](#ch-dec-basics--copies) shows how seqlz does that.
+[`copy8()` and `copy16()`](#ch-dec-basics--copies) show how seqlz does that.
 
 ## Finding matches: a hash table of positions {#ch-compression--hash}
 

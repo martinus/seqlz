@@ -198,7 +198,7 @@ x >> 8 & lanes   = {{ch11.odd}}    odd:  tables 7, 5, 3, 1 = {{ch11.sum.7.dec}},
 4 adds instead of 32. The same on stream 0 of [chapter 16](#ch-trace)'s page, {{ch11.slab.s0}}
 literals in chunks of 25:
 
-@anim pricing The sums of stream 0 of chapter 16's page in x[0], one add per literal, and their move into the 16-bit lanes of even[0] and odd[0] after each chunk; or, as a choice, the same adds in 8-bit lanes only. Code lengths, literals and the sums of all 8 streams come from the real tables and lit_sums().
+@anim pricing The sums of stream 0 of chapter {{chapter:ch-trace}}'s page in x[0], one add per literal, and their move into the 16-bit lanes of even[0] and odd[0] after each chunk; or, as a choice, the same adds in 8-bit lanes only. Code lengths, literals and the sums of all 8 streams come from the real tables and lit_sums().
 
 One sum per page would do to choose the table. The 8 sums per table are for after the choice: each
 stream is rounded up to whole bytes on its own, and `code_literals()` needs all 8 sizes before it
@@ -869,7 +869,7 @@ step, with the copy drawn under the bytes of `dst` the literals came from. From 
 later streams store over raw literals that are read later, from the copy. The bitstream is the one
 thing no store may reach, and none does.
 
-@anim inplace wide dst while code_literals() codes chapter 16's page at level 2: the copy the runs of lit_streams() read, each flush's store into the 8 streams' rooms, the header, and the bitstream's move down. From the encoder's own lit_put() and lit_flush(), checked against code_literals().
+@anim inplace wide dst while code_literals() codes chapter {{chapter:ch-trace}}'s page at level 2: the copy the runs of lit_streams() read, each flush's store into the 8 streams' rooms, the header, and the bitstream's move down. From the encoder's own lit_put() and lit_flush(), checked against code_literals().
 
 @listing src/seqlz_compress_literals.c 861-867
 

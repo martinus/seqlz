@@ -490,7 +490,8 @@ gives the same output in 42 349 instead of 43 841 cycles per page
 
 ## The decoder {#ch-decisions--decoder}
 
-The decoder ([chapters 12 to 14](#ch-dec-basics)) runs while a program waits. It runs 2.1 times `lz4`'s
+The decoder ([`seqlz_decompress.c`](#f-seqlz_decompress-c), [chapter 13](#ch-literals-dec),
+[chapter 14](#ch-decode)) runs while a program waits. It runs 2.1 times `lz4`'s
 instructions, 25 284 against 11 899 per page, at 3.3 instructions per cycle against 2.4: 7609 against 4992
 cycles in a hot loop on the PC
 ([explored-designs.md](https://github.com/martinus/seqlz/blob/main/docs/explored-designs.md#the-numbers-again-with-the-format-as-it-is-now-reads-03-µs-faster-than-on-29th-september)).
@@ -567,7 +568,7 @@ prefetch that had cost the A76 1.3 to 2.6 µs of cold reads did not show again o
 
 The backend prefetches the compressed data, the decoder its tables, {{ch17.tok_lines}} lines of token
 table, {{ch17.len_lines}} for each length table and {{ch17.lit_lines}} for the page's literal table,
-{{ch17.prefetch_lines}} per loop iteration ([chapter 12](#ch-dec-basics--prefetch)). Even the 32 lines of
+{{ch17.prefetch_lines}} per loop iteration ([why](#ch-dec-basics--prefetch)). Even the 32 lines of
 the length tables were worth 2.8 µs to the A55
 ([explored-designs.md](https://github.com/martinus/seqlz/blob/main/docs/explored-designs.md#4-prefetching-the-tables-the-a55-needs-it-the-a76-is-faster-without)),
 and one prefetch per iteration cost the A76 0.8 µs on cold reads of coded pages

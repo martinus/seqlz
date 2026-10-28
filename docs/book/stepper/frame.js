@@ -65,7 +65,7 @@
   };
 
   function start(fig, makeView) {
-    var data = JSON.parse(document.getElementById(fig.id + '-data').textContent);
+    var data = JSON.parse(document.getElementById((fig.getAttribute('data-src') || fig.id) + '-data').textContent);
     var rows = {}, stmt = {}, tops = {};
     fig.querySelectorAll('.st-code .line').forEach(function (r) {
       var n = r.querySelector('.ln').getAttribute('data-n');
@@ -81,7 +81,8 @@
       if (!(n in tops)) tops[n] = rows[n].offsetTop;
       U.scrollBox(codeBox, tops[n] - codeBox.clientHeight / 3);
     }
-    window.addEventListener('resize', function () { tops = {}; });
+    // a step-through in a closed panel had no layout; the panel sends resize when it opens
+    window.addEventListener('resize', function () { tops = {}; if (cur) go(i); });
     document.addEventListener('book-size', function () { tops = {}; });
 
     function load(id) {

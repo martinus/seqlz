@@ -65,7 +65,7 @@ and against the Mi 9T's 4.14 tree.
 This is the one place where the header changes a value of the kernel. `L1_CACHE_BYTES` is a cache
 line as the kernel sees it, and older arm64 kernels, 4.14 among them, say 128 there, where the Mi 9T's
 Cortex-A76 and A55 and mainline arm64 say 64. The decoder prefetches its tables before it decodes a
-page, in `prefetch_lines()` ([chapter 12](#ch-dec-basics--prefetch)), in steps of
+page, in [`prefetch_lines()`](#ch-dec-basics--prefetch), in steps of
 {{ch05.prefetch_step}} bytes with one `prefetch()` every `L1_CACHE_BYTES` inside a step:
 
 ```c

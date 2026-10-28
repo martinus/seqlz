@@ -112,7 +112,8 @@ for ch in sorted((ROOT / "docs/book/chapters").glob("*.md")):
         ch.write_text("\n".join(lines))
 
 # the notes of annotate.py: each block starts where its first line went and ends before the next one,
-# so they still cover the file; links to a block (#b<first line>) move with it
+# so they still cover the file; links to a block (#b<first line>) and "line N" in a note or panel move
+# with their lines
 for path, nf in notes_files(ROOT / "docs/book").items():
     lines = nf.read_text().split("\n")
     mp = linemap(path)
@@ -132,8 +133,13 @@ for path, nf in notes_files(ROOT / "docs/book").items():
             print(f"{nf.name}:{idx+1}: @@ {a}-{b} -> {na}-{nb}{tag}")
             lines[idx] = f"@@ {na}-{nb}"
             changed = True
+    # and "line N" in the notes, a line of their own file
+    def lineref(mm):
+        return re.sub(r"\d+", lambda d: str(near(mp, int(d.group(0)), 1) or d.group(0)), mm.group(0))
     for idx, line in enumerate(lines):
         nl = re.sub(r"\(#b(\d+)\)", lambda r: f"(#b{moved.get(int(r.group(1)), r.group(1))})", line)
+        if not BLOCK.match(line):
+            nl = re.sub(r"\b[Ll]ines? \d+(?:(?:, | to | and |-|\u2013)\d+)*", lineref, nl)
         if nl != line:
             show(nf, idx, line, nl)
             lines[idx], changed = nl, True

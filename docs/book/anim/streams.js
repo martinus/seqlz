@@ -207,7 +207,7 @@ BookAnim.define('streams', function (ctx) {
   // the steps of each mode: what is dealt, decoded, highlighted, and the sentence
   function steps8() {
     var L = [], j, r;
-    L.push({ deal: 0, say: 'Chapter 16\'s page has ' + N + ' literals, coded with literal table ' + D.set + ' in ' + total + ' bits. Each row is ' + ROUND + ' literals, one round of the decoder. The encoder deals them out to ' + S + ' streams: literal k goes to stream k % 8.' });
+    L.push({ deal: 0, say: 'Chapter {{chapter:ch-trace}}\'s page has ' + N + ' literals, coded with literal table ' + D.set + ' in ' + total + ' bits. Each row is ' + ROUND + ' literals, one round of the decoder. The encoder deals them out to ' + S + ' streams: literal k goes to stream k % 8.' });
     L.push({ deal: 8, now: [0, 8], say: 'Literals 0 to 7, ' + lits(0, 8) + ', go to streams 0 to 7, one each. Each becomes its code in table ' + D.set + ', of ' + lens(0, 8) + ' bits.' });
     L.push({ deal: 16, now: [8, 16], say: 'Literals 8 to 15 go to streams 0 to 7 again, behind the first codes: ' + lens(8, 16) + ' bits. A frequent byte takes less room in its stream than a rare one.' });
     L.push({ deal: ROUND, now: [16, ROUND], say: 'Literals 16 to ' + (ROUND - 1) + ' follow the same way. A row of ' + ROUND + ' is ' + R + ' literals per stream: literal k + 8 j + i of the row that starts at k is in stream i.' });

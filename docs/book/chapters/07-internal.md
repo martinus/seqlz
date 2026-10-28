@@ -50,7 +50,7 @@ table, the values 64 to 127:
 Its {{ll.len.18}}-bit code is `{{ll.code.18}}`, so the entry
 `64 << 8 | 6 << 4 | {{ll.len.18}} = {{ch07.ll18.entry}}` fills the {{ch07.ll18.entries}} entries
 {{ch07.ll18.first}} to {{ch07.ll18.last}} of the 256, and the value is `64 + read(6)`
-(`seqlz_br_value()`, [chapter 12](#ch-dec-basics)). The largest base is {{ch07.len_base_max}} on
+([`seqlz_br_value()`](#ch-dec-basics--value)). The largest base is {{ch07.len_base_max}} on
 4 KiB pages and {{k16.ch07.len_base_max}} on 16 KiB pages, more than 8 bits, so the entry is a `u32`.
 
 The third paragraph explains a habit of the encoder: it masks values that are already in range. A

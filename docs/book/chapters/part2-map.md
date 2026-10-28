@@ -65,7 +65,7 @@ step marked, and a box "In short" of its main points, each a link to the section
 <g class="acc"><text x="277.0" y="333" font-size="11" text-anchor="middle">chapter 14</text></g>
 <text x="277.0" y="350" font-size="11" text-anchor="middle">decode_block(): tokens, offsets, copies</text>
 </a>
-<a href="#ch-dec-basics"><g class="acc"><text x="277" y="378" font-size="11" text-anchor="middle">with copies and bit reader: chapter 12</text></g></a>
+<a href="#ch-dec-basics"><g class="acc"><text x="277" y="378" font-size="11" text-anchor="middle">with copies and bit reader: seqlz_decompress.c</text></g></a>
 <rect x="10" y="300" width="80" height="92" rx="4" fill="none" stroke="currentColor" stroke-width="1"/>
 <text x="50.0" y="343.0" font-size="11.5" text-anchor="middle">4096</text>
 <text x="50.0" y="357.0" font-size="11.5" text-anchor="middle">bytes</text>
@@ -133,7 +133,7 @@ zram calls `seqlz_decode()` with the compressed page, the 4096 bytes to fill, an
    copies of a fixed size and no checks of room ([fast path](#ch-decode--fast)), the others the slow
    path with every check ([slow path](#ch-decode--slow)). Level 3's deltas are added back right after
    each copy of literals ([in page order](#ch-literals-dec--undelta)). The copies and the bit reader
-   are in [chapter 12](#ch-dec-basics).
+   are at [the top of `seqlz_decompress.c`](#ch-dec-basics).
 3. A page is valid only if its bits end where the input ends ([the end](#ch-decode--end)). Any other
    input gets an error, and no input makes the decoder read or write outside its buffers
    ([why](#ch-decode--safety)).
