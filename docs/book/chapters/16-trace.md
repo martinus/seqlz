@@ -11,7 +11,7 @@ like one: a small header, an array of records with a pointer, a few small intege
 stretch of English text, and zeros to the end. It compresses to {{ch16.coded.len}} bytes,
 {{ch16.coded.pct}}% of the page, and with raw literals to {{ch16.raw.len}}. Four figures of the book show
 it sequence by sequence: the matcher finding it ([`seqlz_match.h`](#stepper-match)), the encoder writing it
-([chapter 10](#anim-ends)), the cache line of each token's lookup ([chapter 3](#anim-lines)) and the
+([`seqlz_compress.c`](#f-seqlz_compress-c-b43)), the cache line of each token's lookup ([chapter 3](#anim-lines)) and the
 decoder reading it ([chapter 14](#stepper-decode)). A row of links under each one's sentence jumps the
 others to the same sequence.
 
@@ -73,7 +73,7 @@ for this page, which gives `0x00` {{lit.3.len.0}} bits.
 The backend calls `seqlz_compress(st, page, dst, 8192, 2)`: the per-CPU state of {{size.state}}
 bytes, an output buffer of 2 pages, and level 2, the default. `compress_block()` checks that `dst_cap` is at
 least {{ch16.enc_min}} bytes, sets up the encoder with the bitstream growing down from `dst + 8192` and
-the literals up from `dst + 2` ([chapter 10](#ch-encoder--layout)), and runs [`seqlz_match_block()`](#ch-matcher) with `encode_emit()` as its callback. The matcher clears its
+the literals up from `dst + 2` ([both ends](#ch-encoder--layout)), and runs [`seqlz_match_block()`](#ch-matcher) with `encode_emit()` as its callback. The matcher clears its
 {{ch16.hash_entries}} entries of hash table and starts at position 1.
 
 Up to position 13 nothing matches: neither the repeat offset 1 nor the hash table's candidate, at first
@@ -85,7 +85,7 @@ zeros, and the zeros reach byte {{ch16.e0.zeros_to}}. The first sequence is {{ch
 
 ## encode_emit(): the first sequence in bits {#ch-trace--emit}
 
-`encode_emit()` ([chapter 10](#ch-encoder--emit)) copies the 14 literals with one 16-byte copy. `off`
+`encode_emit()` ([`encode_seq()`](#ch-encoder--emit)) copies the 14 literals with one 16-byte copy. `off`
 is the repeat offset, so class 0, without offset bits. The token, `14 + 16 * min(46, 31) + 512 * 0`, is
 {{ch16.s.0.tok}}, which has no code, so it goes as the escape and 12 bits, `{{ch16.e0.word}}`,
 {{ch16.e0.word_bits}} bits in one `enc_put()`. `ml - 4 = {{ch16.e0.ml4}}` is at least 31, so a length
@@ -176,7 +176,7 @@ matcher emits {{ch16.s.98.ml}} bytes at offset {{ch16.s.98.off}} and then {{ch16
 
 The literals fill `dst + 2` to `dst + {{ch16.raw.lit_end}}`, the bitstream the last {{ch16.bytes}}
 bytes of the buffer, {{ch16.bits}} bits, so {{ch16.pad_bits}} bits are left in the last flush, already
-written on top of the byte below `p`. `encoder_finish()` ([chapter 10](#ch-encoder--finish)) writes the
+written on top of the byte below `p`. [`encoder_finish()`](#ch-encoder--finish) writes the
 count, `{{ch16.raw.u16}}`, and moves the bitstream to right after the literals, turned around in
 {{ch16.raw.copies}} copies of 8 bytes and {{ch16.raw.singles}} single bytes; the gap of
 {{ch16.raw.gap}} bytes is far more than the bitstream, so they cannot overlap. That is
@@ -286,7 +286,7 @@ one, {{ch16.zs.lower}}.
 
 At level 3, `seqlz-3`, `seqlz_compress()` takes `compress_own()` instead of `compress_block()`: the
 matcher with its lazy step and the step back ([level 3](#ch-matcher--lazy)), and a record in front of
-each sequence's literals for the deltas ([chapter 10](#ch-encoder--records)). On this page it finds
+each sequence's literals for the deltas ([the records](#ch-encoder--records)). On this page it finds
 {{ch16.l3.seqs}} sequences instead of {{ch16.l2.seqs}}, with {{ch16.l3.lits}} literals instead of
 {{ch16.lits}}; with raw literals that would be {{ch16.l3.raw_len}} bytes instead of {{ch16.raw.len}}.
 

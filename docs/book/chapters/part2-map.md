@@ -32,7 +32,7 @@ step marked, and a box "In short" of its main points, each a link to the section
 </a>
 <a href="#ch-encoder"><rect class="fill-sheet" x="324" y="74" width="190" height="92" rx="4" stroke="currentColor" stroke-width="1"/>
 <text x="419.0" y="92" font-size="12.5" text-anchor="middle" font-weight="700">encoder</text>
-<g class="acc"><text x="419.0" y="107" font-size="11" text-anchor="middle">chapter 10</text></g>
+<g class="acc"><text x="419.0" y="107" font-size="11" text-anchor="middle">seqlz_compress.c</text></g>
 <text x="419.0" y="124" font-size="11" text-anchor="middle">encode_seq()</text>
 <text x="419.0" y="138" font-size="11" text-anchor="middle">literals front, bits back</text>
 </a>
@@ -101,7 +101,7 @@ backend of [chapter 15](#ch-zram-glue--backend). At levels 1 and 2 three steps f
    into sequences: `ll` literals, bytes it found no match for, then a match of `ml` bytes copied from
    `offset` bytes back. It finds a candidate with a hash of the next 5 bytes in a table of positions
    ([the hash](#ch-matcher--hash)), and tries the repeat offset at every position too.
-2. **The encoder** ([chapter 10](#ch-encoder)) gets each sequence through a callback that the compiler
+2. **The encoder** ([`seqlz_compress.c`](#ch-encoder)) gets each sequence through a callback that the compiler
    inlines ([the callback](#ch-matcher--emit)). `encode_seq()` copies the literals to the front of the
    output and puts the sequence's token code, offset bits and length values into a 64-bit accumulator,
    which goes to the back of the output in whole bytes ([both ends](#ch-encoder--layout)).

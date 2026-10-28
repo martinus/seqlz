@@ -206,13 +206,13 @@ indirect call. So the type is for the source: one matcher with several receivers
 The `bool lazy` of level 3 goes the same way. Every call passes a constant: `seqlz_find()` has one call
 with `true` and one with `false`, `compress_block()` passes `false` and `compress_own()`, level 3's,
 `true`. So each inlined copy of the loop sees a constant, and the one for levels 1 and 2 has no code of
-level 3 at all ([chapter 10](#ch-encoder--entry)).
+level 3 at all ([`compress_block()`](seqlz_compress.c.html#b409)).
 
 `seqlz_find()` collects the sequences into an array for tests and tools such as the table trainer,
 which trains the tables on exactly the sequences this matcher finds. The kernel's copy has only the
 encoder: `port.py` makes the matcher call `encode_seq()` by name, with `lazy` as its last argument,
 so the lazy copy, level 3's, is also the one that writes the records for the deltas
-([chapter 10](#ch-encoder--records)).
+([the records](#ch-encoder--records)).
 
 Two passes, the matcher into an array and the encoder over it, took 24 257 instead of 22 848 cycles
 per page, and the mispredictions went from 293 to 319 per page: the encoder's branches lost the
@@ -526,7 +526,7 @@ to the end. The last 8 bytes never
 start a match, every try reads 8 bytes. The format has no count of sequences
 ([the end](book:#ch-format--end)). Every other sequence covers at least 4 bytes, so a page has at most
 {{const.MAX_SEQUENCES}}, `SEQLZ_MAX_SEQUENCES`, which `seqlz_find()`'s array and
-[the encoder's bound](book:#ch-encoder--layout) rely on.
+[the encoder's bound](book:#ch-encoder--two-pages) rely on.
 @more {#ch-matcher--insert} One position of a match, not all, and not the start
 The insert comes before the load of `table[h]` for the new `pos`, so a new position with the same hash
 as `pos - 2` finds it.

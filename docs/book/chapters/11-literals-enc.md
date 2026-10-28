@@ -9,7 +9,7 @@
 - Writing the streams is what costs, the pricing is cheap, and a page that keeps its raw literals has paid for the pricing too ([the cost](#ch-literals-enc--cost)).
 :::
 
-When `compress_block()` is done, `dst` holds a valid page with raw literals ([chapter 10](#ch-encoder)),
+When `compress_block()` is done, `dst` holds a valid page with raw literals ([the encoder](#ch-encoder)),
 which is what level 1, `seqlz-1`, stores. From level 2 on, `seqlz_compress()` then calls
 `seqlz_code_literals()`, at level 3 `seqlz_code_own()`, and both call `code_literals()`: it prices the
 literals in all 8 literal tables, takes the cheapest, at level 3 also builds a table of the page's own
@@ -302,7 +302,7 @@ page's own table has to save the same 16 bytes as without deltas.
 A table of the page's own needs counts, lengths, codes and room for the description,
 {{own.enc.work_size|grp}} bytes in `struct own_work`. The compressor's work memory is the 8 KiB of the
 matcher's table, and nothing else is free per CPU, so `own_work()` puts the struct at byte
-{{own.enc.work_at}} of it ([chapter 10](#ch-encoder--entry)); below that byte goes the copy of the raw
+{{own.enc.work_at}} of it ([`own_work()`](#ch-encoder--own-work)); below that byte goes the copy of the raw
 literals. A page with more literals than that would overwrite it, so `OWN_LITERALS_MAX` is the limit,
 4096 on 4 KiB pages, where no page has more. On 16 KiB pages it is 12 288 of 16 384. Pages with fewer
 than 512 literals, `OWN_LITERALS_MIN`, gained 1.15 bytes per page together on one phone dump, counted
@@ -464,8 +464,8 @@ check of `code_literals()` above, with these bytes and `bits`: the text page pas
 
 @listing src/seqlz_compress_literals.c 528-542
 
-`own_put()` collects bits in a `u64` as `enc_put()` does for the sequences
-([chapter 10](#ch-encoder--put)), but forwards. Once 32 bits or more are waiting, it stores 8 bytes
+`own_put()` collects bits in a `u64` as [`enc_put()`](#f-seqlz_compress-c-b111) does for the
+sequences, but forwards. Once 32 bits or more are waiting, it stores 8 bytes
 big-endian, the waiting bits on top, and moves on by 4 bytes: the first 4 bytes are final, the other 4
 hold the rest, which the next store writes again with more bits behind them. A put adds at most 16
 bits to fewer than 32, so 48 bits fit. `& 63` is a no-op for `cnt` from 32 on, and `& (OWN_DESC_ROOM -
@@ -491,7 +491,7 @@ codes a page's literals in the fewest bits is a question of the same kind as whi
 and `seqlz_delta_literals()` answers it the same way, with the sums of `lit_cost` of
 [above](#ch-literals-enc--pricing): four sums, the literals as they are and with each delta, in all 8
 fixed tables at once. It runs once the page is matched, on the records that `encode_seq()` wrote in
-front of each sequence's literals ([chapter 10](#ch-encoder--records)), and before `code_literals()`.
+front of each sequence's literals ([the records](#ch-encoder--records)), and before `code_literals()`.
 [The page of pointers](#ch-matcher--back) is the example: its {{delta.ptr.n_lit}}
 literals at level 3 are mostly the low byte of a pointer right after a match at offset 8.
 
@@ -584,7 +584,7 @@ next record's first byte; from the second sequence on, `out` is at least 2 recor
 copy ends below the next record. So the loop reads the next record, `pos`, `ll` and `last`, before it
 copies, while `in`, `pin`, `n_lit`, `at` and `dist` keep the current one. Past the last sequence the
 bytes written reach at most the first byte past the old end of the literals, inside the room the
-encoder's check left before `p` ([chapter 10](#ch-encoder--emit)).
+encoder's check left before `p` ([the room check](#ch-encoder--room-check)).
 
 @listing src/seqlz_compress_literals.c 184-189
 
@@ -784,10 +784,10 @@ is about 2 bytes per µs on the A76, where the deltas themselves gave about 22
 commit `2fc645d`).
 
 `seqlz_code_literals()` is the call below level 3, with no table of the page's own and no delta, and
-`seqlz_code_raw_literals()` the same for `seqlz_encode()` ([chapter 10](#ch-encoder--entry)), which
+`seqlz_code_raw_literals()` the same for [`seqlz_encode()`](#f-seqlz_compress-c-b386), which
 `port.py` leaves out of the kernel's copy. Each entry point has `code_literals()` inlined, compiled
 for the constants of its call ([above](#ch-literals-enc--overview)), as for the two copies of the
-matcher ([chapter 10](#ch-encoder--find)). Until 22nd October 2026 the coder was in `seqlz_compress.c`,
+matcher ([`seqlz_find()`](#ch-encoder--find)). Until 22nd October 2026 the coder was in `seqlz_compress.c`,
 a `static` function next to its callers.
 
 ## Coded only where it saves 1/16 of the literals and {{ch11.coded_min}} bytes {#ch-literals-enc--rule}
@@ -943,7 +943,7 @@ instead of one per literal. Stream 0 of the example page, in table {{ch11.set}},
 
 @listing src/seqlz_compress_literals.c 247-269
 
-The streams' version of `enc_flush()` ([chapter 10](#ch-encoder--flush)), but forwards: `n` bits are
+The streams' version of [`enc_flush()`](#f-seqlz_compress-c-b136), but forwards: `n` bits are
 not in memory yet, the shift puts them on top, and `swab64()` followed by a little-endian
 store is a big-endian store, so the stream's first bit is the top bit of the byte at `p`, the order the
 decoder reads. The mask matters only for `n = 0`, at a stream's last flush when its bits ended on a

@@ -238,6 +238,13 @@ raw literals' copy fits the matcher's table, and the sums fit their lanes.
 
 @@ 869-874
 `struct own_work` lives in the matcher's state behind the copy of the literals.
+@more {#ch-encoder--own-work} Where `struct own_work` lies in the matcher's state
+For a table of the page's own, the coder needs `struct own_work`, {{own.enc.work_size|grp}} bytes of
+counts, lengths, codes and the table's description ([own table](#ch-literals-enc--own)), and
+`own_work()` puts it into the matcher's state at byte {{own.enc.work_at}}: `st->work` counts in `u64`,
+so `OWN_LITERALS_MAX / 8U` of them are that byte. Below it is the copy of the raw literals or their
+deltas ([what lies where](#ch-header--state)).
+@end
 
 @@ 875-888
 Level 3: with a delta, the deltas in the matcher's state are coded; without, the literals in `dst`. If

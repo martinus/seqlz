@@ -283,12 +283,12 @@ The `u16` at the start of a page and the stream sizes are little endian
 | `get_unaligned_le32()`, `put_unaligned_le32()`, `get_unaligned_le64()`, `put_unaligned_le64()` | the deltas of level 3's literals, 4 or 8 bytes at a time, in `seqlz_delta_literals()` and in the decoder's `add4()` and `add8()` | any order works, as long as the load and the store use the same one |
 | `get_unaligned_le64()` | the matcher's hash and match length, the decoder's pattern for offsets below 8 | the byte at `p` in the low bits, so that bit tricks find the first byte that differs at the bottom |
 | `get_unaligned_be64()` | the decoder's bit reader for the sequences, the literal streams | the bitstreams are most significant bit first |
-| `put_unaligned_le64()` | the encoder's flush of its bits, the literal coder, the decoder's pattern copy | see [chapter 10](#ch-encoder) |
+| `put_unaligned_le64()` | the encoder's flush of its bits, the literal coder, the decoder's pattern copy | see [`enc_flush()`](seqlz_compress.c.html#b136) |
 | `put_unaligned_be64()` | the encoder's final copy of the bitstream | turns 8 bytes around |
 @end
 @more {#ch-compat--reverse} The bitstream turned around, on 8 example bytes
 The encoder writes the bitstream backwards, from the end of the output buffer down, and at the end
-copies it the right way round behind the literals ([chapter 10](#ch-encoder)). Byte `k` of the
+copies it the right way round behind the literals ([`encoder_finish()`](seqlz_compress.c.html#b304)). Byte `k` of the
 bitstream is then at `end - 1 - k`. Say the bitstream is the 8 bytes `11 22 33 44 55 66 77 88`. In the
 buffer they are the other way round, `88` at `end - 8` and `11` at `end - 1`.
 

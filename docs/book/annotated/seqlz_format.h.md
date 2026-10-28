@@ -174,7 +174,7 @@ same 11-bit table, 26.8%
 ([`docs/explored-designs.md`](https://github.com/martinus/seqlz/blob/main/docs/explored-designs.md#seqlz-third-decoder-round-one-repeat-offset-offset-class-in-the-token-and-why-cold-is-slow)).
 
 The 31 bits of `SEQLZ_SEQ_BITS` are what the encoder's `static_assert`s check
-([why two pages fit](#ch-encoder--layout)). They leave the escape's code
+([why two pages fit](#ch-encoder--two-pages)). They leave the escape's code
 $31 - 12 - 12 = {{ch06.MAX_ESCAPE_LEN}}$ bits on 4 KiB pages and {{k16.ch06.MAX_ESCAPE_LEN}} on 16 KiB
 pages. With the trained {{ch06.esc_len}} bits the longest pair is {{ch06.esc_pair}} bits on 4 KiB
 pages; any other token code is at most 11 bits, $11 + 12 = 23$.

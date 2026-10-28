@@ -122,7 +122,7 @@ same. The kernel builds without the warning about unused parameters below `W=3`,
 @listing src/zram_seqlz.c 55-60
 
 `*dst_len` is the capacity of `dst` on the way in and the compressed length on the way out. zram gives a
-compressor 2 pages of output, and a page always fits into 2 pages ([chapter 10](#ch-encoder)), so the 0
+compressor 2 pages of output, and a page always fits into 2 pages ([two pages](#ch-encoder--two-pages)), so the 0
 of a page that did not fit comes only with a smaller buffer, e.g. the one page zswap gives.
 
 @listing src/zram_seqlz.c 62-77
@@ -180,7 +180,7 @@ where that pays, so the same 2 pages of output suffice. Level 3 needs no more me
 its table of the page's own is worked out in the compression context, behind the copy of the literals
 ([chapter 11](#ch-literals-enc--own)), and decoded into the output page and the scratch
 ([chapter 13](#ch-literals-dec--own)); the records for the deltas go into the output buffer, and the
-deltas into the compression context ([chapter 10](#ch-encoder--records)).
+deltas into the compression context ([the records](#ch-encoder--records)).
 
 @listing src/zram_seqlz.c 114-124
 
@@ -277,7 +277,7 @@ The diff between `src/seqlz_decompress.c` and its copy, on the tree CI uses, `98
 - **The matcher inside `seqlz_compress.c`**, right before its callers, `compress_block()` and
   `compress_own()`, with its `emit` callback a direct call of `encode_seq(e, ..., lazy)`: the lazy copy,
   level 3's, is the one with the records for the deltas, so the wrappers `encode_emit()` and
-  `encode_emit_rec()` are cut ([chapter 10](#ch-encoder--wrappers)). In `src/` the matcher has one
+  `encode_emit_rec()` are cut ([the two receivers](#ch-encoder--wrappers)). In `src/` the matcher has one
   more user, `seqlz_find()`.
 - **What only the harness uses is cut**: all of `src/seqlz.h`; `seqlz_find()`, `seqlz_encode()`,
   `encode_raw()` and `seqlz_code_raw_literals()`. The `raw` parameter of `code_literals()` stays: at level 3 it carries the deltas
@@ -321,7 +321,7 @@ for documenting functions, which `scripts/kernel-doc` parses and checks.
 
 - `Context: Any context` promises that the functions may run where sleeping is not allowed. zram calls
   them under a mutex and does not need it; it holds because the codec never sleeps or allocates.
-- The `Return:` of `seqlz_compress()` has a subtlety of [chapter 10](#ch-encoder): the encoder stops as
+- The `Return:` of `seqlz_compress()` has a subtlety of [the room check](#ch-encoder--room-check): the encoder stops as
   soon as fewer than {{ch15.enc_room}} bytes (`ENC_ROOM`) plus the next literals are free, so a page can
   be refused although its size with coded literals would have fit. With zram's 2 pages it never happens.
 - "Safe for any input" is constraint C6 of the plan, the one hard limit

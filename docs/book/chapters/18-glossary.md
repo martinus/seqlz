@@ -78,7 +78,7 @@ sense given here.
 - **prefix code**: codes of which none is the start of another, so a decoder knows where each ends.
   [Chapter 2](#ch-compression--prefix-codes)
 - **record**: at level 3, the {{delta.rec}} bytes the encoder writes in front of a sequence's literals, its position,
-  `ll` and the offset before, for `seqlz_delta_literals()`. [Chapter 10](#ch-encoder--records)
+  `ll` and the offset before, for `seqlz_delta_literals()`. [The records](#ch-encoder--records)
 - **repeat offset**: the offset of the match before, used again for 0 bits; 1 at the start of a page.
   [Chapter 4](#ch-format--offsets)
 - **scratch**: the per-CPU buffer the decoder decodes coded literals into, a page plus 16 bytes.
@@ -191,7 +191,7 @@ sense given here.
 - **seqlz**: the codec, one format with three levels of the compressor and one decoder; also the
   project, its binaries `seqlz-*` and its options `SEQLZ_*`. [Preface](#preface)
 - **`seqlz-1`, `seqlz-2`, `seqlz-3`**: seqlz at levels 1 to 3: raw literals; coded literals where they
-  pay; and also a lazy step, a table of the page's own and literals as deltas. [Chapter 10](#ch-encoder),
+  pay; and also a lazy step, a table of the page's own and literals as deltas. [`seqlz_compress()`](#ch-encoder--entry),
   [chapter 11](#ch-literals-enc)
 - **`seqlz-opt`**: an optimal parser for the same format, for zram's recompression, removed.
   [Chapter 17](#ch-decisions--not-kept)

@@ -23,7 +23,7 @@ table of the codec, not just these functions.
 @@ 12-17
 Two blocks, zram's buffer of two pages. With this much room `seqlz_compress()` never fails, even on
 random data, and writes no byte past it however large `dst` is. The proof is in the encoder
-([why two pages fit](book:#ch-encoder--layout)).
+([why two pages fit](book:#ch-encoder--two-pages)).
 
 @@ 18-24
 A sequence for code outside the compressor: `seqlz_find()` fills an array of them, `seqlz_encode()`

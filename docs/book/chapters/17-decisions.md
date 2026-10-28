@@ -385,7 +385,7 @@ several side by side
 ### The buffer: literals in front, bitstream from the back, the matcher's table as scratch
 
 The encoder writes literals from the front and the bitstream from the back of its output
-([chapter 10](#ch-encoder--layout)). Before, the bitstream went behind room for a page of literals, which
+([both ends](#ch-encoder--layout)). Before, the bitstream went behind room for a page of literals, which
 needed two pages of output; zram gives two, zswap one. The change wrote the same bytes and made writes in
 the VM 0.19 to 0.21 µs faster
 ([explored-designs.md](https://github.com/martinus/seqlz/blob/main/docs/explored-designs.md#the-compressor-into-a-buffer-of-any-size-the-bitstream-from-the-back-the-same-bytes-in-zram-writes-2-faster-in-the-vm-kept)).
@@ -774,8 +774,8 @@ within the noise
 | priced with the fixed tables' sums of `lit_cost`, every 5th literal | every literal | every literal made pages almost no smaller and the encoder slower ([chapter 11](#ch-literals-enc--deltas)) |
 | every 5th literal | every 4th | every 4th is the same byte of each 4- or 8-byte field, and made pages 1.0 byte larger |
 | where the deltas stay raw, the literals stay raw | a second try of the literals as they are, with the fixed tables and a table of their own | it saved 0.71 bytes per page, for writes 0.39 µs slower on the A76 and 0.93 µs on the A55 in zram in the Mi 9T's kernel, 24th October 2026 ([chapter 11](#ch-literals-enc--code-own)) |
-| the records and the deltas in copies of the loops for level 3 | a test for every sequence in the loops all levels share | the test made levels 1 and 2 about 6% slower to write on the A76, and slower to read ([chapter 10](#ch-encoder--wrappers), [chapter 14](#ch-decode--deltas)) |
-| records in `dst` | a second buffer | no byte of work memory; the matcher's state is its hash table until the page is matched ([chapter 10](#ch-encoder--records)) |
+| the records and the deltas in copies of the loops for level 3 | a test for every sequence in the loops all levels share | the test made levels 1 and 2 about 6% slower to write on the A76, and slower to read ([the two receivers](#ch-encoder--wrappers), [chapter 14](#ch-decode--deltas)) |
+| records in `dst` | a second buffer | no byte of work memory; the matcher's state is its hash table until the page is matched ([the records](#ch-encoder--records)) |
 | for an offset below 4, the smallest multiple of it that is 4 or more, 4 or 6 | the offset as it is | the decoder adds 4 or 8 bytes at a time ([`seqlz_delta_last()`](#ch-internal--delta-last)) |
 
 The cost is in the code as much as in the time: a second copy of the decoder's loop, `undelta_literals()`,

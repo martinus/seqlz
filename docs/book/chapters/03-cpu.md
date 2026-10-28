@@ -500,7 +500,7 @@ Such a **wild copy** writes past the last byte the sequence needs and reads past
 `seqlz_decode()` takes the fast path only where there is room in the page, in the literals and in the
 input, one compare per buffer against limits computed once per page
 ([chapter 14](#ch-decode--rooms)); near the end of the page the slow path copies less at a time. The
-encoder keeps such room too ([chapter 10](#ch-encoder)).
+encoder keeps such room too ([the room check](#ch-encoder--room-check)).
 
 ::: measured 16 bytes, not 32
 Copying 32 bytes of every match made the mean faster and the p99 slower, because the slowest pages
@@ -556,7 +556,7 @@ With the mask the check is gone, and the mask itself costs nothing: x86-64's shi
 written `<< (n & 63U)` even where `n` is never 64, and why `enc[]` in `struct value_table` has
 {{ch03.enc_len_symbols}} entries for {{const.LEN_SYMBOLS}} or {{k16.const.LEN_SYMBOLS}} symbols: a
 power of 2, so that `s & (ENC_LEN_SYMBOLS - 1U)` proves every index in range
-([the masks](#ch-internal--masks), [chapter 10](#ch-encoder)). Masked shifts and indices took the compressor
+([the masks](#ch-internal--masks), [`put_len_value()`](#f-seqlz_compress-c-b150)). Masked shifts and indices took the compressor
 from 25 225 to 25 064 cycles per page, with 4.7% fewer instructions
 ([explored-designs.md](https://github.com/martinus/seqlz/blob/main/docs/explored-designs.md#the-compressor-second-round-fewer-instructions)).
 The decoder had 65 such checks in an early version, `lz4`'s 18, but not in its hot path: without them,
