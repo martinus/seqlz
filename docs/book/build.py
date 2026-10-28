@@ -1122,13 +1122,18 @@ MERMAID_SCRIPT = """<script>
     var t = document.documentElement.getAttribute('data-theme');
     return (t ? t === 'dark' : system.matches) ? 'dark' : 'neutral';
   }
-  function draw() {
-    charts.forEach(function (c, i) { c.removeAttribute('data-processed'); c.innerHTML = sources[i]; });
+  /* a chart in a closed panel is drawn when the panel opens: hidden with display: none, as in
+     Safari, it has no size, and mermaid draws it squeezed */
+  function draw(only) {
+    var nodes = charts.filter(function (c) { return !c.closest('.bpanel[hidden]') && (!only || only.contains(c)); });
+    if (!nodes.length) return;
+    nodes.forEach(function (c) { c.removeAttribute('data-processed'); c.innerHTML = sources[charts.indexOf(c)]; });
     mermaid.initialize({ startOnLoad: false, theme: theme() });
-    mermaid.run({ nodes: charts });
+    mermaid.run({ nodes: nodes });
   }
-  document.addEventListener('book-theme', draw);
-  system.addEventListener('change', draw);
+  document.addEventListener('book-theme', function () { draw(); });
+  document.addEventListener('book-panel', function (e) { draw(e.detail); });
+  system.addEventListener('change', function () { draw(); });
   draw();
 })();
 </script>

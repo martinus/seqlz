@@ -511,8 +511,11 @@ try { var z = +localStorage.getItem('book-size'); if (z >= 0.8 && z <= 2) docume
     if (open) p.removeAttribute('hidden'); else p.setAttribute('hidden', 'until-found');
     var b = document.querySelector('.pbtn[aria-controls="' + p.id + '"]');
     if (b) b.setAttribute('aria-expanded', open ? 'true' : 'false');
-    /* a figure in it had no width while it was closed */
-    if (open) window.dispatchEvent(new Event('resize'));
+    /* a figure in it had no width while it was closed, and a chart is drawn now */
+    if (open) {
+      window.dispatchEvent(new Event('resize'));
+      document.dispatchEvent(new CustomEvent('book-panel', { detail: p }));
+    }
   }
   var calm = matchMedia('(prefers-reduced-motion: reduce)');
   document.querySelectorAll('.pbtn').forEach(function (b) {
