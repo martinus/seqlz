@@ -108,7 +108,7 @@ static __always_inline void copy_match(u8 *d, const u8 *d_end, unsigned int off,
 	if (off < 8) {
 		/* with less than 8 bytes left, byte by byte below */
 		if ((unsigned int)(d_end - d) >= 8U) {
-			unsigned int step = repeat_step[off & 7U];
+			unsigned int step = repeat_step[off];
 			/*
 			 * reads d - off up to d - off + 7, which is below
 			 * d + 8 <= d_end: inside the block
