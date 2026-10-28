@@ -155,8 +155,15 @@ figure.listing figcaption { display: flex; justify-content: space-between; gap: 
 .lfile { font-family: var(--mono); font-weight: 600; font-size: 0.95em; color: var(--ink); text-decoration: none; min-width: 0; overflow-wrap: anywhere; }
 a.lfile:hover { color: var(--accent); text-decoration: underline; }
 .lrange { color: var(--muted); font-variant-numeric: tabular-nums; }
-.lnotes { font-weight: 600; text-decoration: none; }
-a.lnotes:hover { text-decoration: underline; }
+/* the way from a listing to the same lines in the annotated source */
+.lnotes { font-weight: 600; text-decoration: none; margin-left: 0.5rem; padding: 0 0.4em; border: 1px solid currentColor; border-radius: 3px; white-space: nowrap; }
+a.lnotes:hover { background: var(--accent); color: var(--paper); }
+.chapnotes { margin: 0.7rem 0 0; font-family: var(--display); font-size: 0.9rem; }
+.chapnotes a { text-decoration: none; }
+.chapnotes a:hover { text-decoration: underline; }
+.codefirst { margin: 0 0 2rem; max-width: 40rem; padding: 0.6rem 0.9rem; border-left: 3px solid var(--accent); background: var(--sheet);
+             font-family: var(--display); font-size: 0.95rem; }
+.codefirst .cfhead { font-weight: 700; font-stretch: 75%; letter-spacing: 0.1em; text-transform: uppercase; font-size: 0.78rem; color: var(--accent); margin-right: 0.4rem; }
 pre.numbered { padding-block: 0.6rem; }
 .line { display: flex; padding-right: 1rem; }
 .lc { white-space: pre; flex: none; }
@@ -253,6 +260,7 @@ try { var z = +localStorage.getItem('book-size'); if (z >= 0.8 && z <= 2) docume
   <p class="kicker">A book about one directory: seqlz/src</p>
   <h1>seqlz, line by line</h1>
   <p class="sub">How a memory page of 4096 bytes becomes a few hundred, and back, in the code that does it. For developers who have never written a compressor or kernel code.</p>
+  {{CODE_FIRST}}
   <div class="hexpage" aria-label="the 9 bytes 02 00 61 62 dc 65 ef db 8a">
     <span class="h-hdr">02</span><span class="h-hdr">00</span><span class="h-lit">61</span><span class="h-lit">62</span><span class="h-bits">dc</span><span class="h-bits">65</span><span class="h-bits">ef</span><span class="h-bits">db</span><span class="h-bits">8a</span>
   </div>
