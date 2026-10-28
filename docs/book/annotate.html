@@ -83,6 +83,13 @@ body.nocm .cmline { display: none; }
 .bfig { grid-column: 1 / -1; min-width: 0; padding-block: 0.4rem 1.2rem; }
 .bfig > figure { margin-block: 0.6rem 0; }
 
+/* the files before and after in Part II's reading order */
+.filenav { display: flex; justify-content: space-between; gap: 1rem; flex-wrap: wrap; margin-top: 2.5rem; padding-top: 1rem;
+           border-top: 1.5px solid var(--ink); font-family: var(--display); }
+.filenav a { display: flex; flex-direction: column; gap: 0.15rem; text-decoration: none; min-width: 0; }
+.filenav .fnext { margin-left: auto; text-align: right; }
+.filenav .fnk { font-size: 0.75rem; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); }
+.filenav code { font-size: 1rem; overflow-wrap: anywhere; }
 @media (max-width: 60rem) {
   .blk { grid-template-columns: minmax(0, 1fr); }
   .bnote { order: -1; padding-block: 1rem 0.6rem; }
@@ -117,6 +124,7 @@ try { var t = localStorage.getItem('book-theme'); if (t === 'light' || t === 'da
 <nav class="fmap" aria-label="Sections of the file">{{MAP}}</nav>
 <section class="intro">{{INTRO}}</section>
 <main id="code">{{BODY}}</main>
+<nav class="filenav" aria-label="Files of Part II">{{NAV}}</nav>
 </div>
 {{TEMPLATES}}
 <script>

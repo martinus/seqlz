@@ -1,8 +1,14 @@
 # The code on one page {#map}
 
-Part II goes through `src/` file by file, in the order in which the files build on each other. This
-page is the other order: the path of one page through the code, written and read back, with a link to
-the chapter of each step. Every chapter of Part II starts with the same path in four lines, its own
+Part II is the code itself: every file of `src/` as it is, with a short note next to each block and,
+under the note, links to the sections that explain more. Read the files in this order, each one links
+to the next:
+
+@code
+
+The chapters of Part II after the files explain what needs more than a note. This page is the other
+order: the path of one page through the code, written and read back, with a link to the chapter of each
+step. Every chapter of Part II starts with the same path in four lines, its own
 step marked, and a box "In short" of its main points, each a link to the section that explains it. Skim those, and read on where a point is new to you.
 
 <figure class="diagram">

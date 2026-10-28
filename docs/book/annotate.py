@@ -87,11 +87,12 @@ def parse_notes(path):
     return "\n".join(intro).strip(), sections
 
 
-def render(path, src, lines, listings, body, ids, figures, cores, md, commit):
+def render(path, src, lines, listings, body, ids, figures, cores, md, commit, near=(None, None)):
     """the page of the notes at path: a fragment like the book's page, with {{BOOK}} where the address
     of the book goes. lines: the file's highlighted lines; listings: (id, first, last) of each listing
     of the file, in the book's order; body: the book's chapters as HTML, ids: its ids; figures: id ->
-    (the key in cores of what it needs on the page before it, its markup); md: markdown to HTML"""
+    (the key in cores of what it needs on the page before it, its markup); md: markdown to HTML; near:
+    the files before and after it in the reading order, or None"""
     intro, sections = parse_notes(path)
     blocks = [b for s in sections for b in s["blocks"]]
     nxt = 1
@@ -167,6 +168,9 @@ def render(path, src, lines, listings, body, ids, figures, cores, md, commit):
         fail("template.html does not start with its fonts and <style> {{KATEX_CSS}}, the book's CSS")
     fonts, css = m.groups()
     keys = list(dict.fromkeys(figures[f][0] for f in used))
+    nav = "".join(f'<a class="{cls}" href="{pathlib.Path(f).name}.html"><span class="fnk">{what}</span>'
+                  f'<code>{html.escape(pathlib.Path(f).name)}</code></a>'
+                  for f, cls, what in ((near[0], "fprev", "previous file"), (near[1], "fnext", "next file")) if f)
     name = pathlib.Path(src).name
     return ((HERE / "annotate.html").read_text()
             .replace("{{FONTS}}", "\n".join(line for line in fonts.split("\n") if line.startswith("<link")))
@@ -181,4 +185,5 @@ def render(path, src, lines, listings, body, ids, figures, cores, md, commit):
             .replace("{{MAP}}", "".join(cells))
             .replace("{{INTRO}}", links(md(intro)))
             .replace("{{BODY}}", "".join(sec_html))
+            .replace("{{NAV}}", nav)
             .replace("{{TEMPLATES}}", "".join(f'<template id="t-{f}">{figures[f][1]}</template>' for f in used)))

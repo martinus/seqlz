@@ -54,7 +54,7 @@ Fenced code (```c, ```text, ```python) is highlighted the same way, without
 line numbers. Raw HTML (figures with inline SVG) passes through.
 
 python3 build.py [--check] [--out DIR] [--site DIR]
-    --check fails if a line of src/ is in no listing, an id is twice on the page, or a link goes to
+    --check fails if a line of src/ without notes is in no listing, an id is twice on the page, or a link goes to
     an id that is not; --out writes the two pages into DIR instead of next to this script, and the
     annotated sources into DIR/annotated; --site writes the site of GitHub Pages into DIR too: the
     standalone page as index.html, and annotated/<file>.html with links to it
@@ -184,6 +184,11 @@ def src_lines(path):
 COVERED = {}  # path -> set of line numbers
 # the files with an annotated source, annotate.py: their listings link to the same lines there
 NOTES = annotate.notes_files(HERE)
+# the annotated sources in the order a part of book.json reads them, "code": (group, its title, file)
+CODE = [(g["group"], g["title"], f) for part in BOOK["parts"] for g in part.get("code", []) for f in g["files"]]
+if set(f for *_, f in CODE) != set(NOTES):
+    sys.exit(f"book.json's code and annotated/*.md differ: in book.json only {sorted(set(f for *_, f in CODE) - set(NOTES))}, "
+             f"with notes only {sorted(set(NOTES) - set(f for *_, f in CODE))}")
 LISTINGS = []  # (path, first line, last line, id)
 LANG = {".c": "c", ".h": "c", ".inc": "c", ".py": "python", ".sh": "bash", ".patch": "diff", ".cpp": "cpp"}
 
@@ -191,6 +196,20 @@ LANG = {".c": "c", ".h": "c", ".inc": "c", ".py": "python", ".sh": "bash", ".pat
 def notes_href(path, line=None):
     """the annotated source of path, at a line of it"""
     return f"annotated/{pathlib.Path(path).name}.html" + (f"#L{line}" if line else "")
+
+
+def render_code_list():
+    """the annotated sources in their order, by group, each with the first sentence of its notes"""
+    out, group = [], None
+    for g, title, f in CODE:
+        if g != group:
+            out.append(("</ul>" if group else "") + f'<p class="codegroup">{html.escape(title)}</p><ul class="codelist">')
+            group = g
+        intro, _ = annotate.parse_notes(NOTES[f])
+        first = re.split(r"(?<=\.)\s", re.sub(r"\[([^]]*)\]\([^)]*\)", r"\1", intro), maxsplit=1)[0]
+        out.append(f'<li><a href="{notes_href(f)}"><code>{html.escape(pathlib.Path(f).name)}</code></a> '
+                   f'{md(first)[3:-4]}</li>')
+    return "".join(out) + "</ul>"
 
 
 def file_commit(path):
@@ -739,6 +758,10 @@ def preprocess(text, where, first=1):
             out.append(stash(render_stepper(m.group(1), at(i))))
             i += 1
             continue
+        if line.strip() == "@code":
+            out.append(stash(render_code_list()))
+            i += 1
+            continue
         if line.startswith("@program"):  # built by prebuild(), the code is shown by its fence
             i += 1
             continue
@@ -912,15 +935,16 @@ def build():
                  - {p["id"] for p in BOOK["parts"] if "id" in p})
     for b in bad:
         warn(f"link to missing id #{b}")
-    # the annotated sources first, where the rail is seen without scrolling
     toc_html = []
-    if NOTES:
-        toc_html.append(f'<li class="tocpart"><a href="{notes_href(next(iter(NOTES)))}">Annotated source</a></li>')
-        toc_html += [f'<li class="tocchap"><a href="{notes_href(p)}"><span class="tocno">Code</span>'
-                     f'<span class="toct">{html.escape(pathlib.Path(p).name)}</span></a></li>' for p in NOTES]
     for part, items in toc:
         if part.get("title"):
             toc_html.append(f'<li class="tocpart"><a href="#{part["id"]}">{part["label"]}: {part["title"]}</a></li>')
+        # a part's annotated sources come before its chapters, the group named at its first file
+        for g in part.get("code", []):
+            for k, f in enumerate(g["files"]):
+                toc_html.append(f'<li class="tocchap tocfile"><a href="{notes_href(f)}"><span class="tocno">'
+                                f'{html.escape(g["group"]) if k == 0 else ""}</span><span class="toct">'
+                                f'<code>{html.escape(pathlib.Path(f).name).replace("_", "_<wbr>")}</code></span></a></li>')
         for cid, label, title, subs in items:
             sub = "".join(f'<li><a href="#{sid}">{html.escape(t)}</a></li>' for sid, t in subs)
             toc_html.append(f'<li class="tocchap" data-for="{cid}"><a href="#{cid}"><span class="tocno">{label}</span>'
@@ -928,10 +952,13 @@ def build():
                             + (f'<ol class="tocsub">{sub}</ol>' if sub else "") + "</li>")
     # and on the title page, for a reader who wants the code first
     code_first = ""
-    if NOTES:
-        files = ", ".join(f'<a href="{notes_href(p)}"><code>{html.escape(pathlib.Path(p).name)}</code></a>' for p in NOTES)
-        code_first = (f'<p class="codefirst"><span class="cfhead">Code first</span> The annotated source: {files}, the '
-                      f'code with a short note next to each block, and links back into this book.</p>')
+    if CODE:
+        firsts = [(t, f) for k, (g, t, f) in enumerate(CODE) if k == 0 or CODE[k - 1][0] != g]
+        files = ", ".join(f'{html.escape(t)} in <a href="{notes_href(f)}"><code>{html.escape(pathlib.Path(f).name)}</code></a>'
+                          for t, f in firsts)
+        code_first = (f'<p class="codefirst"><span class="cfhead">Code first</span> Part II is the code of '
+                      f'<code>src/</code> file by file, with a short note next to each block: {files}, and the files '
+                      f'after them.</p>')
     commit = f"{SRC_COMMIT[:7]}, {SRC_DATE}"
     tpl = (HERE / "template.html").read_text()
     out = (tpl.replace("{{KATEX_CSS}}", katex_css(allhtml))
@@ -949,11 +976,13 @@ def build():
     # the annotated sources, standalone pages only: they link to the book's standalone page, which on
     # the site is index.html
     notes = {}
-    for src, path in NOTES.items():
+    order = [f for *_, f in CODE]
+    for k, src in enumerate(order):
         lines = highlight_lines("\n".join(src_lines(src)).rstrip("\n"), LANG.get(pathlib.Path(src).suffix, "text"))
+        near = (order[k - 1] if k else None, order[k + 1] if k + 1 < len(order) else None)
         notes[pathlib.Path(src).name] = standalone(annotate.render(
-            path, src, lines, [(lid, a, b) for p, a, b, lid in LISTINGS if p == src], allhtml, ids, FIGURES,
-            CORES, md, SRC_COMMIT))
+            NOTES[src], src, lines, [(lid, a, b) for p, a, b, lid in LISTINGS if p == src], allhtml, ids, FIGURES,
+            CORES, md, SRC_COMMIT, near))
     sites = [(OUT_DIR, STANDALONE.name)] + ([(SITE, "")] if SITE else [])
     for d, book in sites:
         (d / "annotated").mkdir(parents=True, exist_ok=True)
@@ -1000,9 +1029,10 @@ def check_coverage():
     missing_any = False
     for f in sorted((REPO / "src").iterdir()):
         rel = f"src/{f.name}"
-        lines = src_lines(rel)
-        if f.suffix == ".inc" or f.name.startswith("."):
+        # a file with notes is covered by them, annotate.py checks that they have every line
+        if f.suffix == ".inc" or f.name.startswith(".") or rel in NOTES:
             continue
+        lines = src_lines(rel)
         cov = COVERED.get(rel, set())
         miss = [i + 1 for i, l in enumerate(lines) if l.strip() and (i + 1) not in cov]
         if miss:
