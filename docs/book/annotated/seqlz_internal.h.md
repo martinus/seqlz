@@ -115,6 +115,42 @@ back let these misses overlap ([prefetches](book:#ch-cpu--prefetch)).
 `PREFETCH_STEP` is 512 bytes, 8 lines of 64 bytes per round of the outer loop. The second paragraph is
 about the last line of a table, see the next block.
 @anim misses A model of 8 cache misses, one after another or overlapped
+@more {#ch-dec-basics--prefetch} Why the tables are prefetched, 8 lines at a time
+The decoder looks things up in tables: one lookup in the token table, 8 KiB, per sequence, and for
+coded literals one lookup per literal in a literal table of 2 KiB. Left alone, it would pay the misses
+one after the other, each time a lookup reaches a line that is not there yet. `prefetch(p)` says "the
+line of `p` will be needed soon" and does not wait for it. Issued for every line of the tables at the
+start, before the header is read, the trips to memory run at the same time, and by the time the loop
+does its lookups most lines have arrived. `prefetch()` is `prfm` on arm64 and `prefetcht0` on x86-64,
+the latter with a patch to the kernel ([chapter 5](#ch-compat--prefetch)); `L1_CACHE_BYTES` is the
+line size, 64 on both.
+
+The inner loop has constant bounds, and the compiler unrolls it to 8 prefetches in a row. The token
+table takes {{ch12.tok.rounds}} rounds, each length table {{ch12.ll.rounds}} and a literal table
+{{ch12.lit.rounds}}: {{ch12.lines_raw}} cache lines for a page with raw literals, {{ch12.lines_coded}},
+{{ch12.kib_coded}} KiB, for one with coded literals, which prefetches the one literal table it uses. A
+page with a table of its own prefetches none: it builds its table ([chapter 13](#ch-literals-dec--own)).
+The tables do not grow with the page, so it is the same with 16 KiB pages.
+@assert F("k16.ch12.lines_coded") == ch12.lines_coded and ch12.lines_coded - ch12.lines_raw == ch12.lit.cachelines
+
+::: why 8 lines per round, not 1
+With one line per round, the loop's add, compare and branch were more instructions than the
+prefetches. On the Mi 9T's little Cortex-A55, 8 lines per round took the decoder from 16 809 to 16 547
+instructions per page and from 16 676 to 16 247 cycles
+([explored-designs.md](https://github.com/martinus/seqlz/blob/main/docs/explored-designs.md#seqlzs-decoder-for-an-in-order-core-15-fewer-instructions-07-to-08-µs-less-at-cold-p99-on-the-a55-kept)).
+Measured again in October 2026, the plain loop made the big Cortex-A76 read pages with coded literals
+cold in 8.15 to 8.84 µs over the rounds, against 7.38 to 7.99 µs for two builds with 8 lines
+([explored-designs.md](https://github.com/martinus/seqlz/blob/main/docs/explored-designs.md#five-simplifications-measured-in-the-vm-and-on-the-phone-the-literal-streams-as-arrays-kept-four-not)).
+Why 8 and not all 128 lines of the token table without a loop is not recorded.
+:::
+
+[Chapter 3](#ch-cpu--prefetch) has what the prefetches are worth on the A55, 14.5 µs per cold read. On
+the A76 they once cost 1.2 µs, and for a while only in-order cores prefetched the token table. Since
+10th October 2026 every core runs the same loop with the prefetch
+([chapter 17](#ch-decisions--one-loop-for-all-cores)), and the cost did not show again: cold reads in
+7.44 and 7.65 µs with it, 8.07 and 7.60 µs without, in two runs
+([explored-designs.md](https://github.com/martinus/seqlz/blob/main/docs/explored-designs.md#the-kernel-copys-choices-measured-in-one-boot-and-on-the-phone--o3-kept-one-decode-loop-prefetch-no-__aligned64-no-load16)).
+@end
 
 @@ 123-134
 The cast is there because the harness compiles this header as C++, where `void *` does not convert to
@@ -125,6 +161,25 @@ The cast is there because the harness compiles this header as C++, where `void *
 bytes into a line spans 33 lines; the loop asks for the lines of `p`, `p + 64`, ... `p + 1984`, 32
 of them, and the last 8 bytes lie in the 33rd. Where `p` starts a line, `end - 1` is in a line the loop
 asked for already, and the extra prefetch costs nothing.
+@more {#ch-dec-basics--end-line} Which tables start inside a cache line
+In `struct seqlz_tables` on a 64-bit build the token table is at offset {{ch12.tok.off}}, `ll.decode`
+and `ml.decode` at {{ch12.ll.off|grp}} and {{ch12.ml.off|grp}}, {{ch12.ll.mod}} bytes past a
+multiple of 64, and the literal tables at {{ch12.lit.off|grp}}, {{ch12.lit1.off|grp}} and so on,
+{{ch12.lit.mod}} bytes past one. The harness aligns the struct to a page, so there the last
+{{ch12.ll.tail}} entries of each length table and the last {{ch12.lit.tail}} of each literal table are
+in a line of their own. The kernel's copy is one static object, which C aligns to its widest member,
+the `u64` of `lit_cost`; a kernel build puts it at a multiple of 32 bytes with gcc for x86-64 and of 8
+with gcc for arm64 and clang for x86-64. So there any table can start inside a line, and the literal
+tables always do.
+@assert ch12.ml.mod == ch12.ll.mod and ch12.tok.mod == 0 and ch12.ll.last_entry - ch12.ll.first_extra + 1 == ch12.ll.tail and ch12.lit.last_entry - ch12.lit.first_extra + 1 == ch12.lit.tail and ch12.lit.mod % 8 != 0
+
+Until 11th October 2026 the decoder left that line out (#179). With canonical codes the last entries
+belong to the longest codes, the rarest symbols, so it cost a miss only on a rare code. Line 132 is one
+`prefetch()` more per table; where the table starts a line, it asks for a line the loop asked for
+already. Aligning the tables to 64 bytes instead would need a struct aligned to 64, which the tests and
+tools that get it from `malloc()` do not have. On x86-64 the extra prefetch made no difference in a quick
+bench; it was not measured on the phone (commit `bafef14`).
+@end
 
 @@ 135-142
 The loop forms `q + k` up to `q + size - 64` only when `size` is a multiple of 512; otherwise its last

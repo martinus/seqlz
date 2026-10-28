@@ -863,8 +863,10 @@ def map_block(cid, labels):
             if k:
                 items.append(f'<span class="onmap-sep">{html.escape(n.get("join", arrow))}</span>')
             cur = ' class="cur" aria-current="location"' if n["id"] == cid else ""
-            items.append(f'<a href="#{n["id"]}"{cur}><span class="onmap-no">{labels.get(n["id"], "?")}</span> '
-                         f'{html.escape(n["label"])}</a>')
+            # a node in the code of Part II has no chapter number
+            no = labels.get(n["id"])
+            items.append(f'<a href="#{n["id"]}"{cur}>' + (f'<span class="onmap-no">{no}</span> ' if no else "")
+                         + f'{html.escape(n["label"])}</a>')
         if r.get("to"):
             items.append(f'<span class="onmap-sep">{arrow}</span><span class="onmap-data">{html.escape(r["to"])}</span>')
         out.append(f'<div class="onmap-row"><span class="onmap-what">{html.escape(r["what"])}</span>'

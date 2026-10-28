@@ -168,7 +168,7 @@ sense given here.
 - **software pipelining**: starting the loads of a loop's next round while the current one is worked on,
   so that an in-order core does not wait. [Chapter 3](#ch-cpu--in-order)
 - **store forwarding**: a load takes bytes a recent store wrote from the store buffer, if all come from
-  one store; else it waits. [Chapter 12](#ch-dec-basics--copies)
+  one store; else it waits. [`copy8()`](#ch-dec-basics--copies)
 - **SWAR**: SIMD within a register, several small values in one 64-bit integer handled by one instruction.
   [Chapter 3](#ch-cpu--swar)
 

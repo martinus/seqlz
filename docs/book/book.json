@@ -35,7 +35,6 @@
         {"file": "09-matcher.md"},
         {"file": "10-encoder.md"},
         {"file": "11-literals-enc.md"},
-        {"file": "12-dec-basics.md"},
         {"file": "13-literals-dec.md"},
         {"file": "14-decode.md"},
         {"file": "15-zram-glue.md"}

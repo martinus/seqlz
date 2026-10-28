@@ -29,7 +29,7 @@ The page layout is in [chapter 4](#ch-format--layout), the literal table's entri
 Each code shifts `bits` left by its length, and the 1 that the refill set in bit 0 moves up with it. So
 its position, `__builtin_ctzll(bits)`, is the number of bits used since `ip`: one instruction on x86-64,
 two on arm64. This **sentinel** replaces the `count` of the sequences' bit reader
-([chapter 12](#ch-dec-basics--bit-reader)). With a count, 8 streams are 24 values, and x86-64 has 16
+([the bit reader](#ch-dec-basics--bit-reader)). With a count, 8 streams are 24 values, and x86-64 has 16
 general purpose registers, some of which the loop needs for the table and the output. With the
 sentinel the 8 `bits` stay in registers, and the 8 pointers, which only a refill needs, go to the stack
 ([explored-designs.md](https://github.com/martinus/seqlz/blob/main/docs/explored-designs.md#seqlz-fast-lit-one-of-8-literal-tables-per-page)).
@@ -224,7 +224,7 @@ ends after at most 1024 + 257 steps for any input, also one that never fills the
 @listing src/seqlz_decompress_literals.c 194-208
 
 The description is read through `bits`, a 64-bit window whose top `avail` bits are the next ones, as
-the sequences' bit reader does it ([chapter 12](#ch-dec-basics--bit-reader)). When fewer than 16 are
+the [sequences' bit reader](#ch-dec-basics--bit-reader) does it. When fewer than 16 are
 left, it loads 8 bytes big-endian at `p + at` and keeps the `n` whole bytes that fit below 64:
 `(63 - avail) >> 3` is 7 when `bits` is empty, and the mask `~(~0ULL >> (avail + 8n))` clears what is
 below them. `avail + 8n` is at most 63, so the shift is never by 64, which C leaves undefined. Near
@@ -399,7 +399,7 @@ the table's description. The codes 0 to 7 are a
 fixed table; `& (SEQLZ_LIT_SETS - 1U)` changes none of them and keeps the index inside `seqlz_tables.lit[]`
 whatever the value. The prefetch of the 2 KiB table goes out before the sizes are read, so its misses
 overlap with that work; the table never starts a line, so it covers {{ch13.lt.lines}} lines, the last
-one asked for by the prefetch of `end - 1` ([chapter 12](#ch-dec-basics--prefetch)). The sizes are
+one asked for by the [prefetch of `end - 1`](#ch-dec-basics--end-line). The sizes are
 at byte $3 + e$, behind the delta's byte if there is one, which is the pointer the function returns.
 @assert ch13.lt.mod8 != 0 and ch13.lt.lines == 33 and ch13.lt.prefetches == 33 and ch13.lt.loop_prefetches == 32
 

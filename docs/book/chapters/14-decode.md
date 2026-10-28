@@ -47,8 +47,8 @@ flowchart TB
 </pre>
 
 The file first has the helpers only this loop uses: the fast path's match copy, the two ways to get the
-next token, and the room the fast path needs. The slow path's helpers are in
-[chapter 12](#ch-dec-basics).
+next token, and the room the fast path needs. The slow path's helpers are at the
+[top of the file](#ch-dec-basics).
 
 ## copy_match_fast(): the match without loops {#ch-decode--copy-match-fast}
 
@@ -58,7 +58,7 @@ On the fast path a match has at most {{ch14.fast_len}} bytes, since the token's 
 length value follows. The caller guarantees {{ch14.cmf.room}} bytes of room at `d`. From offset 8 on the
 copies are 16, 32 or 40 bytes, always at least `len`, and each `copy8()` loads before it stores, so for
 `8 <= off < 16` a load reads what the store before wrote, the overlap the format asks for
-([chapter 12](#ch-dec-basics--copies)). `m = d - off` once, because clang computed `d + 8 - off` anew
+([`copy8()`](#ch-dec-basics--copies)). `m = d - off` once, because clang computed `d + 8 - off` anew
 for every load: on the Mi 9T's little Cortex-A55 that took the decoder from 17 842 to 17 542
 instructions per page
 ([explored-designs.md](https://github.com/martinus/seqlz/blob/main/docs/explored-designs.md#seqlzs-decoder-for-an-in-order-core-15-fewer-instructions-07-to-08-µs-less-at-cold-p99-on-the-a55-kept)).
@@ -76,7 +76,7 @@ wrote
 
 @listing src/seqlz_decompress.c 327-343
 
-Below offset 8, the pattern register of `repeat_pattern()` ([chapter 12](#ch-dec-basics--pattern)) is
+Below offset 8, the pattern register of [`repeat_pattern()`](#ch-dec-basics--pattern) is
 stored 5 times without a loop. The smallest step is {{ch14.cmf.min_step}}, for
 `off = {{ch14.cmf.min_step_off}}`, and then the 5 stores cover
 $4 \times {{ch14.cmf.min_step}} + 8 = {{ch14.cmf.five_stores}}$ bytes, the comment's "at least 28"; with
@@ -127,8 +127,8 @@ lengths before, which the predictor learns only for a page it has seen, and a sw
 once. In a page seen once that branch was the largest single source of mispredictions in the decoder
 ([explored-designs.md](https://github.com/martinus/seqlz/blob/main/docs/explored-designs.md#which-branches-three-in-the-sequence-loop-are-58-of-the-130-misses-of-a-page-seen-once)).
 So the fast path refills on a schedule: `*skip` alternates, and a branch that alternates is one every
-predictor gets right. The refill is `seqlz_br_refill_8()`, the fast half of `seqlz_br_refill()`
-([chapter 12](#ch-dec-basics--bit-reader)), without the check of bytes left.
+predictor gets right. The refill is `seqlz_br_refill_8()`, the fast half of [`seqlz_br_refill()`](#ch-dec-basics--byte-loop),
+without the check of bytes left.
 
 Why the bits never run short: after a refill `count` is at least 56, and until the next one two fast
 sequences drop their code and offset bits, the second one before its own `next_token_fast()` refills.
@@ -248,7 +248,7 @@ says ([chapter 4](#ch-format--offsets)), and `skip = 0` has the first fast seque
 @listing src/seqlz_decompress.c 413-423
 
 The tables are prefetched before the header is read, {{ch14.pf.token}} prefetches for the token table
-and {{ch14.pf.len}} for each length table ([chapter 12](#ch-dec-basics--prefetch)), so that the header
+and {{ch14.pf.len}} for each length table ([why](#ch-dec-basics--prefetch)), so that the header
 and the literals run while the lines are on their way. `get_unaligned_le16()` replaced a helper of
 seqlz's own on 10th October 2026, within the noise in the kernel VM and on the phone
 ([explored-designs.md](https://github.com/martinus/seqlz/blob/main/docs/explored-designs.md#the-kernel-copys-choices-measured-in-one-boot-and-on-the-phone--o3-kept-one-decode-loop-prefetch-no-__aligned64-no-load16)).
@@ -380,7 +380,7 @@ it, AddressSanitizer reported a heap overflow in that test
 An `ll` of 15 means a literal length value follows the offset bits
 ([chapter 4](#ch-format--length-values)); the refill makes sure of the 20 or 22 bits `seqlz_br_value()`
 may take. `lit > lit_end` has to come first: with `lit` past `lit_end`, the cast of `lit_end - lit` would
-let every `nl` pass. `copy_literals()` may read up to `lit_bound` ([chapter 12](#ch-dec-basics--literals)).
+let every `nl` pass. [`copy_literals()`](#ch-dec-basics--literals) may read up to `lit_bound`.
 With `deltas`, `undelta_literals()` restores exactly the `nl` literals, again before `last`
 changes.
 Until 11th October 2026 the last sequence had a token too, with a match of nothing, and the decoder checked
@@ -486,7 +486,7 @@ The example page, {{ab.len}} bytes, has raw literals, `n_lit = {{ab.lits}}`, and
 {{ch14.ab.tok}}: `ll` {{ch14.ab.ll}}, `ml` {{ch14.ab.ml}} with a length value, offset {{ch14.ab.raw}}.
 It goes the slow path for three reasons at once: the length value, `lit` above `lit_fast`, and `br.p`
 above `in_fast`. `copy_literals()` copies `a b` byte by byte, `seqlz_br_value()` reads
-{{ch14.ab.value}} ([chapter 12](#ch-dec-basics--bit-reader)), and `copy_match()` stores `abababab` up
+{{ch14.ab.value}} ([the example](#ch-dec-basics--value)), and `copy_match()` stores `abababab` up
 to `d + {{ch14.ab.store_end}}` and the last {{ch14.ab.bytewise}} bytes one by one. Then `d - lit` is
 `end_gap`, 0 literals for 0 bytes, and the {{ch14.ab.count3}} bits left are the zero padding.
 @assert ab.len == 9 and ab.lits == 2 and ab.b.bytes == 5 and ch14.ab.escaped == 1 and ch14.ab.value_bit == 1 and ch14.ab.ml == 35 and ch14.ab.count3 == ab.b.pad and ch14.ab.raw == 2

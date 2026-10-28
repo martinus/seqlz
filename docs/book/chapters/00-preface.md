@@ -59,19 +59,19 @@ produces, and collects [the design decisions](#ch-decisions) with what they were
 
 | file | lines | what it is | chapter |
 | --- | --- | --- | --- |
-| `src/seqlz_compat.h` | {{ch00.lines.seqlz_compat_h}} | the kernel's types and helpers, also outside the kernel | [5](#ch-compat) |
-| `src/seqlz_format.h` | {{ch00.lines.seqlz_format_h}} | the format's constants | [6](#ch-header) |
-| `src/seqlz_internal.h` | {{ch00.lines.seqlz_internal_h}} | what the compressor's and decompressor's files share: work memory, levels | [6](#ch-header) |
-| `src/seqlz.h` | {{ch00.lines.seqlz_h}} | the functions for userspace: tests, tools, the harness | [6](#ch-header) |
-| `src/seqlz_tables.h` | {{ch00.lines.seqlz_tables_h}} | the layout of the tables in memory, the token table's entries | [7](#ch-internal) |
-| `src/seqlz_codes.c` | {{ch00.lines.seqlz_codes_c}} | builds codes and decode tables from code lengths | [8](#ch-codes) |
+| [`src/seqlz_compat.h`](#f-seqlz_compat-h) | {{ch00.lines.seqlz_compat_h}} | the kernel's types and helpers, also outside the kernel | [5](#ch-compat) |
+| [`src/seqlz_format.h`](#f-seqlz_format-h) | {{ch00.lines.seqlz_format_h}} | the format's constants | [6](#ch-header) |
+| [`src/seqlz_internal.h`](#f-seqlz_internal-h) | {{ch00.lines.seqlz_internal_h}} | what the compressor's and decompressor's files share: work memory, levels | [6](#ch-header) |
+| [`src/seqlz.h`](#f-seqlz-h) | {{ch00.lines.seqlz_h}} | the functions for userspace: tests, tools, the harness | [6](#ch-header) |
+| [`src/seqlz_tables.h`](#f-seqlz_tables-h) | {{ch00.lines.seqlz_tables_h}} | the layout of the tables in memory, the token table's entries | [7](#ch-internal) |
+| [`src/seqlz_codes.c`](#f-seqlz_codes-c) | {{ch00.lines.seqlz_codes_c}} | builds codes and decode tables from code lengths | [8](#ch-codes) |
 | `src/seqlz_default_tables.c`, `src/seqlz_lit_sets.c` and their `.inc` files | ${{ch00.lines.seqlz_default_tables_c}} + {{ch00.lines.seqlz_lit_sets_c}} + 2 \times {{ch00.lines.seqlz_default_tables_4k_inc}} + 2 \times {{ch00.lines.seqlz_lit_sets_4k_inc}}$ | the trained code lengths, part of the format | [8](#ch-codes) |
-| `src/seqlz_match.h` | {{ch00.lines.seqlz_match_h}} | the matcher: finds the repeats in a page | [9](#ch-matcher) |
-| `src/seqlz_compress.c` | {{ch00.lines.seqlz_compress_c}} | the encoder | [10](#ch-encoder) |
-| `src/seqlz_compress_literals.c` | {{ch00.lines.seqlz_compress_literals_c}} | the coding of literals | [11](#ch-literals-enc) |
-| `src/seqlz_decompress.c` | {{ch00.lines.seqlz_decompress_c}} | the decoder | [12](#ch-dec-basics), [14](#ch-decode) |
-| `src/seqlz_decompress_literals.c` | {{ch00.lines.seqlz_decompress_literals_c}} | the decoding of literals | [13](#ch-literals-dec) |
-| `src/zram_seqlz.c` | {{ch00.lines.zram_seqlz_c}} | seqlz as a zram backend, for the benchmarks | [15](#ch-zram-glue) |
+| [`src/seqlz_match.h`](#f-seqlz_match-h) | {{ch00.lines.seqlz_match_h}} | the matcher: finds the repeats in a page | [9](#ch-matcher) |
+| [`src/seqlz_compress.c`](#f-seqlz_compress-c) | {{ch00.lines.seqlz_compress_c}} | the encoder | [10](#ch-encoder) |
+| [`src/seqlz_compress_literals.c`](#f-seqlz_compress_literals-c) | {{ch00.lines.seqlz_compress_literals_c}} | the coding of literals | [11](#ch-literals-enc) |
+| [`src/seqlz_decompress.c`](#f-seqlz_decompress-c) | {{ch00.lines.seqlz_decompress_c}} | the decoder | [14](#ch-decode) |
+| [`src/seqlz_decompress_literals.c`](#f-seqlz_decompress_literals-c) | {{ch00.lines.seqlz_decompress_literals_c}} | the decoding of literals | [13](#ch-literals-dec) |
+| [`src/zram_seqlz.c`](#f-zram_seqlz-c) | {{ch00.lines.zram_seqlz_c}} | seqlz as a zram backend, for the benchmarks | [15](#ch-zram-glue) |
 @assert len(ch00.lines) == 18
 @assert ch00.lines.seqlz_default_tables_4k_inc == ch00.lines.seqlz_default_tables_16k_inc and ch00.lines.seqlz_lit_sets_4k_inc == ch00.lines.seqlz_lit_sets_16k_inc
 

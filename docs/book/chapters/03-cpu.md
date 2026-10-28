@@ -88,8 +88,8 @@ on the bits the lookup before consumed, the code asks for the lines ahead of tim
 
 `seqlz_decode()` asks for the lines of its tables before it reads the first byte of the page,
 {{ch03.prefetch_lines}} lines per round of a small loop, `prefetch_lines()`
-([chapter 12](#ch-dec-basics--prefetch)), which also says why a table that does not start at a cache
-line misses its last line: the literal tables always do.
+([why 8 lines a round](#ch-dec-basics--prefetch), and [the line of `end - 1`](#ch-dec-basics--end-line) for why
+a table that does not start at a cache line misses its last line: the literal tables always do).
 @assert ch03.lit_at_mod != 0 and ch03.lit_size_mod == 0
 
 ::: measured What the prefetches give
@@ -416,7 +416,7 @@ runs on every core, because nothing else in the kernel's `lib/` asks which CPU i
 x86-64 has 16 general-purpose registers, arm64 31. A value that does not fit is **spilled** to the
 stack, and in a hot loop that can put a load onto a chain. The decoder reads its bitstream through
 one register: `struct seqlz_bit_reader` has a `u64 bits` with the next bits on top and an `int count`
-of how many are real ([chapter 12](#ch-dec-basics--bit-reader)). One refill of 8 bytes serves two or
+of how many are real ([the bit reader](#ch-dec-basics--bit-reader)). One refill of 8 bytes serves two or
 three sequences: it leaves at least 56 bits, and a sequence on the fast path takes at most
 {{ch03.tok_bits}} bits of token and 14 of offset ({{ch03.off_max}} on 4 KiB pages).
 
@@ -458,7 +458,7 @@ page's literals in all 8 literal tables ([chapter 11](#ch-literals-enc--pricing)
 tables, table `k` in bits `8k` to `8k + 7`, so one add per literal sums all 8 tables. A lane holds at
 most 255, so after {{ch03.lit_cost_run}} literals of at most {{ch03.lit_bits}} bits the sums move into
 wider lanes. `seqlz_hash5()` ([chapter 9](#ch-matcher--hash)) and `repeat_pattern()`
-([chapter 12](#ch-dec-basics--pattern)) also use a register as 8 bytes at once, with one multiply
+([offsets below 8](#ch-dec-basics--pattern)) also use a register as 8 bytes at once, with one multiply
 each.
 
 ## Copying more than needed {#ch-cpu--wild-copy}
@@ -504,21 +504,21 @@ encoder keeps such room too ([chapter 10](#ch-encoder)).
 
 ::: measured 16 bytes, not 32
 Copying 32 bytes of every match made the mean faster and the p99 slower, because the slowest pages
-have many short matches and each paid for 32 bytes ([chapter 12](#ch-dec-basics--copy-match)). Copying
+have many short matches and each paid for 32 bytes ([16 bytes first](#ch-dec-basics--first16)). Copying
 byte by byte up to the end of the page made the slowest pages 10 times slower than `lz4`: with offset
 1 every byte waited for the store before it
 ([explored-designs.md](https://github.com/martinus/seqlz/blob/main/docs/explored-designs.md#numbers-that-were-only-in-the-codecs-comments-until-10th-october-2026)).
 :::
 
 When the offset is below 16, the bytes a copy of 16 reads overlap the bytes it writes, and an 8-byte
-load must not read bytes the store before it has not written yet. [Chapter 12](#ch-dec-basics--copies)
-shows how the copies handle offsets below 8 and from 8 on.
+load must not read bytes the store before it has not written yet. [`copy8()` and
+`copy16()`](#ch-dec-basics--copies) show how the copies handle offsets below 8 and from 8 on.
 
 ## Shifts by 64, and what the kernel's sanitizers add {#ch-cpu--ubsan}
 
 Bit readers meet undefined behaviour whenever a field can have 0 bits: "the top `x` bits" of a
 64-bit `v` is `v >> (64 - x)`, a shift by 64 for `x = 0`, and x86-64 then shifts by 0 and returns `v`, not 0.
-`seqlz_br_value()` shifts by 1 and then by `63 - x` instead ([chapter 12](#ch-dec-basics--bit-reader)).
+`seqlz_br_value()` shifts by 1 and then by `63 - x` instead (the note on [`seqlz_br_value()`](#ch-dec-basics--value)).
 The token table's entries hold the shift for the offset's `raw_bits` bits as `(64 - raw_bits) & 63`,
 0 for class 0, which has no offset bits ([chapter 7](#ch-internal)). `__builtin_ctzll(0)` is undefined too, `rep bsf` gives 64 on
 CPUs with `tzcnt` and nothing defined on older ones; `seqlz_match_len()` ORs in a bit where the XOR
