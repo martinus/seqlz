@@ -492,7 +492,7 @@ and `seqlz_delta_literals()` answers it the same way, with the sums of `lit_cost
 [above](#ch-literals-enc--pricing): four sums, the literals as they are and with each delta, in all 8
 fixed tables at once. It runs once the page is matched, on the records that `encode_seq()` wrote in
 front of each sequence's literals ([chapter 10](#ch-encoder--records)), and before `code_literals()`.
-The page of pointers of [chapter 9](#ch-matcher--back) is the example: its {{delta.ptr.n_lit}}
+[The page of pointers](#ch-matcher--back) is the example: its {{delta.ptr.n_lit}}
 literals at level 3 are mostly the low byte of a pointer right after a match at offset 8.
 
 @listing src/seqlz_compress_literals.c 9-15

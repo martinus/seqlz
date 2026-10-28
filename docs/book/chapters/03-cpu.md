@@ -246,7 +246,7 @@ decoder compiled to branches that made 30% and 28% of all mispredictions.
 At every position of the page the matcher asks whether the next 4 bytes match at the repeat offset,
 and whether they match at the candidate from the hash table. Both answers are close to random. It
 computes both first, `rep_hit` and `cand_hit`, and decides with one branch on `rep_hit | cand_hit`
-([chapter 9](#ch-matcher--position)). With three branches per position the matcher mispredicted 539
+([one branch](#ch-matcher--position)). With three branches per position the matcher mispredicted 539
 times per page, with one 329, and the p99 of compressing a cold page went from 15.4 to 12.6 µs
 ([explored-designs.md](https://github.com/martinus/seqlz/blob/main/docs/explored-designs.md#the-compressor-seqlz-fast)).
 
@@ -390,7 +390,7 @@ smaller changes from 17 842
 **A load has to start early.** Loaded right before it is used, a value costs an in-order core the
 whole latency of the load; issued a few instructions earlier, the instructions in between fill the
 wait. The matcher loads the next position's 8 bytes, hash, table entry and candidate bytes while it
-compares the current one, **software pipelining** ([chapter 9](#ch-matcher--position)). On the A55
+compares the current one, **software pipelining** ([one position ahead](#ch-matcher--ahead)). On the A55
 that, with two smaller changes to the same loop, took compression from 43 841 to 42 349 cycles per
 page, 3.4%, with the same output; on the PC from 16 489 to 16 148
 ([explored-designs.md](https://github.com/martinus/seqlz/blob/main/docs/explored-designs.md#the-matcher-on-an-in-order-core-34-fewer-compress-cycles-on-the-a55-same-output-kept)).
@@ -443,7 +443,7 @@ CPU; CI checks that on s390x. Both orders are used on purpose:
 
 - **Little endian for comparing bytes.** `seqlz_match_len()` loads 8 bytes of two strings and XORs
   them: byte 0 of a string is the lowest byte, so the first byte that differs holds the lowest set
-  bit, and counting the trailing zero bits finds it ([chapter 9](#ch-matcher--match-len)).
+  bit, and counting the trailing zero bits finds it ([`seqlz_match_len()`](#ch-matcher--match-len)).
 - **Big endian for the bitstream.** Loaded big endian, the first byte of the stream lands in the top
   8 bits of the register, and its bit 7 in bit 63, where the decoder takes the next code from. On
   x86-64 that is `movq` and `bswap`, on arm64 `ldr` and `rev`: one instruction more per refill.
@@ -457,7 +457,7 @@ page's literals in all 8 literal tables ([chapter 11](#ch-literals-enc--pricing)
 `struct seqlz_tables` holds, for each byte value, one `u64` with the byte's code length in all 8
 tables, table `k` in bits `8k` to `8k + 7`, so one add per literal sums all 8 tables. A lane holds at
 most 255, so after {{ch03.lit_cost_run}} literals of at most {{ch03.lit_bits}} bits the sums move into
-wider lanes. `seqlz_hash5()` ([chapter 9](#ch-matcher--hash)) and `repeat_pattern()`
+wider lanes. [`seqlz_hash5()`](#ch-matcher--hash) and `repeat_pattern()`
 ([offsets below 8](#ch-dec-basics--pattern)) also use a register as 8 bytes at once, with one multiply
 each.
 
@@ -522,7 +522,7 @@ Bit readers meet undefined behaviour whenever a field can have 0 bits: "the top 
 The token table's entries hold the shift for the offset's `raw_bits` bits as `(64 - raw_bits) & 63`,
 0 for class 0, which has no offset bits ([`token_entry()`](#ch-internal--token-entry-code)). `__builtin_ctzll(0)` is undefined too, `rep bsf` gives 64 on
 CPUs with `tzcnt` and nothing defined on older ones; `seqlz_match_len()` ORs in a bit where the XOR
-could be 0 ([chapter 9](#ch-matcher--match-len)), and the literal streams' marker bit is never shifted
+could be 0 ([why](#ch-matcher--match-len)), and the literal streams' marker bit is never shifted
 out. And the limits of the decoder's fast path, `lit_fast` for the literals and `in_fast` for the input,
 are `unsigned long`, not pointers, because "16 bytes before the end" of a short input would be a pointer
 before the buffer ([chapter 14](#ch-decode--setup)).

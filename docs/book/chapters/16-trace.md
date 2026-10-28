@@ -10,7 +10,7 @@ The page is made up, since real pages from a zram dump hold keys and passwords. 
 like one: a small header, an array of records with a pointer, a few small integers and a name each, a
 stretch of English text, and zeros to the end. It compresses to {{ch16.coded.len}} bytes,
 {{ch16.coded.pct}}% of the page, and with raw literals to {{ch16.raw.len}}. Four figures of the book show
-it sequence by sequence: the matcher finding it ([chapter 9](#stepper-match)), the encoder writing it
+it sequence by sequence: the matcher finding it ([`seqlz_match.h`](#stepper-match)), the encoder writing it
 ([chapter 10](#anim-ends)), the cache line of each token's lookup ([chapter 3](#anim-lines)) and the
 decoder reading it ([chapter 14](#stepper-decode)). A row of links under each one's sentence jumps the
 others to the same sequence.
@@ -73,8 +73,7 @@ for this page, which gives `0x00` {{lit.3.len.0}} bits.
 The backend calls `seqlz_compress(st, page, dst, 8192, 2)`: the per-CPU state of {{size.state}}
 bytes, an output buffer of 2 pages, and level 2, the default. `compress_block()` checks that `dst_cap` is at
 least {{ch16.enc_min}} bytes, sets up the encoder with the bitstream growing down from `dst + 8192` and
-the literals up from `dst + 2` ([chapter 10](#ch-encoder--layout)), and runs `seqlz_match_block()`
-([chapter 9](#ch-matcher)) with `encode_emit()` as its callback. The matcher clears its
+the literals up from `dst + 2` ([chapter 10](#ch-encoder--layout)), and runs [`seqlz_match_block()`](#ch-matcher) with `encode_emit()` as its callback. The matcher clears its
 {{ch16.hash_entries}} entries of hash table and starts at position 1.
 
 Up to position 13 nothing matches: neither the repeat offset 1 nor the hash table's candidate, at first
@@ -286,7 +285,7 @@ one, {{ch16.zs.lower}}.
 ## Level 3: {{ch16.l3.len}} bytes, without a table of its own {#ch-trace--level3}
 
 At level 3, `seqlz-3`, `seqlz_compress()` takes `compress_own()` instead of `compress_block()`: the
-matcher with its lazy step and the step back ([chapter 9](#ch-matcher--lazy)), and a record in front of
+matcher with its lazy step and the step back ([level 3](#ch-matcher--lazy)), and a record in front of
 each sequence's literals for the deltas ([chapter 10](#ch-encoder--records)). On this page it finds
 {{ch16.l3.seqs}} sequences instead of {{ch16.l2.seqs}}, with {{ch16.l3.lits}} literals instead of
 {{ch16.lits}}; with raw literals that would be {{ch16.l3.raw_len}} bytes instead of {{ch16.raw.len}}.

@@ -21,7 +21,7 @@ sense given here.
   empty entry. [Chapter 2](#ch-compression--complete)
 - **decoder, encoder, matcher**: the matcher finds the matches of a page (`src/seqlz_match.h`), the encoder
   writes them in the format, the decoder turns a compressed page back into the page.
-  [Chapters 9 to 14](#ch-matcher)
+  [`seqlz_match.h`](#ch-matcher), [the encoder](#ch-encoder), [the decoder](#ch-decode)
 - **delta, `dt`**: at level 3, a literal stored as the literal minus an earlier byte of the page,
   modulo 256, before it is coded, one of three ways per page, which the byte `dt` before the stream
   sizes names: the byte 4 or 8 before, or the byte at the offset of the sequence before, for every
@@ -37,9 +37,9 @@ sense given here.
 - **fast path**: the decoder's path for a sequence without a length value and with room at every end:
   fixed copies, no loop, no checks. [Chapter 14](#ch-decode--fast)
 - **greedy, lazy matching**: a greedy matcher takes the first match it finds; lazy matching checks whether
-  the next position starts a longer one, which seqlz does not. [Chapter 9](#ch-matcher)
+  the next position starts a longer one, which seqlz does at level 3 only. [The matcher](#ch-matcher--plan)
 - **hash table**: the matcher's {{ch17.hash_slots}} slots of 2 bytes, cleared for each page, the newest
-  position per hash of 5 bytes. [Chapter 9](#ch-matcher--hash)
+  position per hash of 5 bytes. [The table](#ch-matcher--state)
 - **header**: the u16 with the literal count and a flag, and with coded literals byte 2, with deltas the
   byte that says which, and the stream sizes: $3 + w$ bytes, and with deltas one byte more. [Byte 2](#ch-header--header)
 - **Huffman code**: the prefix code with the fewest bits for given frequencies; seqlz's are limited to
@@ -54,7 +54,7 @@ sense given here.
 - **literal, match, offset**: a literal is a byte stored as it is; a match copies `ml` bytes from `offset`
   bytes back. [Chapter 2](#ch-compression--lz77)
 - **lazy step**: a look at the next position before a match is taken, for a longer one there; level 3
-  does it for matches below 20 bytes. [Chapter 9](#ch-matcher--lazy)
+  does it for matches below 20 bytes. [Level 3](#ch-matcher--lazy)
 - **literal table**: one of the 8 fixed tables for coded literals, or a page's own table; a page uses
   one. Not related to the 8 streams. [`seqlz_lit_sets.c`](#f-seqlz_lit_sets-c)
 - **`ll`, `ml`**: literal length and match length of a sequence, `ml` 4 or more.

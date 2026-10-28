@@ -328,8 +328,8 @@ shortest codes in the real 4 KiB table, with the escape among them:
 Token 49 is the sequence of an array of 8-byte pointers that differ from the one 8 bytes back only in
 their lowest byte: 1 literal and 7 bytes from 8 back, the same offset as before, in {{tok.len.49}}
 bits. Where the lowest byte carries into the next one, the sequence is 2 literals and 6 bytes, token
-34, at {{tok.len.34}} bits. Of the {{ch04.ptr.tokens}} tokens of [chapter 9](#ch-matcher)'s page of
-512 pointers, {{ch04.ptr.t49}} are token 49 and {{ch04.ptr.t34}} token 34.
+34, at {{tok.len.34}} bits. Of the {{ch04.ptr.tokens}} tokens of [the matcher's page of
+512 pointers](#ch-matcher--back), {{ch04.ptr.t49}} are token 49 and {{ch04.ptr.t34}} token 34.
 @assert ch04.ptr.t49 + ch04.ptr.t34 + 1 == ch04.ptr.tokens
 
 **The escape.** Codes of at most 11 bits have room for 2048 symbols, fewer than the 3072 tokens, so
@@ -547,7 +547,7 @@ bytes 25 to 4095: z, 4071 times
 @assert second.seqs == 4 and second.escapes == 0 and ch04.second.s[0].cls == 0 and ch04.second.s[1].cls == 4 and ch04.second.s[2].cls == 2 and ch04.second.s[0].mlf < 31 and ch04.second.s[1].mlf < 31 and ch04.second.s[2].mlf == 31 and ch04.second.s[2].llf < 15
 
 - **The first match uses the repeat offset.** `last` starts at 1, and `llll` is 4 bytes from 1 back,
-  in 0 offset bits; the matcher finds it with that same candidate ([chapter 9](#ch-matcher)).
+  in 0 offset bits; the matcher finds it with that same candidate ([the matcher](#ch-matcher--state)).
 - **Token 12 has an {{tok.len.12}}-bit code.** 12 literals and a match of exactly 4 bytes at the
   repeat offset is rare on real pages, so its code is long; escaped it would have taken
   {{ch04.esc_bits}} bits.
@@ -839,7 +839,7 @@ A delta, not a XOR: a field that grows by 1 from `0x0f` to `0x10` has a delta of
 `0x10` is `0x1f`, every bit the carry flipped. The first form of `e`, on 21st October 2026, XORed the
 literals; the subtraction replaced it the same day, before it was merged ([chapter 17](#ch-decisions--deltas)).
 
-The page of 512 pointers of [chapter 9](#ch-matcher--back) at level 3 begins with
+[The page of 512 pointers](#ch-matcher--back) at level 3 begins with
 `{{delta.ptr.l3.head}}`: `h` says {{delta.ptr.l3.n}} coded literals, `t = {{delta.ptr.l3.t}}` is code
 {{delta.ptr.l3.code}} with `w = {{delta.ptr.l3.w}}` and `e = 1`, byte {{delta.ptr.l3.dt_at}} is
 `dt = {{delta.ptr.l3.dt}}`, so `x = 8`, and 5 bytes of sizes follow. Its first literals,

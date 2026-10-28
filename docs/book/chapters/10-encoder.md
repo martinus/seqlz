@@ -9,7 +9,7 @@
 - `encoder_finish()` turns the bitstream around 8 bytes at a time, a little-endian load and a big-endian store; at levels 2 and 3 the literals are coded afterwards, with the matcher's 8 KiB table as the copy of the raw literals ([encoder_finish()](#ch-encoder--finish), [the entry points](#ch-encoder--entry)).
 :::
 
-The matcher of [chapter 9](#ch-matcher) finds a page's sequences; the encoder in
+[The matcher](#ch-matcher) finds a page's sequences; the encoder in
 `src/seqlz_compress.c` writes them in the format of [chapter 4](#ch-format): the literals as they are,
 and for `ll`, `ml` and the offset the token's code, the offset bits and the length values. The two run
 as one loop, so the encoder gets each sequence the moment it is found and never sees the page as a
@@ -27,7 +27,7 @@ level 3's deltas of the literals and the coding of the literals are in `seqlz_co
 `find_emit()` is the simple receiver of the matcher's sequences: it stores the three numbers into the
 next element and ignores the literals. A level that is not one gives no sequences, as
 `seqlz_compress()` and `seqlz_encode()` give no page for it. It is inlined into the matcher's loop like `encode_emit()`
-([chapter 9](#ch-matcher--emit)). `seqlz_find()` is not for zram: the table trainer counts the symbols
+([who calls the matcher](#ch-matcher--emit)). `seqlz_find()` is not for zram: the table trainer counts the symbols
 of exactly these sequences, and the round trip fuzzer checks that `seqlz_encode()` of them gives the
 same bytes as `seqlz_compress()`. `port.py` cuts it from the kernel's copy. The two calls that differ
 only in `true` and `false` could be one call with `level >= SEQLZ_LEVEL_OWN`; they are two on
@@ -94,7 +94,7 @@ into, and 1 byte less.
 
 ::: why One pass, any buffer
 Two passes, the matcher into an array and then the encoder, were 6% slower
-([chapter 9](#ch-matcher--emit)). A second buffer for the bitstream needs more work memory per CPU.
+([measured](#ch-matcher--emit)). A second buffer for the bitstream needs more work memory per CPU.
 Until 8th October 2026 the encoder wrote the bitstream forwards, behind room for a page of literals at
 `d + 2 + 4096`, and moved it down at the end, which needed a `dst` of two pages. zram gives two pages,
 zswap, the kernel's compressed cache in front of another swap device, gives one, and `lz4`, `lzo` and
@@ -112,7 +112,7 @@ commit `66aab11`).
 second stores 8 bytes below that, so the bits reach no lower than `p - 15`. With `p - lit >= ll + 32`
 the two never meet, with 1 byte spare. Until 11th October the comment counted this as 40 bytes, not 32
 ([#180](https://github.com/martinus/seqlz/issues/180)). As the check is not exact, a page can fail
-although it would have fit with up to 31 bytes to spare: the page of pointers from chapter 9
+although it would have fit with up to 31 bytes to spare: [the page of pointers](#ch-matcher--back)
 compresses to {{pointers.len}} bytes and needs a `dst` of {{ch10.ptr.min_dst}}.
 @assert ch10.ptr.min_dst - pointers.len < ch10.enc_room and ch10.slab.min_dst - slab.len < ch10.enc_room
 
@@ -183,7 +183,7 @@ and neither is in the literals. So at level 3 the encoder writes that next to th
 the page is matched ([chapter 11](#ch-literals-enc--deltas)). `dst` is where the room is: the matcher's
 state is its hash table until the last sequence, and the literals' copy goes there only afterwards.
 Each field fits a `u16`, as a page of 16 KiB has positions, lengths and offsets below $2^{16}$. The
-cost is room in `dst`: on the page of pointers of [chapter 9](#ch-matcher--back), level 3 finds
+cost is room in `dst`: on [the page of pointers](#ch-matcher--back), level 3 finds
 {{delta.ptr.n_lit}} literals in {{delta.ptr.recs}} sequences, and with the records they take
 {{delta.ptr.with_rec|grp}} bytes. A page that does not fit with its records is matched a second time
 without them, and stored without deltas ([below](#ch-encoder--entry)).
@@ -399,7 +399,7 @@ $7 + 31 + 20 + 20 = 78$ bits.
 
 @listing src/seqlz_compress.c 253-266
 
-The matcher calls its receiver with the signature of `emit_fn` ([chapter 9](#ch-matcher--emit)): a
+The matcher calls its receiver with the signature of [`emit_fn`](#ch-matcher--emit): a
 `void *` and the sequence. `rec` has to be a constant at the call, so there are two receivers, one
 per constant; `compress_block()` passes `encode_emit()` to the greedy matcher, `compress_own()` passes
 `encode_emit_rec()` to the lazy one. Once inlined, the code of the records exists only in level 3's

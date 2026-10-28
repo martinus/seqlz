@@ -134,7 +134,7 @@ The coded rows use ideal code lengths from the same pages, so they are optimisti
 34.5%, `zstd -1`, which codes no literals, at 26.9%. The largest step towards `zstd` is writing the three
 numbers of a sequence in bits instead of bytes, not a better search: with the matches of `lz4hc` level 3
 the rows are 31.3%, 26.1%, 25.4% and 23.7%. So seqlz has a cheap greedy matcher
-([chapter 9](#ch-matcher)) and spends its effort on the format ([chapter 4](#ch-format)).
+([`seqlz_match.h`](#ch-matcher)) and spends its effort on the format ([chapter 4](#ch-format)).
 
 ### Fixed tables, because a page is too small to carry its own
 
@@ -409,7 +409,7 @@ So both stay, as zram's levels 1 and 2, coded the default, and level 3 adds a th
 
 ## The matcher {#ch-decisions--matcher}
 
-The matcher ([chapter 9](#ch-matcher)) is where the write time goes: in the third round of compressor
+[The matcher](#ch-matcher) is where the write time goes: in the third round of compressor
 work it took 17 300 cycles per page, `lz4` 17 100 for everything
 ([explored-designs.md](https://github.com/martinus/seqlz/blob/main/docs/explored-designs.md#the-compressor-third-round-ideas-from-the-literature)).
 Every decision here trades bytes against work per position.
@@ -463,14 +463,14 @@ A hash of 6 bytes made pages 27.9% instead of 27.0%.
 ### The repeat offset at every position
 
 It needs no lookup, and it is about 22% of the matches on desktop pages and 32% on phone pages, with the
-classes and tables of 14th October 2026 ([chapter 9](#ch-matcher--plan)). Offline on phone pages,
+classes and tables of 14th October 2026 ([two candidates](#ch-matcher--plan)). Offline on phone pages,
 checking it only up to 16 positions after a match cost 0.3%, never checking it 3.7%
 ([explored-designs.md](https://github.com/martinus/seqlz/blob/main/docs/explored-designs.md#ratio-from-the-parse-and-the-tables-on-phone-pages-measured-offline-not-built)).
 
 ### No step, and a cleared table
 
 The step `1 + (pos − anchor) >> 6`, with `pos` the matcher's position and `anchor` where its literals
-since the last match start ([chapter 9](#ch-matcher)), needed `anchor` in the loop over positions without a match, which has
+since the last match start ([the step](#ch-matcher--step)), needed `anchor` in the loop over positions without a match, which has
 no register to spare. Without it, pages that compress are 5% faster to write, and the write p99 went from
 1.31 to 1.21 times `lz4`'s
 ([explored-designs.md](https://github.com/martinus/seqlz/blob/main/docs/explored-designs.md#the-matcher-without-its-step-writes-1-to-3-faster-kept)).
@@ -667,8 +667,8 @@ bench's model of zsmalloc, level 3 stored 0.30% more than `zstd` 3 on average an
 
 | decision | instead of | why |
 | --- | --- | --- |
-| one lazy step, only for matches below 20 bytes | a lazy step at every match, or a hash chain | a longer match one byte later is rare after a long one, and looking takes time ([chapter 9](#ch-matcher--lazy)) |
-| matches extended backwards, at level 3 only | the step back at every level | at levels 1 and 2 it cost writes 1% to 7% ([chapter 9](#ch-matcher--hit)) |
+| one lazy step, only for matches below 20 bytes | a lazy step at every match, or a hash chain | a longer match one byte later is rare after a long one, and looking takes time ([level 3](#ch-matcher--lazy-measured)) |
+| matches extended backwards, at level 3 only | the step back at every level | at levels 1 and 2 it cost writes 1% to 7% ([no step back](#ch-matcher--hit)) |
 | the same format and decoder at every level | a format per level | one decoder and one specification for all levels |
 | a table of the page's own, only from 512 literals on and where it saves 16 bytes | a table on every page | the description costs bytes, and building a decode table for every read costs time |
 | the entropy first, then the code | building the code on every page | many pages leave after one pass over 256 counts ([chapter 11](#ch-literals-enc--own)) |

@@ -287,7 +287,7 @@
       pos: function (k) { return 'step ' + (k + 1) + ' of ' + steps.length + ', sequence ' + seqOf(k) + ' of ' + seqStarts.length; },
       seq: function (k) { return seqOf(k) > 0 ? seqOf(k) - 1 : null; },
       stepOfSeq: function (seq) { return seqStarts[Math.min(seq, seqStarts.length - 1)]; },
-      linkLabel: 'decoded (chapter 14)'
+      linkLabel: 'decoded (chapter {{chapter:ch-decode}})'
     };
   }
 

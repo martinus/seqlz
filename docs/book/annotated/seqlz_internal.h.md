@@ -70,14 +70,14 @@ below `8 << 8 = 2048`, which has to be inside the block.
 Each entry is a position in the page, so a `u16` is enough for blocks up to 64 KiB. 4096 entries of 2
 bytes are one per position of a 4 KiB page, if the hash spread them perfectly. The kernel's copy has
 `12U` in place of the `?:`, it compresses 4 KiB blocks only. The measurements of 2048 and 8192
-entries are in [chapter 9](book:#ch-matcher--hash).
+entries are in [`seqlz_match.h`](book:#ch-matcher--state).
 
 @@ 59-71
 All three levels write the same format and one decoder reads them; they differ in how hard the
 compressor works. The code compares with `>=` and `<`, e.g. `level >= SEQLZ_LEVEL_OWN`, never with
 `==`, so a level 4 would inherit what levels 2 and 3 do.
 
-The lazy step is [chapter 9](book:#ch-matcher--lazy), the own table and the deltas
+The lazy step is in [`seqlz_match.h`](book:#ch-matcher--lazy), the own table and the deltas
 [chapter 11](book:#ch-literals-enc--own).
 @more {#ch-header--compressor} The three levels side by side, measured
 A **level** is what zram calls the knob a user sets per device, `level=` in

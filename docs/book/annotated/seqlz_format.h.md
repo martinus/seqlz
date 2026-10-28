@@ -542,7 +542,7 @@ or one just below 256, e.g. `0x01` or `0xff`. When many of a page's literals do 
 a handful of values that come again and again, and a literal table codes those in fewer bits than the
 literals as they are.
 
-The page of 512 pointers of [chapter 9](#ch-matcher--back), `0x7f1234560010 + 16 * i`, shows the
+[The page of 512 pointers](#ch-matcher--back), `0x7f1234560010 + 16 * i`, shows the
 second choice. At level 3 its sequences are mostly 1 literal, the low byte of a pointer, and the 7
 bytes after it copied from the pointer before, offset 8. `SEQLZ_DELTA_8` stores each such literal as
 its delta to the low byte of the pointer before, 8 bytes back: the literal `0x30` minus `0x20`, which

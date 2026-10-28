@@ -128,8 +128,8 @@ seqlz's table has {{ch02.HASH_SLOTS}} slots of 2 bytes, 8 KiB, all of its work m
 compression, and it is cleared for every page. Its hash covers the next **5 bytes**, not 4, which
 finds fewer and longer matches; a match of exactly 4 bytes is still found at the repeat offset, which
 needs no table. E.g. `,dog=` goes to slot {{ch02.hash.dog}} at position 5 and again at position 17,
-which is how the match of sequence 2 is found. [Chapter 9](#ch-matcher--hash) has the hash and the
-measurements behind 5 bytes.
+which is how the match of sequence 2 is found. [`seqlz_hash5()`](#ch-matcher--hash) has the hash and the
+[measurements behind 5 bytes](#ch-matcher--five-bytes).
 @assert size.state == 2 * ch02.HASH_SLOTS == 8192 and ch02.hash.dog == ch02.hash.dog17
 
 ::: try The real matcher on the example
@@ -146,7 +146,7 @@ the other {{ch02.cat.2.ml}} zeros with one match at offset 1. That match ends at
 and the matcher still passes a last sequence with no literals and no match, for which the format
 writes no bits.
 @assert ch02.cat.n == 4 and ch02.cat[2].ll == 3 and ch02.cat[2].off == 1 and ch02.cat[3].ll == 0
-[Chapter 9](#ch-matcher--back) has a program that prints every sequence the matcher finds; give it
+[The page of pointers](#ch-matcher--back) has a program that prints every sequence the matcher finds; give it
 this page, and others.
 :::
 
@@ -157,7 +157,7 @@ chain, picked the match that saves the most bits by the tables and looked one po
 pages 3.3% smaller for about twice the time to write; it was not kept, nor a deeper one
 ([`docs/plan.md` §1.1](https://github.com/martinus/seqlz/blob/main/docs/plan.md#11-the-score-memory-against-time-not-bars)).
 seqlz's level 3 of today looks one position ahead only for a match shorter than 20 bytes
-([chapter 9](#ch-matcher--lazy)).
+([the lazy step](#ch-matcher--lazy)).
 
 ## Fixed-width numbers waste bits {#ch-compression--entropy}
 
@@ -185,7 +185,7 @@ the least number of bits per value any code can reach on average, here {{ch02.cl
 Class 0, at {{ch02.cls.0.share}}%, carries {{ch02.cls.0.info}} bits; class 1, at
 {{ch02.cls.1.share}}%, carries {{ch02.cls.1.info}}. A good code gives class 0 fewer than 3 bits and
 class 1 more. (On a desktop's zram pages of September 2026, 18% to 25% of the matches use the repeat
-offset, see [chapter 9](#ch-matcher--plan).)
+offset, see [two candidates](#ch-matcher--plan).)
 @assert ch02.cls[0].info < "3" < ch02.cls[1].info
 
 ## Prefix codes {#ch-compression--prefix-codes}

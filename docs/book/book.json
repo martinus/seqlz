@@ -28,7 +28,6 @@
       "chapters": [
         {"file": "part2-map.md", "numbered": false, "label": "Map"},
         {"code": true},
-        {"file": "09-matcher.md"},
         {"file": "10-encoder.md"},
         {"file": "11-literals-enc.md"},
         {"file": "13-literals-dec.md"},

@@ -26,7 +26,7 @@ step marked, and a box "In short" of its main points, each a link to the section
 <text x="50.0" y="131.0" font-size="11.5" text-anchor="middle">bytes</text>
 <a href="#ch-matcher"><rect class="fill-sheet" x="112" y="74" width="190" height="92" rx="4" stroke="currentColor" stroke-width="1"/>
 <text x="207.0" y="92" font-size="12.5" text-anchor="middle" font-weight="700">matcher</text>
-<g class="acc"><text x="207.0" y="107" font-size="11" text-anchor="middle">chapter 9</text></g>
+<g class="acc"><text x="207.0" y="107" font-size="11" text-anchor="middle">seqlz_match.h</text></g>
 <text x="207.0" y="124" font-size="11" text-anchor="middle">seqlz_match_block()</text>
 <text x="207.0" y="138" font-size="11" text-anchor="middle">sequences: ll, ml, offset</text>
 </a>
@@ -97,7 +97,7 @@ step marked, and a box "In short" of its main points, each a link to the section
 zram calls `seqlz_compress()` with the page, a buffer for the result and the level, through the
 backend of [chapter 15](#ch-zram-glue--backend). At levels 1 and 2 three steps follow:
 
-1. **The matcher** ([chapter 9](#ch-matcher)), `seqlz_match_block()`, walks the page once and cuts it
+1. **The matcher** ([`seqlz_match.h`](#ch-matcher)), `seqlz_match_block()`, walks the page once and cuts it
    into sequences: `ll` literals, bytes it found no match for, then a match of `ml` bytes copied from
    `offset` bytes back. It finds a candidate with a hash of the next 5 bytes in a table of positions
    ([the hash](#ch-matcher--hash)), and tries the repeat offset at every position too.

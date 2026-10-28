@@ -172,7 +172,7 @@
       // the sequence being looked for: the number of sequences emitted before this step
       seq: function (k) { var n = replay(k).seqs.length; return n < emits.length ? n : null; },
       stepOfSeq: function (seq) { return emits[Math.min(seq, emits.length - 1)]; },
-      linkLabel: 'found by the matcher (chapter 9)'
+      linkLabel: 'found by the matcher (seqlz_match.h)'
     };
   }
 
