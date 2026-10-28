@@ -305,7 +305,7 @@ a format that has to tell itself apart ([format.md](https://github.com/martinus/
 
 Literals are 68% of `seqlz-1`'s output, and coding them is worth 3.5 points to `zstd` 3. So
 `seqlz-2` Huffman codes them, `seqlz-1` stores them raw, in one format with one decoder
-([chapter 11](#ch-literals-enc), [chapter 13](#ch-literals-dec)).
+([`code_literals()`](#ch-literals-enc), [chapter 13](#ch-literals-dec)).
 
 ### 8 fixed literal tables, the page picks one
 
@@ -348,7 +348,7 @@ page, and cold reads in the kernel from 2940 / 4810 to 2860 / 4531 ns at p50 / p
 ### Coded only where it saves 1/16 and {{ch15.coded_min}} bytes
 
 The coded streams plus {{ch15.coded_min}} bytes must be less than $n - n/16$ for $n$ literals
-([chapter 11](#ch-literals-enc--rule)). Coding wherever it saves anything gave less than 0.1 points more
+([the rule](#ch-literals-enc--rule)). Coding wherever it saves anything gave less than 0.1 points more
 ([explored-designs.md](https://github.com/martinus/seqlz/blob/main/docs/explored-designs.md#seqlz-fast-lit-one-of-8-literal-tables-per-page)),
 and a coded page costs the decoder a fixed time, large on the in-order A55: its literal table from memory,
 and the literals through a buffer. Raising the minimum from 19 to {{ch15.coded_min}} bytes cost 7.9 bytes
@@ -374,7 +374,7 @@ header's 19 bytes, which later became the minimum of {{ch15.coded_min}}.
 ### Pricing all 8 tables at once
 
 Each byte's code lengths in the 8 tables are one 64-bit word, so one add per literal prices all 8, and
-every {{ch17.lit_cost_run}} literals the sums move into wider lanes ([chapter 11](#ch-literals-enc--pricing)).
+every {{ch17.lit_cost_run}} literals the sums move into wider lanes ([the pricing](#ch-literals-enc--pricing)).
 In the kernel that costs 30 to 40 ns per write; writing the streams is what costs, and pricing a sample
 could save 400 cycles at most, since the exact stream sizes are needed anyway
 ([explored-designs.md](https://github.com/martinus/seqlz/blob/main/docs/explored-designs.md#seqlz-fast-lit-one-of-8-literal-tables-per-page)).
@@ -671,7 +671,7 @@ bench's model of zsmalloc, level 3 stored 0.30% more than `zstd` 3 on average an
 | matches extended backwards, at level 3 only | the step back at every level | at levels 1 and 2 it cost writes 1% to 7% ([no step back](#ch-matcher--hit)) |
 | the same format and decoder at every level | a format per level | one decoder and one specification for all levels |
 | a table of the page's own, only from 512 literals on and where it saves 16 bytes | a table on every page | the description costs bytes, and building a decode table for every read costs time |
-| the entropy first, then the code | building the code on every page | many pages leave after one pass over 256 counts ([chapter 11](#ch-literals-enc--own)) |
+| the entropy first, then the code | building the code on every page | many pages leave after one pass over 256 counts ([the estimate](#ch-literals-enc--entropy)) |
 | code lengths from $f \cdot 2^l \ge n$, repaired in 16 buckets | a Huffman code | no sort and no tree; a few bits more on some pages |
 | the description in byte order, in a fixed code `OWN` | 256 lengths, or the bytes and their lengths | a byte value costs no bits, only its length ([chapter 4](#ch-format--own)) |
 | the decode table built in the output page | in work memory | no byte more per CPU ([chapter 13](#ch-literals-dec--own)) |
@@ -771,9 +771,9 @@ within the noise
 | the same three choices: 4 back, 8 back, the last offset | other distances, more choices, Paeth and gradient predictors | of 131 transforms, each counted on every page, all 131 with the same pricing saved 7.6 bytes per page against the XOR, the three subtractions 7.4 |
 | one choice per page, in a byte of the header | a XOR per literal lane, with a literal table per lane ("format 3", 8 streams of lanes) | the lanes gave less, 896.5 bytes per page on the same ten samples against 880.7, both as stored after a recompression from `seqlz-1`, for more code; the size came from the XOR, not from the lanes |
 | that byte right after byte 2, before the sizes | after the sizes, as the first form had it | the header reads in order: byte 2 says whether the byte is there, and it comes next; the same bytes per page, and one add in the decoder either way |
-| priced with the fixed tables' sums of `lit_cost`, every 5th literal | every literal | every literal made pages almost no smaller and the encoder slower ([chapter 11](#ch-literals-enc--deltas)) |
+| priced with the fixed tables' sums of `lit_cost`, every 5th literal | every literal | every literal made pages almost no smaller and the encoder slower ([`DELTA_STEP`](#f-seqlz_compress_literals-c-b9)) |
 | every 5th literal | every 4th | every 4th is the same byte of each 4- or 8-byte field, and made pages 1.0 byte larger |
-| where the deltas stay raw, the literals stay raw | a second try of the literals as they are, with the fixed tables and a table of their own | it saved 0.71 bytes per page, for writes 0.39 µs slower on the A76 and 0.93 µs on the A55 in zram in the Mi 9T's kernel, 24th October 2026 ([chapter 11](#ch-literals-enc--code-own)) |
+| where the deltas stay raw, the literals stay raw | a second try of the literals as they are, with the fixed tables and a table of their own | it saved 0.71 bytes per page, for writes 0.39 µs slower on the A76 and 0.93 µs on the A55 in zram in the Mi 9T's kernel, 24th October 2026 ([`seqlz_code_own()`](#ch-literals-enc--code-own)) |
 | the records and the deltas in copies of the loops for level 3 | a test for every sequence in the loops all levels share | the test made levels 1 and 2 about 6% slower to write on the A76, and slower to read ([the two receivers](#ch-encoder--wrappers), [chapter 14](#ch-decode--deltas)) |
 | records in `dst` | a second buffer | no byte of work memory; the matcher's state is its hash table until the page is matched ([the records](#ch-encoder--records)) |
 | for an offset below 4, the smallest multiple of it that is 4 or more, 4 or 6 | the offset as it is | the decoder adds 4 or 8 bytes at a time ([`seqlz_delta_last()`](#ch-internal--delta-last)) |

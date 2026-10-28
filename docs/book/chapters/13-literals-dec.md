@@ -10,7 +10,7 @@
 :::
 
 A page with coded literals has them Huffman coded in 8 streams, literal `i` in stream `i % 8`
-([chapter 11](#ch-literals-enc) wrote them). `seqlz_decode()` first calls `seqlz_decode_literals()`, which
+([`code_literals()`](#ch-literals-enc) wrote them). `seqlz_decode()` first calls `seqlz_decode_literals()`, which
 decodes all of them into the scratch, `SEQLZ_SCRATCH` bytes of work memory, and returns where the
 sequences' bitstream starts. From then on the loop of [chapter 14](#ch-decode) reads the literals from
 the scratch as if the page had them raw.
@@ -40,7 +40,7 @@ The comment's last sentence is the invariant: a refill leaves at least 56 bits a
 between two refills take fewer, so they never reach the 1, and `bits` is never 0, for which
 `__builtin_ctzll()` is undefined.
 
-One stream in three states, from the page of [chapter 11](#ch-literals-enc--example): {{letters.lits}}
+One stream in three states, from [the page of letters](#ch-literals-enc--example): {{letters.lits}}
 literals, 200 random letters and a zero byte, coded with literal table {{ch13.set}}. Stream 0 starts at
 byte {{ch13.s0.start}} of the compressed page with the bytes `{{ch13.s0.bytes}}`.
 @assert letters.lits == 201 and ch13.last_lit_byte == 0 and ch13.r.valid_before + ch13.r.new_bits == ch13.r.valid_after
@@ -474,7 +474,7 @@ bits 0 to 6 of each byte; two such bytes sum to at most `0x7f + 0x7f = 0xfe`, so
 the next, and the sum's bit 7 is the carry out of bit 6. The true bit 7 of a byte's sum is bit 7 of
 `a`, XOR bit 7 of `b`, XOR that carry. `(a ^ b) & ~low` is the first two in bit 7 of each byte, and
 XORed into the sum it gives the true bit. The carry out of bit 7, which a byte's sum modulo 256 drops,
-is never made. The deltas `f0 01` of [chapter 11](#ch-literals-enc--sub-bytes)'s example plus the
+is never made. The deltas `f0 01` of [`sub_bytes()`](#ch-literals-enc--sub-bytes)'s example plus the
 bytes `10 00` they are to:
 
 ```text
@@ -514,7 +514,7 @@ for a short sequence near the page's end, `d + dist` would be past the end of th
 allow even forming such a pointer.
 
 The first sequence of the page of pointers is {{delta.ptr.rec.0.ll}} literals at the page's start, with
-`SEQLZ_DELTA_8`, so `dist` is 8 and `k` starts at 8. As in [chapter 11](#ch-literals-enc--deltas) they
+`SEQLZ_DELTA_8`, so `dist` is 8 and `k` starts at 8. As in [the encoder](#ch-literals-enc--delta-write) they
 arrive as `{{delta.ptr.deltas}}` (the first 9 of these bytes). No word of 8 fits before the 9th
 literal, so the first 8 bytes stay as they are, the first pointer, and the byte loop restores byte 8,
 `10 + 10 = 20`, the low byte of the second pointer: `{{delta.ptr.plain}}`.
@@ -622,7 +622,7 @@ of a step first saved 2.8% of the A55's decode cycles, and was not built into th
 
 The fixed cost per page counts more there: the 2 KiB table comes from memory, and the literals go
 through the scratch before the sequences copy them. That is why the encoder codes literals only where
-they save {{ch11.coded_min}} bytes and $\frac{1}{16}$ of themselves ([chapter 11](#ch-literals-enc--rule)). Decoding the
+they save {{ch11.coded_min}} bytes and $\frac{1}{16}$ of themselves ([the rule](#ch-literals-enc--51)). Decoding the
 literals into the end of the output page instead, which saves the scratch, was built: on 4 KiB pages it
 made cold reads 0.08 to 0.22 µs slower in the kernel VM, and it was not kept
 ([explored-designs.md](https://github.com/martinus/seqlz/blob/main/docs/explored-designs.md#16-kib-pages-tuned-c5-does-not-hold-the-literals-in-the-page-would-fix-it-not-kept)).

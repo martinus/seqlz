@@ -68,7 +68,7 @@ produces, and collects [the design decisions](#ch-decisions) with what they were
 | `src/seqlz_default_tables.c`, `src/seqlz_lit_sets.c` and their `.inc` files | ${{ch00.lines.seqlz_default_tables_c}} + {{ch00.lines.seqlz_lit_sets_c}} + 2 \times {{ch00.lines.seqlz_default_tables_4k_inc}} + 2 \times {{ch00.lines.seqlz_lit_sets_4k_inc}}$ | the trained code lengths, part of the format | Part II |
 | [`src/seqlz_match.h`](#f-seqlz_match-h) | {{ch00.lines.seqlz_match_h}} | the matcher: finds the repeats in a page | Part II |
 | [`src/seqlz_compress.c`](#f-seqlz_compress-c) | {{ch00.lines.seqlz_compress_c}} | the encoder | Part II |
-| [`src/seqlz_compress_literals.c`](#f-seqlz_compress_literals-c) | {{ch00.lines.seqlz_compress_literals_c}} | the coding of literals | [11](#ch-literals-enc) |
+| [`src/seqlz_compress_literals.c`](#f-seqlz_compress_literals-c) | {{ch00.lines.seqlz_compress_literals_c}} | the coding of literals | Part II |
 | [`src/seqlz_decompress.c`](#f-seqlz_decompress-c) | {{ch00.lines.seqlz_decompress_c}} | the decoder | [14](#ch-decode) |
 | [`src/seqlz_decompress_literals.c`](#f-seqlz_decompress_literals-c) | {{ch00.lines.seqlz_decompress_literals_c}} | the decoding of literals | [13](#ch-literals-dec) |
 | [`src/zram_seqlz.c`](#f-zram_seqlz-c) | {{ch00.lines.zram_seqlz_c}} | seqlz as a zram backend, for the benchmarks | [15](#ch-zram-glue) |

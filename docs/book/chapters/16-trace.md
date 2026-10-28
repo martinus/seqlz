@@ -185,7 +185,7 @@ $2 + {{ch16.lits}} + {{ch16.bytes}} = {{ch16.raw.len}}$ bytes, the page as `seql
 
 ## seqlz_code_literals(): {{ch16.coded.saved}} bytes less {#ch-trace--literals}
 
-`seqlz_code_literals()` ([chapter 11](#ch-literals-enc)) prices the {{ch16.lits}} literals in all 8 tables,
+`seqlz_code_literals()` ([`code_literals()`](#ch-literals-enc)) prices the {{ch16.lits}} literals in all 8 tables,
 in chunks of {{ch16.lt.chunk}}. The trace program recomputes it one literal at a time:
 
 @output ch16-trace 27-35
@@ -300,7 +300,7 @@ many pages. But the page has to carry it: its description takes {{ch16.l3.own_de
 the header the literals would take {{ch16.l3.own_total}} bytes, {{ch16.l3.own_more}} more than with
 table {{ch16.l3.set}}, where they would have to fit in {{ch16.l3.own_needs}}, {{own.enc.saves_min}}
 bytes less. `own_code()` does not even build that table: its estimate from the counts already says it
-cannot save enough ([chapter 11](#ch-literals-enc--own)). The numbers here come from building it
+cannot save enough ([the estimate](#ch-literals-enc--entropy)). The numbers here come from building it
 anyway. {{ch16.l3.lits}} literals are not many more than the {{own.enc.min_lits}} below which level 3
 does not try a table of its own: the fewer the literals, the more the description weighs.
 

@@ -213,7 +213,7 @@ at {{ch05.ll_cap}} and `ml - 4` at {{ch05.ml_cap}} with it.
 On 32-bit arm and x86 the compiler turns a `u64 / u32` into a call to a helper of its runtime
 library, `__aeabi_uldivmod` or `__udivdi3`. The kernel has neither, so the module would not link. The
 kernel's `div_u64()` avoids the call. The codec has one such division, in `own_lengths()`
-([chapter 11](book:#ch-literals-enc--own)). `tools/kernel-port/check.sh` looks for calls of those
+([the gain](seqlz_compress_literals.c.html#b439)). `tools/kernel-port/check.sh` looks for calls of those
 helpers in the objects of `lib/seqlz/`, because its builds do not link.
 
 @@ 136-141

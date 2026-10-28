@@ -16,7 +16,7 @@ sense given here.
   for tokens, and how many there are. A table is a list of code lengths. [Chapter 2](#ch-compression)
 - **coded literals**: literals written as Huffman codes of one literal table in 8 streams, from level 2
   on where that saves $\frac{1}{16}$ of them plus {{ch15.coded_min}} bytes.
-  [Chapter 11](#ch-literals-enc)
+  [`code_literals()`](#ch-literals-enc)
 - **complete**: a prefix code whose codes use up every bit pattern, Kraft sum 1, so a decode table has no
   empty entry. [Chapter 2](#ch-compression--complete)
 - **decoder, encoder, matcher**: the matcher finds the matches of a page (`src/seqlz_match.h`), the encoder
@@ -88,7 +88,7 @@ sense given here.
 - **sequence**: `ll` literals and one match; the last sequence of a page has literals only and no token.
   [Chapter 4](#ch-format)
 - **stream**: one of the 8 parts of the coded literals, literal $k$ in stream $k \bmod 8$.
-  [Chapter 11](#ch-literals-enc--streams)
+  [`lit_streams()`](#ch-literals-enc--streams)
 - **symbol**: what a code stands for: a token, a byte value, a length value's symbol.
   [Chapter 2](#ch-compression)
 - **table**: the code lengths of one kind of symbol; seqlz has {{ch17.tables}}, fixed and part of the
@@ -192,7 +192,7 @@ sense given here.
   project, its binaries `seqlz-*` and its options `SEQLZ_*`. [Preface](#preface)
 - **`seqlz-1`, `seqlz-2`, `seqlz-3`**: seqlz at levels 1 to 3: raw literals; coded literals where they
   pay; and also a lazy step, a table of the page's own and literals as deltas. [`seqlz_compress()`](#ch-encoder--entry),
-  [chapter 11](#ch-literals-enc)
+  [`seqlz_compress_literals.c`](#f-seqlz_compress_literals-c)
 - **`seqlz-opt`**: an optimal parser for the same format, for zram's recompression, removed.
   [Chapter 17](#ch-decisions--not-kept)
 

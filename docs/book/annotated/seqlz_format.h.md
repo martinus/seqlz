@@ -548,7 +548,7 @@ bytes after it copied from the pointer before, offset 8. `SEQLZ_DELTA_8` stores 
 its delta to the low byte of the pointer before, 8 bytes back: the literal `0x30` minus `0x20`, which
 gives `0x10`. `SEQLZ_DELTA_LAST` would take the same bytes after the first sequence, as every offset
 before them is 8, and its price is the same; the encoder keeps the first of equal prices
-([chapter 11](#ch-literals-enc--deltas)). Of the {{delta.ptr.n_lit}} literals,
+([the four prices](#ch-literals-enc--delta-prices)). Of the {{delta.ptr.n_lit}} literals,
 {{delta.ptr.distinct.plain}} different byte values as they are become {{delta.ptr.distinct.deltas}}
 as deltas, and {{delta.ptr.h.10}} of them are `0x10`. Level 2 stores the page in {{delta.ptr.l2.len}}
 bytes with raw literals, as coding them saves too little; level 3 without deltas would store it in
@@ -569,7 +569,7 @@ turns that into one small value where a XOR gives one value per pattern of carri
 The delta's byte is byte 3 with every code, a fixed table's or the page's own, and the sizes, the
 description and the streams move one byte up behind it. `seqlz_delta_last()`
 ([its values](#ch-internal--delta-last)) computes the distance of `SEQLZ_DELTA_LAST`, the encoder picks the
-delta in `seqlz_delta_literals()` ([chapter 11](#ch-literals-enc--deltas)), and the decoder adds the
+delta in `seqlz_delta_literals()` ([the deltas](#ch-literals-enc--deltas)), and the decoder adds the
 bytes back in `undelta_literals()` ([chapter 13](#ch-literals-dec--undelta)). On ten samples of 20 000
 pages, level 3 stores 869.7 bytes per page with deltas, 915.6 without, 5.0% less, measured on 21st and
 22nd October 2026

@@ -359,7 +359,7 @@ for a few bytes more header ([chapter 13](#ch-literals-dec--cost)). Measured aga
 ([explored-designs.md](https://github.com/martinus/seqlz/blob/main/docs/explored-designs.md#five-simplifications-measured-in-the-vm-and-on-the-phone-the-literal-streams-as-arrays-kept-four-not)).
 The encoder has the same chain the other way round, a shift and an or on a stream's accumulator per
 code, and `lit_streams()` writes 4 streams at a time, each with its own accumulator
-([chapter 11](#ch-literals-enc)); one stream after the other took about 3.5 cycles per literal.
+([`lit_streams()`](#ch-literals-enc--streams)); one stream after the other took about 3.5 cycles per literal.
 
 The sequences have a chain too, and it is the reason for the format's main idea. The bits of the next
 token start where this sequence's bits end, which is known only from the token's table entry: lookup,
@@ -453,7 +453,7 @@ CPU; CI checks that on s390x. Both orders are used on purpose:
 A 64-bit register can hold 8 numbers of 8 bits side by side, and one add adds all 8 pairs, as long as
 no lane overflows into the next: **SWAR**, SIMD within a register. The kernel may not use the vector
 registers in most places, so SWAR is how seqlz does 8 things at once. The encoder uses it to price a
-page's literals in all 8 literal tables ([chapter 11](#ch-literals-enc--pricing)): `lit_cost` in
+page's literals in all 8 literal tables ([the pricing](#ch-literals-enc--pricing)): `lit_cost` in
 `struct seqlz_tables` holds, for each byte value, one `u64` with the byte's code length in all 8
 tables, table `k` in bits `8k` to `8k + 7`, so one add per literal sums all 8 tables. A lane holds at
 most 255, so after {{ch03.lit_cost_run}} literals of at most {{ch03.lit_bits}} bits the sums move into

@@ -45,7 +45,7 @@ streams, `d` the bytes of a page's own table (0 with a fixed table). E.g. 1000 l
 table may take at most 886 bytes coded, 100 literals must fit below 43 bytes.
 
 The 51 bytes pay for a cost that does not shrink with the literals: a cold literal table and a second
-pass over a buffer. [Chapter 11](book:#ch-literals-enc--rule) has the measurements behind the number.
+pass over a buffer. [Why 51 bytes](book:#ch-literals-enc--51) has the measurements behind the number.
 The 51 bytes also cover the larger header, at most 13 bytes more than the 2 of a page with raw literals, which
 a `static_assert` in `seqlz_compress_literals.c` checks, because the coded literals are written over
 the raw ones in place ([in place](book:#ch-literals-enc--in-place)).
@@ -77,8 +77,8 @@ All three levels write the same format and one decoder reads them; they differ i
 compressor works. The code compares with `>=` and `<`, e.g. `level >= SEQLZ_LEVEL_OWN`, never with
 `==`, so a level 4 would inherit what levels 2 and 3 do.
 
-The lazy step is in [`seqlz_match.h`](book:#ch-matcher--lazy), the own table and the deltas
-[chapter 11](book:#ch-literals-enc--own).
+The lazy step is in [`seqlz_match.h`](book:#ch-matcher--lazy), the own table and the deltas in
+[`seqlz_compress_literals.c`](seqlz_compress_literals.c.html).
 @more {#ch-header--compressor} The three levels side by side, measured
 A **level** is what zram calls the knob a user sets per device, `level=` in
 `/sys/block/zram0/algorithm_params` ([the backend](#ch-zram-glue--backend)). seqlz's three levels

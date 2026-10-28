@@ -182,7 +182,7 @@ condition, and a page that does not meet it gets raw literals.
 </svg>
 </div>
 <figcaption>The steps of each level, left to right, and the layouts they end in; the dashed boxes are
-the rule of <a href="#ch-literals-enc--rule">chapter 11</a> on whether the coded literals save enough.</figcaption>
+the rule of <a href="#ch-literals-enc--rule"><code>code_literals()</code></a> on whether the coded literals save enough.</figcaption>
 </figure>
 
 **Raw literals.** With the top bit clear, the `n` literals follow as they are, in page order, and
@@ -464,7 +464,7 @@ first match's offset is at most that sequence's `ll`.
 
 The {{ab.len}} bytes `{{ab.hex}}` are a 4 KiB page of `ab` 2048 times. `seqlz-1` and
 `seqlz-2` both write exactly these bytes: 2 literals are far from saving the {{ch01.LIT_CODED_MIN}} bytes
-that coding them needs ([chapter 11](#ch-literals-enc)).
+that coding them needs ([the rule](#ch-literals-enc--rule)).
 
 - `{{ch04.ab.hdr}}`: `h = {{ab.lits}}`, raw literals.
 - `{{ch04.ab.lithex}}`: the {{ab.lits}} literals, `a` and `b`.
@@ -666,7 +666,7 @@ Widths of 3 and 4 bits are left out: few pages would use them.
 
 Why the literals are in 8 streams is a question of the decoder's speed
 ([chains of dependent steps](#ch-cpu--chains)). How the encoder picks the table, and when it codes the
-literals at all, is in [chapter 11](#ch-literals-enc).
+literals at all, is in [`code_literals()`](#ch-literals-enc).
 
 ## A page's own literal table, in byte order {#ch-format--own}
 
@@ -805,7 +805,7 @@ A page is invalid if the sum goes above 1, if a byte value above 255 would get a
 the last symbol in its byte is not 0, or if $3 + w + e + d$ is beyond `len`. `seqlz_decode()` reads zeros
 past the end of the page, and a code of zeros, `{{own.code.8}}`, is a length, so a table that never
 fills the code space still ends there, and the last of those checks rejects it. How the encoder chooses the lengths and which pages get a
-table is in [chapter 11](#ch-literals-enc--own); how the decoder builds a decode table from them
+table is in [`code_literals()`](#ch-literals-enc--own); how the decoder builds a decode table from them
 without any memory of its own, in [chapter 13](#ch-literals-dec--own).
 
 ## Literals as deltas {#ch-format--deltas}

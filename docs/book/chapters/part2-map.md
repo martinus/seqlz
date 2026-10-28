@@ -38,7 +38,7 @@ step marked, and a box "In short" of its main points, each a link to the section
 </a>
 <a href="#ch-literals-enc"><rect class="fill-sheet" x="536" y="74" width="174" height="92" rx="4" stroke="currentColor" stroke-width="1"/>
 <text x="623.0" y="92" font-size="12.5" text-anchor="middle" font-weight="700">literal coder</text>
-<g class="acc"><text x="623.0" y="107" font-size="11" text-anchor="middle">chapter 11</text></g>
+<g class="acc"><text x="623.0" y="107" font-size="11" text-anchor="middle">seqlz_compress_literals.c</text></g>
 <text x="623.0" y="124" font-size="11" text-anchor="middle">code_literals()</text>
 <text x="623.0" y="138" font-size="11" text-anchor="middle">levels 2 and 3</text>
 </a>
@@ -106,7 +106,7 @@ backend of [chapter 15](#ch-zram-glue--backend). At levels 1 and 2 three steps f
    output and puts the sequence's token code, offset bits and length values into a 64-bit accumulator,
    which goes to the back of the output in whole bytes ([both ends](#ch-encoder--layout)).
    `encoder_finish()` moves the bits to right after the literals, and that is a level 1 page.
-3. **The literal coder** ([chapter 11](#ch-literals-enc)), at levels 2 and 3 only, prices the 8 fixed
+3. **The literal coder** ([`seqlz_compress_literals.c`](#ch-literals-enc)), at levels 2 and 3 only, prices the 8 fixed
    literal tables with one add per literal, takes the one with the fewest bits, and writes the literals
    as 8 streams of Huffman codes over the raw ones, where that saves enough
    ([the rule](#ch-literals-enc--rule)).

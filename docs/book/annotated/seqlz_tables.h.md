@@ -131,7 +131,7 @@ entries.
 `enc[]` has the length below the code, the other way round from the other tables, because of what
 `lit_put()` does with an entry: `acc = acc << (e & 63) | e >> 8`, then `*sum += e`. The shift count is
 the low byte as it is, the code one shift away, and adding whole entries sums the lengths in the low
-byte of `sum` ([chapter 11](book:#ch-literals-enc--lit_put-one-code-into-an-accumulator)).
+byte of `sum` ([stream 0, code by code](book:#ch-literals-enc--lit_put-one-code-into-an-accumulator)).
 @more {#ch-internal--lit-table} Byte `e` of table 0, in both arrays
 In table 0, byte `0x65`, the letter `e`, has the {{lit.0.len.101}}-bit code `{{lit.0.code.101}}`. So
 the {{ch07.lit_e.entries}} entries {{ch07.lit_e.first}} to {{ch07.lit_e.last}} of `decode[]` are
@@ -214,7 +214,7 @@ at most 250, so `lit_sums()` adds at most 25 literals into one word, then spread
 
 Tables 1 and 4, where the zero byte has a 2-bit code, are for pages with many zeros; table 0, where `e`
 has a {{lit.0.len.101}}-bit code, fits text. For these two literals table {{ch07.lit_best}} wins with
-{{ch07.lit_best_bits}} bits, against 16 as raw bytes; [chapter 11](#ch-literals-enc--pricing) prices
+{{ch07.lit_best_bits}} bits, against 16 as raw bytes; [`lit_sums()`](#ch-literals-enc--pricing) prices
 four literals the same way.
 @assert lit[1].len[0] == lit[4].len[0] == 2 and min(lit[0].len[0], lit[2].len[0], lit[3].len[0], lit[5].len[0], lit[6].len[0], lit[7].len[0]) > 2 and ch07.lit_best == 4
 

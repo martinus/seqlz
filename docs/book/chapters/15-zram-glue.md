@@ -67,7 +67,7 @@ the split; the harness's `lz4`, `lzo` and `zstd` are copies of the kernel's glue
 
 The three codecs are the three levels of `seqlz_compress()` ([the levels](#ch-header--compressor)); they
 write the same format and are read by the same decoder. `seqlz-2` lets `seqlz_code_literals()`
-([chapter 11](#ch-literals-enc)) code the literals where that saves $\frac{1}{16}$ of them and
+([the literal coder](#ch-literals-enc)) code the literals where that saves $\frac{1}{16}$ of them and
 {{ch15.coded_min}} bytes, `seqlz-3` adds the lazy matcher, a literal table of the page's own and the
 literals as deltas to earlier bytes of the page. In the
 kernel they are levels 1 to 3 of one backend, `seqlz`, with 2 the default; the harness names them as
@@ -106,7 +106,7 @@ parameter; later that day it built the global in every `setup()`, and then nowhe
 `struct seqlz_state` is a union of the matcher's hash table and a page of bytes
 ([what lies where](#ch-header--state)): {{ch17.hash_slots}} entries of 2 bytes, {{size.state}} bytes, and
 `seqlz_code_literals()` copies the raw literals into the same memory once the matcher is done
-([chapter 11](#ch-literals-enc--in-place)). Both codecs compress with it. The zeroing is not needed, since
+([in place](#ch-literals-enc--in-place)). Both codecs compress with it. The zeroing is not needed, since
 the matcher clears its table for every page; `kzalloc()` zeroes in the kernel, and the harness does the
 same. The kernel builds without the warning about unused parameters below `W=3`, so its backend needs no
 `(void)p`.
@@ -178,7 +178,7 @@ handed out, so the split cost seqlz no memory.
 `seqlz_compress()` writes the raw literals first and codes them over the raw ones in the same buffer
 where that pays, so the same 2 pages of output suffice. Level 3 needs no more memory than level 2:
 its table of the page's own is worked out in the compression context, behind the copy of the literals
-([chapter 11](#ch-literals-enc--own)), and decoded into the output page and the scratch
+([the work memory](#ch-literals-enc--the-work-memory)), and decoded into the output page and the scratch
 ([chapter 13](#ch-literals-dec--own)); the records for the deltas go into the output buffer, and the
 deltas into the compression context ([the records](#ch-encoder--records)).
 
@@ -281,7 +281,7 @@ The diff between `src/seqlz_decompress.c` and its copy, on the tree CI uses, `98
   more user, `seqlz_find()`.
 - **What only the harness uses is cut**: all of `src/seqlz.h`; `seqlz_find()`, `seqlz_encode()`,
   `encode_raw()` and `seqlz_code_raw_literals()`. The `raw` parameter of `code_literals()` stays: at level 3 it carries the deltas
-  ([chapter 11](#ch-literals-enc--code-own)).
+  ([`seqlz_code_own()`](#ch-literals-enc--code-own)).
 
 Every textual replacement goes through `must()` or `cut()`, which assert that the text occurs exactly as
 often as expected, so a change in `src/` that moves such a text stops `port.py` instead of writing a copy

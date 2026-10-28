@@ -198,7 +198,7 @@ Three things follow, and the book comes back to each:
 
 - **A few bytes per page are cheap.** A format can afford a byte of header, a flag per page, a field
   that makes the decoder faster. Coding the literals pays only if it saves $\frac{1}{16}$ of them and
-  {{ch01.LIT_CODED_MIN}} bytes more ([chapter 11](#ch-literals-enc)).
+  {{ch01.LIT_CODED_MIN}} bytes more ([the rule](#ch-literals-enc--rule)).
 - **The cliff is the largest step.** A page moved from 3625 to 3600 bytes saves 455 bytes, 18 times
   the 25 bytes of compression it took. And the decoder only ever sees pages below 3625 bytes.
 - **The measure of size is not the mean ratio.** The project counts the **stored size**, the sum of
