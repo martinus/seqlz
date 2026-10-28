@@ -82,9 +82,9 @@ sense given here.
 - **repeat offset**: the offset of the match before, used again for 0 bits; 1 at the start of a page.
   [Chapter 4](#ch-format--offsets)
 - **scratch**: the per-CPU buffer the decoder decodes coded literals into, a page plus 16 bytes.
-  [Chapter 13](#ch-literals-dec)
+  [`seqlz_decode_literals()`](#ch-literals-dec)
 - **sentinel**: the 1 bit a literal stream keeps below its valid bits, whose position counts the bits
-  used. [Chapter 13](#ch-literals-dec--sentinel)
+  used. [The sentinel](#ch-literals-dec--sentinel)
 - **sequence**: `ll` literals and one match; the last sequence of a page has literals only and no token.
   [Chapter 4](#ch-format)
 - **stream**: one of the 8 parts of the coded literals, literal $k$ in stream $k \bmod 8$.

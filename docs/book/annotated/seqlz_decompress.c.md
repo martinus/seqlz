@@ -3,8 +3,8 @@
 The decoder of one page. A compressed page is a 2-byte header (the number of literals and a flag for
 coded literals), the literals, and a bitstream with one token per sequence: a sequence is "copy `nl`
 literals, then copy `len` bytes from `off` bytes back" ([the layout](book:#ch-format--layout)). The
-coded literals are decoded in another file, `seqlz_decompress_literals.c`
-([chapter 13](book:#ch-literals-dec)).
+coded literals are decoded in another file,
+[`seqlz_decompress_literals.c`](seqlz_decompress_literals.c.html).
 
 C wants a helper before its caller, so the file reads bottom up. A reading order that follows the
 call:
@@ -342,7 +342,7 @@ may belong to another allocation, so an 8-byte load near the end could read memo
 decoder's.
 
 **An exact count for the end check.** Why not load the last bytes with zeros behind them, as
-`lit_load_tail()` does for the literal streams ([chapter 13](#ch-literals-dec--refill))? Because the end
+`lit_load_tail()` does for the literal streams ([`lit_refill()`](#ch-literals-dec--refill))? Because the end
 of `decode_block()` rejects a page unless every byte of the bitstream was read, `br.p == br.end`, fewer
 than 8 bits are left, and those are 0 ([chapter 14](#ch-decode--end)). A load with zeros behind it
 would move `p` past `end` and count the zeros as real bits, and a page cut short would look complete.
@@ -426,25 +426,121 @@ is then fixed with an XOR of both top bits. A plain word addition would carry fr
 next.
 
 `add8()` only for a distance of 8 or more: with distance 4 its two loads overlap the bytes it writes.
+@anchor ch-literals-dec--undelta
+@more {#ch-literals-dec--add8} `add8()` on `f0 01` plus `10 00`, step by step
+`add4()` and `add8()` add the word `dist` bytes before `p` to the word at `p`, byte by byte, modulo
+256: a load, a load, the addition and a store, `put_unaligned_le32()` being the store of
+[`seqlz_compat.h`](seqlz_compat.h.html#b158). They are the inverse of the encoder's
+[`sub_bytes()`](#ch-literals-enc--sub-bytes), which subtracts the same way. `a & low` and `b & low`
+keep bits 0 to 6 of each byte; two such bytes sum to at most `0x7f + 0x7f = 0xfe`, so no byte carries
+into the next, and the sum's bit 7 is the carry out of bit 6. The true bit 7 of a byte's sum is bit 7
+of `a`, XOR bit 7 of `b`, XOR that carry. `(a ^ b) & ~low` is the first two in bit 7 of each byte, and
+XORed into the sum it gives the true bit. The carry out of bit 7, which a byte's sum modulo 256 drops,
+is never made. The deltas `f0 01` of [`sub_bytes()`](#ch-literals-enc--sub-bytes)'s example plus the
+bytes `10 00` they are to:
+
+```text
+a, the deltas           {{delta.sub.r}}
+b, the bytes before     {{delta.sub.b}}
+a & low                 {{delta.add.a_lo}}
+b & low                 {{delta.add.b_lo}}
+sum                     {{delta.add.sum}}
+(a ^ b) & ~low          {{delta.add.fix}}
+add8()                  {{delta.add.r}}      bytes 00 01, the literals again
+a + b                   {{delta.add.plain}}      bytes 00 02: the carry of 0xf0 + 0x10 went into byte 1
+```
+
+@assert delta.add.r == delta.sub.a and delta.add.plain == "0x0000000000000200"
+
+Compiled for arm64 by clang with `-O2`, `add8()` without its load and store is 6 instructions where the
+XOR it replaced was 1.
+@end
 
 @@ 237-248
 How far back the byte is that a literal is a delta to: 4, 8, or derived from the offset of the
-sequence before, at least 4 ([chapter 4](book:#ch-format--deltas)).
+sequence before, at least 4 ([chapter 4](book:#ch-format--deltas), [its values](book:#ch-internal--delta-last)).
+Both restoring functions below start with it.
 
 @@ 249-277
-Level 3 stores some literals as the difference to an earlier byte of the page. They can only be turned
-back in the page, right after the copy and before the match after them, because that match may copy
-from them.
+Level 3 stores some literals as the difference to an earlier byte of the page. They come out of
+`seqlz_decode_literals()` still as deltas, and can only be turned back in the page, right after the
+copy and before the match after them ([the deltas in the loop](book:#ch-decode--deltas)), because the
+byte a delta is to may be one of a match, and that match may copy from them.
 
 `k` starts at `dist - at` near the page's start: literals before byte `dist` have nothing to be a delta
 to. Then whole words forward, each reading `dist` bytes back, which are final by then. The index `k`
 and not a pointer, because `d + dist` could be past the page, and C does not allow forming that
 pointer.
+@more Why the bytes `dist` back are always final
+`undelta_literals()` restores the `nl` literals at `d`, `at` bytes into the page. `k` is the first
+literal that is a delta, by the one rule of the format ([the deltas](#ch-format--deltas)), the same
+for all three: 0, the sequence's first literal, when the sequence starts `dist` or more bytes into the
+page, else `dist - at`. Then whole words, 8 bytes for a distance of 8 or more, else 4, as long as the
+word ends inside the literals, and the last bytes one at a time, where the cast to `u8` is the modulo
+256.
+
+Each word reads the word `dist` bytes back, which ends before the word starts, so its bytes are the
+page's own already. For the first literals of a sequence they are bytes before `d`: of the match
+before, which the loop copied in full before these literals, or of earlier sequences, and nothing
+writes there again. For the later literals some of them are earlier literals of the same sequence,
+restored by the word before, since the loop goes forward. That is the reason the distance of
+`SEQLZ_DELTA_LAST` is never below 4.
+@end
+@more The first sequence of the page of pointers
+The first sequence of the page of pointers is {{delta.ptr.rec.0.ll}} literals at the page's start, with
+`SEQLZ_DELTA_8`, so `dist` is 8 and `k` starts at 8. As in [the encoder](#ch-literals-enc--delta-write)
+they arrive as `{{delta.ptr.deltas}}` (the first 9 of these bytes). No word of 8 fits before the 9th
+literal, so the first 8 bytes stay as they are, the first pointer, and the byte loop restores byte 8,
+`10 + 10 = 20`, the low byte of the second pointer: `{{delta.ptr.plain}}`.
+@assert delta.ptr.rec[0].ll == 9 and delta.ptr.rec[0].pos == 0 and delta.ptr.pick == ch06.DELTA_8 and delta.ptr.plain == "10 00 56 34 12 7f 00 00 20 30 40 50" and delta.ptr.deltas == "10 00 56 34 12 7f 00 00 10 10 10 10"
+@end
 
 @@ 278-302
 The same for the fast path, which copied 16 bytes whatever `nl` is: all 16 bytes, no loop, no branch
 on `nl`. The bytes past `nl` become garbage, which they were already; the match writes over them.
 Near the page's start it falls back to `undelta_literals()`.
+@more The second sequence of the page of pointers, on the fast path
+The fast path copies 16 bytes of literals whatever `nl` is, at most 14
+([the fast path](#ch-decode--fast)), and `undelta_fast()` restores all 16, one path for all three
+deltas: the same `dist` as `undelta_literals()`, then two `add8()` for a distance of 8 or more, else
+four `add4()`. The first word's source lies wholly before `d`, in bytes the match before or earlier
+sequences wrote, which are final; each word after it reads `dist` bytes back, into bytes before `d` or
+of a word restored before it. The bytes past `nl`, which `copy16()` copied from the next sequence's
+literals, turn into garbage; the match after the literals writes over them before anything reads them.
+Only near the page's start, where `d - dst < dist`, do the first literals have no byte to be a delta
+to, and there it calls `undelta_literals()` and its loops.
+
+The second sequence of [the page of pointers](#b249), 1 literal at byte {{delta.ptr.rec.1.pos}}, as the
+fast path would see it:
+
+| bytes at `d` | plus the 8 bytes at `d - 8` | after the first `add8()` |
+| --- | --- | --- |
+| `{{delta.ptr.fast.before}}` | `{{delta.ptr.fast.ref}}` | `{{delta.ptr.fast.after}}` |
+
+The 8 bytes at `d - 8` are the first sequence's last literal and the 7 bytes of its match. The first
+byte is the low byte of the third pointer again, `10 + 20 = 30`; the other 7, and the 8 of the second
+`add8()`, are written over by the 7 bytes of the match and by the sequences after it.
+@assert delta.ptr.rec[1].ll == 1 and delta.ptr.rec[1].pos == 16 and delta.ptr.rec[0].ll + 7 == 16 and delta.ptr.fast.before[:2] == "10" and delta.ptr.fast.after[:2] == "30"
+@end
+@more {#ch-literals-dec--counters} The page of counters, word by word
+One literal is too few to see the words at work. The animation takes a page of counters of 4 bytes
+instead, each 0 to 11 more than the one before, which level 3 stores with `SEQLZ_DELTA_4`: its first
+sequence goes through `undelta_literals()`, with the bytes kept as they are at the start and the byte
+loop at the end, and its second through `undelta_fast()`.
+
+@anim undelta The first bytes of the page of counters, one copy, `add4()`, byte or match per step: the deltas copied into the page, the bytes 4 before added back word by word, then the fast path's 16 bytes. Every byte is one the real `seqlz_decode()` had in the page at that step, recorded with a hook on its `add4()`.
+@end
+@more {#ch-literals-dec--undelta-cost} What the deltas cost a read, measured
+The 16 bytes for every sequence, whatever `nl` is, make the deltas cost more than their count of
+literals suggests: with a distance below 8 they are 4 steps through memory, each waiting for the store
+of the one before, and each step is 3 instructions longer with the addition than it was with the XOR.
+On the Mi 9T, userspace with the kernel's compile flags, 21st October 2026, a level 3 page read 0.13 to
+0.24 µs slower with deltas than with the XOR on the A76 and 0.34 to 0.46 µs slower on the A55. Doing
+the 16 bytes in registers instead of through memory gained 0.01 to 0.03 µs on the A76 and 0.13 to 0.16
+µs on the A55, within the 0.16 µs that two builds of the same level 2 code differed by, and was not
+kept
+([explored-designs.md](https://github.com/martinus/seqlz/blob/main/docs/explored-designs.md#level-3-stores-its-literals-as-deltas-not-xors-084-fewer-bytes-than-the-xor-kept)).
+@end
 
 ## Helpers of the fast path
 
@@ -517,7 +613,7 @@ The header's low 15 bits are the number of literals; more than a page is invalid
 
 @@ 437-460
 Bit 15 of the header picks the layout. Coded literals are decoded into the scratch first
-([chapter 13](book:#ch-literals-dec)), which returns where the bitstream starts. It also gets `d`: a page
+([`seqlz_decode_literals()`](book:#ch-literals-dec)), which returns where the bitstream starts. It also gets `d`: a page
 with a literal table of its own has that table built in the output page, before the loop overwrites
 it ([own table](book:#ch-literals-dec--own)).
 

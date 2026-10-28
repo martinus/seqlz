@@ -70,7 +70,7 @@ names it.
 
 @@ 89-99
 The scratch that coded literals are decoded into before the sequences are copied
-([chapter 13](book:#ch-literals-dec)): a page plus 16 bytes, 4112 on 4 KiB pages, because the
+([`seqlz_decode_literals()`](book:#ch-literals-dec)): a page plus 16 bytes, 4112 on 4 KiB pages, because the
 decoder's 16-byte copies read up to 15 bytes past the last literal. With the hash table that is
 12 304 bytes per CPU, which `kmalloc()` hands out as 16 384, below `lz4`'s 20 480
 ([memory](book:#ch-zram-glue--fast-lit)).

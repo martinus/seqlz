@@ -315,7 +315,7 @@ So level 3 stores the page in {{ch16.l3.len}} bytes, {{ch16.l3.saved}} fewer tha
 @assert ch16.l3.set == ch16.lt.set and ch16.l3.len < ch16.coded.len and ch16.l3.own_more > 0
 
 Where the literals have an order of their own, level 3's other two tools pay as well: the page of
-counters of [chapter 13](#anim-undelta) is {{counter.coded.len}} bytes at level 2 and
+counters of [the deltas' animation](#anim-undelta) is {{counter.coded.len}} bytes at level 2 and
 {{counter.l3.len}} at level 3, with a table of its own and its literals as deltas.
 @assert counter.l3.own == 1 and counter.l3.delta == 1
 
@@ -324,8 +324,8 @@ counters of [chapter 13](#anim-undelta) is {{counter.coded.len}} bytes at level 
 The backend calls `seqlz_decode(src, {{ch16.coded.len}}, dst, scratch)` with the per-CPU scratch of
 {{const.SCRATCH}} bytes ([chapter 14](#ch-decode)). Bit 7 of byte 2 is 0, so it runs the copy of
 `decode_block()` without deltas. That prefetches the token and length tables, finds the
-top bit of `{{ch16.coded.u16}}` set and `n_lit = {{ch16.lits}}`, and `seqlz_decode_literals()`
-([chapter 13](#ch-literals-dec)) reads table {{ch16.lt.set}} and width {{ch16.lt.width}} from byte 2,
+top bit of `{{ch16.coded.u16}}` set and `n_lit = {{ch16.lits}}`, and [`seqlz_decode_literals()`](#ch-literals-dec)
+reads table {{ch16.lt.set}} and width {{ch16.lt.width}} from byte 2,
 prefetches the literal table, and reads the sizes, {{ch16.lt.sizes_sp}}. {{ch16.lits}} literals are
 {{ch16.d.rounds}} full rounds of 40 and a rest of {{ch16.d.rest}}: {{ch16.d.steps}} steps of all 8 streams
 and one in which streams 0 to {{ch16.d.r_last}} take their literal, while streams

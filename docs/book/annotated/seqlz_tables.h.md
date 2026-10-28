@@ -268,7 +268,7 @@ with codes of 2 or 3 bits, so 8 bits often hold two whole, and `quad[]` returns 
 
 E.g. `quad[0xd1]`: the 8 bits are a run of 1, then the length 9, then the length 10. The first ends
 after 6 bits, the second after 8. `OWN_QUAD_NONE`, 11, is no length: it marks a missing second one, and
-the decoder handles it without a branch ([chapter 13](book:#ch-literals-dec--own)). A run longer than 7
+the decoder handles it without a branch ([`read_own_table()`](seqlz_decompress_literals.c.html#b228)). A run longer than 7
 gets only bit 31, and the decoder takes its symbol from `decode[]`.
 @anim ownread How the decoder reads a page's own table with quad[]
 @more {#ch-internal--own} `quad[0xd1]` and `quad[0xfc]`, field by field

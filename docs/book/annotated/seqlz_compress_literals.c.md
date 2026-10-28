@@ -310,7 +310,7 @@ for an addition ([the decoder's deltas](#ch-literals-dec--undelta)).
 @end
 @more {#ch-literals-enc--sub-bytes-word} A word of the page of counters, byte by byte
 The figure shows all 8 bytes of a word lane by lane, on a word that `seqlz_delta_literals()`
-subtracts with `SEQLZ_DELTA_4` on [chapter 13's page of counters](#anim-undelta): the 8 bytes at byte
+subtracts with `SEQLZ_DELTA_4` on [the page of counters](#ch-literals-dec--counters): the 8 bytes at byte
 {{delta.lane.at}} minus the 8 bytes {{delta.lane.dist}} before.
 Only byte 0 borrows. The borrow clears bit 7 of byte 0 of the difference, which `a | high` had set,
 and stops there; in the other bytes bit 7 stays 1, and `(a ^ ~b) & high` turns it into their true 0.
@@ -840,8 +840,8 @@ lengths, one of 3 bits and 12 of 4, fill {{own.enc.space0}} of the 1024 units of
 
 The animation under the note puts each byte's share of the literals, $f / n$, next to the share of the
 code space its code takes, $2^{-l}$: the first loop keeps the second at or below the first, and the
-gain is how far below. As a choice it runs on the base64 page of
-[chapter 13](#ch-literals-dec--own), where the second loop has more to do.
+gain is how far below. As a choice it runs on the base64 page that
+[`read_own_table()`'s animation](#f-seqlz_decompress_literals-c-b194) reads too, where the second loop has more to do.
 @end
 
 @@ 482-506

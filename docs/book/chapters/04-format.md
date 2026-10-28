@@ -4,7 +4,7 @@ A page compressed by seqlz is a string of bytes, and zram stores it together wit
 chapter is about those bytes, as
 [`docs/format.md`](https://github.com/martinus/seqlz/blob/main/docs/format.md) specifies them, and
 it is the map for Part II: when `seqlz_decode()` in [chapter 14](#ch-decode) checks the top bit of the
-first two bytes, or [chapter 13](#ch-literals-dec) reads 8 streams of literals, this is where the
+first two bytes, or [`seqlz_decode_literals()`](#ch-literals-dec) reads 8 streams of literals, this is where the
 bytes they read are described as a whole.
 
 The spec is about {{ch04.format_lines}} lines, written so that a decoder can be built from it alone. Two such decoders
@@ -806,7 +806,7 @@ the last symbol in its byte is not 0, or if $3 + w + e + d$ is beyond `len`. `se
 past the end of the page, and a code of zeros, `{{own.code.8}}`, is a length, so a table that never
 fills the code space still ends there, and the last of those checks rejects it. How the encoder chooses the lengths and which pages get a
 table is in [`code_literals()`](#ch-literals-enc--own); how the decoder builds a decode table from them
-without any memory of its own, in [chapter 13](#ch-literals-dec--own).
+without any memory of its own, in [`read_own_table()`](#ch-literals-dec--own).
 
 ## Literals as deltas {#ch-format--deltas}
 

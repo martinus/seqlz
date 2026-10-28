@@ -165,7 +165,7 @@ codec has no decompression context. The object is not `static`: `bench/bench_mai
 
 @listing src/zram_seqlz.c 89-98
 
-The scratch is where the coded literals are decoded to ([chapter 13](#ch-literals-dec)), a page plus 16
+The scratch is where the coded literals are decoded to ([`seqlz_decode_literals()`](#ch-literals-dec)), a page plus 16
 bytes, at levels 2 and 3, {{const.SCRATCH}} with 4 KiB pages: the decoder's 16-byte copies read up to 15 bytes past the last
 literal, and the last step of `seqlz_decode_literals()` writes up to 8. So `seqlz-2` has
 {{size.state}} bytes per CPU for compression and {{const.SCRATCH}} for decompression,
@@ -179,7 +179,7 @@ handed out, so the split cost seqlz no memory.
 where that pays, so the same 2 pages of output suffice. Level 3 needs no more memory than level 2:
 its table of the page's own is worked out in the compression context, behind the copy of the literals
 ([the work memory](#ch-literals-enc--the-work-memory)), and decoded into the output page and the scratch
-([chapter 13](#ch-literals-dec--own)); the records for the deltas go into the output buffer, and the
+([own table](#ch-literals-dec--own)); the records for the deltas go into the output buffer, and the
 deltas into the compression context ([the records](#ch-encoder--records)).
 
 @listing src/zram_seqlz.c 114-124

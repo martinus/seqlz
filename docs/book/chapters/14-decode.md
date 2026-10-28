@@ -10,7 +10,7 @@
 :::
 
 `seqlz_decode()` turns a compressed page back into its `SEQLZ_BLOCK_SIZE` bytes. It reads the header, has the
-coded literals decoded into the scratch if the page has them ([chapter 13](#ch-literals-dec)), and runs
+coded literals decoded into the scratch if the page has them ([`seqlz_decode_literals()`](#ch-literals-dec)), and runs
 one loop over the sequences: one lookup in the token table, the offset from the bits after the code,
 the copies of the literals and the match. There is no count of the sequences, and the last one has no
 token: the loop ends when the literals left fill the rest of the page.
@@ -227,7 +227,7 @@ constant, and `decode_block()` is `__always_inline`, so the compiler makes two c
 the one with `false` the `if (deltas)` lines are gone, and a page without deltas runs the loop as it
 was before level 3 had them. In the one with `true` the loop adds the bytes back right after each
 sequence's literals are copied, with `undelta_fast()` on the fast path and `undelta_literals()` on the
-slow path and for the last sequence ([chapter 13](#ch-literals-dec--undelta)): the next match may copy
+slow path and for the last sequence ([the deltas](#ch-literals-dec--undelta)): the next match may copy
 from those literals, so they have to be the page's own before it. `seqlz_decode()` checks only which
 copy to run; `seqlz_decode_literals()` reads and checks the byte that says which delta.
 
@@ -239,7 +239,7 @@ as fast as before, within the run's spread, and level 3 read 0.37 µs slower per
 1.0 µs on the A55 than without the XOR, the mean of two phone dumps
 ([explored-designs.md](https://github.com/martinus/seqlz/blob/main/docs/explored-designs.md#level-3-xors-its-literals-with-an-earlier-byte-of-the-page-38-fewer-bytes-than-seqlz-3-of-15-october-kept));
 the deltas read another 0.13 to 0.24 µs slower on the A76 and 0.34 to 0.46 µs on the A55
-([chapter 13](#ch-literals-dec--undelta)). The cost is code size: the loop is in the decoder twice.
+([what the deltas cost](#ch-literals-dec--undelta-cost)). The cost is code size: the loop is in the decoder twice.
 :::
 
 ## Setup: the header, the tables, and where the literals are {#ch-decode--setup}
@@ -263,7 +263,7 @@ seqlz's own on 10th October 2026, within the noise in the kernel VM and on the p
 bytes, raw or coded. Until 23rd October 2026 only `seqlz_decode_literals()` checked that, for coded
 literals; a raw page with more was rejected too, but only because the loop never found its end
 (commit `3ae2e09`). `seqlz_decode_literals()` still checks it, for the compiler's sake
-([chapter 13](#ch-literals-dec--main)).
+([the second check](#ch-literals-dec--the-sizes-checked-against-the-input)).
 
 @listing src/seqlz_decompress.c 437-459
 
@@ -271,7 +271,7 @@ literals; a raw page with more was rejected too, but only because the loop never
 scratch; zram at level 1 writes only raw literals and may call the decoder without one
 ([chapter 15](#ch-zram-glue)). `seqlz_decode_literals()` also gets `d`, the output page, where a page with a
 table of its own has that table built before the loop below writes the page
-([chapter 13](#ch-literals-dec--own)), and `&delta` for the delta's byte. Its literals end at `lit_end` in the scratch, and `lit_bound` is
+([own table](#ch-literals-dec--own)), and `&delta` for the delta's byte. Its literals end at `lit_end` in the scratch, and `lit_bound` is
 the end of the scratch, 16 bytes more, for the 16-byte copies. Raw literals are right after the header, and
 `lit_bound` is the end of the input: behind the literals is the bitstream, which may be read though it
 is not literals. The `u64` sum cannot wrap; with 15 bits of `n_lit` neither could a 32-bit one, but then
@@ -363,7 +363,7 @@ gives `24 >= 24`, invalid.
 
 With `deltas`, `undelta_fast()` adds the bytes back on the 16 bytes `copy16()` wrote, before `last`
 becomes this sequence's offset: the distance of `SEQLZ_DELTA_LAST` is the offset of the sequence before.
-[Chapter 13's animation](#anim-undelta) steps through its four `add4()` on a page of counters.
+[The animation of the deltas](#anim-undelta) steps through its four `add4()` on a page of counters.
 
 `nl` is not checked against the literals left, which saved 3 instructions per sequence on 3rd October
 2026 (commit `5c769f5`). A page whose tokens claim more literals than its header has moves `lit` past
@@ -451,19 +451,19 @@ For any bytes and any `src_len`:
   is checked before `token_entry()`, which reads no table.
 - **The deltas.** `undelta_literals()` and `undelta_fast()` write only the literals just copied, or the
   16 bytes of the fast path, and read only bytes of the page before them
-  ([chapter 13](#ch-literals-dec--safety)).
+  ([the literals' safety](#ch-literals-dec--safety)).
 - **The page, for matches.** `1 <= off <= d - dst` before each match. `repeat_pattern()` reads up to
   `d + 6`, and its bytes at `d` and after are masked away.
 - **Writes.** The fast path writes at most {{ch14.cmf.max_write}} bytes from at least
   {{ch14.room.page}} before `d_end`; the slow path checks `nl` and `len` against the room, and its copies
   check before each 8 or 16 bytes. The scratch gets up to 8 bytes past the literals, inside its 16 spare
-  ones ([chapter 13](#ch-literals-dec--safety)).
+  ones ([the literals' safety](#ch-literals-dec--safety)).
 - **Undefined behaviour.** Every shift count is 0 to 63, pointers are formed only inside their buffers,
   the limits that could fall before one are numbers, and counts that may go negative are `int`.
 - **Time.** Every round writes a match of at least 4 bytes inside the page, so after at most
   {{ch14.max_rounds}} rounds the page is full, and each round's work is bounded by the bytes it writes.
   A page's own table takes at most 1024 + 257 steps of `read_own_table()`, whatever `src_len` is
-  ([chapter 13](#ch-literals-dec--own)).
+  ([the bound](#f-seqlz_decompress_literals-c-b157)).
 @assert ch14.max_rounds == 1024
 
 The slowest valid page found is made up: a match of 4 bytes at an offset below 8 in every sequence, every

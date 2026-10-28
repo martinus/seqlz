@@ -305,7 +305,7 @@ a format that has to tell itself apart ([format.md](https://github.com/martinus/
 
 Literals are 68% of `seqlz-1`'s output, and coding them is worth 3.5 points to `zstd` 3. So
 `seqlz-2` Huffman codes them, `seqlz-1` stores them raw, in one format with one decoder
-([`code_literals()`](#ch-literals-enc), [chapter 13](#ch-literals-dec)).
+([`code_literals()`](#ch-literals-enc), [`seqlz_decode_literals()`](#ch-literals-dec)).
 
 ### 8 fixed literal tables, the page picks one
 
@@ -337,7 +337,7 @@ whose literals cost the most per byte.
 ### 8 streams, which have nothing to do with the 8 tables
 
 Literal `k` goes to stream `k mod 8`, so the decoder runs 8 independent chains
-([chapter 13](#ch-literals-dec)). Against 4 streams, the decode loop went from 9070 to 8676 cycles per
+([8 streams, not 4](#ch-literals-dec--cost)). Against 4 streams, the decode loop went from 9070 to 8676 cycles per
 page, and cold reads in the kernel from 2940 / 4810 to 2860 / 4531 ns at p50 / p99
 ([explored-designs.md](https://github.com/martinus/seqlz/blob/main/docs/explored-designs.md#seqlz-fast-lit-one-of-8-literal-tables-per-page)).
 4 streams store 2.0 bytes per page less and were measured twice more: no faster on the phone
@@ -490,7 +490,7 @@ gives the same output in 42 349 instead of 43 841 cycles per page
 
 ## The decoder {#ch-decisions--decoder}
 
-The decoder ([`seqlz_decompress.c`](#f-seqlz_decompress-c), [chapter 13](#ch-literals-dec),
+The decoder ([`seqlz_decompress.c`](#f-seqlz_decompress-c), [`seqlz_decompress_literals.c`](#ch-literals-dec),
 [chapter 14](#ch-decode)) runs while a program waits. It runs 2.1 times `lz4`'s
 instructions, 25 284 against 11 899 per page, at 3.3 instructions per cycle against 2.4: 7609 against 4992
 cycles in a hot loop on the PC
@@ -585,7 +585,7 @@ to 180 ns slower, 740 to 810 ns at p99
 ### `seqlz_decode_literals()` is not inlined
 
 Inside the loop over the sequences, its 8 stream accumulators would take registers that loop needs, also
-on pages without coded literals ([chapter 13](#ch-literals-dec--main)).
+on pages without coded literals ([why `noinline`](#ch-literals-dec--main)).
 
 ### Bounded work for any input
 
@@ -674,7 +674,7 @@ bench's model of zsmalloc, level 3 stored 0.30% more than `zstd` 3 on average an
 | the entropy first, then the code | building the code on every page | many pages leave after one pass over 256 counts ([the estimate](#ch-literals-enc--entropy)) |
 | code lengths from $f \cdot 2^l \ge n$, repaired in 16 buckets | a Huffman code | no sort and no tree; a few bits more on some pages |
 | the description in byte order, in a fixed code `OWN` | 256 lengths, or the bytes and their lengths | a byte value costs no bits, only its length ([chapter 4](#ch-format--own)) |
-| the decode table built in the output page | in work memory | no byte more per CPU ([chapter 13](#ch-literals-dec--own)) |
+| the decode table built in the output page | in work memory | no byte more per CPU ([own table](#ch-literals-dec--own)) |
 
 The description was measured six ways, bytes per table of the page's own, counted offline on the tables
 level 3 made on three samples of 20 000 pages, each way with a code built for it, the mean over the
@@ -749,7 +749,7 @@ difference is a small delta, while a XOR spreads it over every bit a carry flips
 shows it ([the page of pointers](#ch-header--deltas)). On 21st October the subtraction stored 873.6 bytes per
 page instead of the XOR's 881.0, 0.84% less. It cost reads 0.13 to 0.24 µs on the A76 and 0.34 to 0.46
 µs on the A55, as the decoder's fast path restored 16 bytes per sequence in 3 to 4 dependent steps,
-each 3 instructions longer than with the XOR ([chapter 13](#ch-literals-dec--undelta)), and writes 0.12
+each 3 instructions longer than with the XOR ([what the deltas cost](#ch-literals-dec--undelta-cost)), and writes 0.12
 to 0.27 µs on the A76. With the phone's mix of writes and reads that is about 22 bytes per µs, where
 the XOR itself bought its bytes at 9 to 12.
 
@@ -759,7 +759,7 @@ October 2026 one rule replaced that, for 0.45% fewer bytes and a simpler spec: e
 `x` bytes into the page is a delta, for all three, so the first literals of a sequence refer to bytes
 the match before wrote. Level 3 stored 869.7 bytes per page instead of 873.6, the format says the rule
 in one sentence, the decoder lost its own branches for the byte 4 and 8 before
-([chapter 13](#ch-literals-dec--undelta)), and the encoder finds the first delta one way. On the Mi
+([`undelta_literals()`](#ch-literals-dec--undelta)), and the encoder finds the first delta one way. On the Mi
 9T, in userspace with the kernel's compile flags, writes got about 0.2 µs faster and reads stayed
 within the noise
 ([explored-designs.md](https://github.com/martinus/seqlz/blob/main/docs/explored-designs.md#one-rule-for-which-literals-are-deltas-045-fewer-bytes-a-simpler-spec-kept)).

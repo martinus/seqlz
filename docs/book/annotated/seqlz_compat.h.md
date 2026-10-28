@@ -143,7 +143,7 @@ that runs once per sequence or per literal costs more than the helper's work. gl
 has its own `__always_inline`, which means the same, so line 86 defines it only where it is missing.
 
 The decoder uses `noinline` and `__cold` on `lit_load_tail()`, which runs only at the end of a
-literal stream, and `noinline` on `seqlz_decode_literals()` ([chapter 13](#ch-literals-dec)).
+literal stream, and `noinline` on `seqlz_decode_literals()` ([why](#ch-literals-dec--main)).
 @end
 
 @@ 95-104

@@ -181,7 +181,7 @@ The inner loop has constant bounds, and the compiler unrolls it to 8 prefetches 
 table takes {{ch12.tok.rounds}} rounds, each length table {{ch12.ll.rounds}} and a literal table
 {{ch12.lit.rounds}}: {{ch12.lines_raw}} cache lines for a page with raw literals, {{ch12.lines_coded}},
 {{ch12.kib_coded}} KiB, for one with coded literals, which prefetches the one literal table it uses. A
-page with a table of its own prefetches none: it builds its table ([chapter 13](#ch-literals-dec--own)).
+page with a table of its own prefetches none: it builds its table ([own table](#ch-literals-dec--own)).
 The tables do not grow with the page, so it is the same with 16 KiB pages.
 @assert F("k16.ch12.lines_coded") == ch12.lines_coded and ch12.lines_coded - ch12.lines_raw == ch12.lit.cachelines
 

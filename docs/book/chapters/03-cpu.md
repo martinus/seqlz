@@ -255,7 +255,7 @@ times per page, with one 329, and the p99 of compressing a cold page went from 1
 A **chain** is a sequence of steps where each needs the result of the one before. It bounds the time
 from below, whatever the width of the core. Decoding Huffman codes is such a chain: to decode a
 literal, the decoder looks up the next 10 bits of its stream in the literal table and shifts the
-stream by the code length the entry holds ([chapter 13](#ch-literals-dec--decode)). The next lookup
+stream by the code length the entry holds ([`lit_decode()`](#ch-literals-dec--decode)). The next lookup
 needs the shifted bits, so in one stream every literal waits for the load and the shift of the one
 before. The 8 streams of a page with coded literals ([chapter 4](#ch-format--coded)) are 8 chains
 that do not depend on each other: the decoder steps all 8 in turn, and while one stream's load is on
@@ -354,7 +354,7 @@ its way, the next one's can start.
 </figure>
 
 With 4 streams a literal took about 2.9 cycles to decode, and 8 streams made a page decode faster
-for a few bytes more header ([chapter 13](#ch-literals-dec--cost)). Measured again in October 2026,
+for a few bytes more header ([8 streams, not 4](#ch-literals-dec--cost)). Measured again in October 2026,
 4 streams made reads 0.7% to 1.8% slower in the kernel VM, for 0.1% to 0.2% less memory, so 8 stayed
 ([explored-designs.md](https://github.com/martinus/seqlz/blob/main/docs/explored-designs.md#five-simplifications-measured-in-the-vm-and-on-the-phone-the-literal-streams-as-arrays-kept-four-not)).
 The encoder has the same chain the other way round, a shift and an or on a stream's accumulator per
@@ -423,7 +423,7 @@ three sequences: it leaves at least 56 bits, and a sequence on the fast path tak
 The 8 literal streams need 8 such registers at once and a pointer each, and with a count each they
 did not fit into x86-64's registers. So a stream has no count: its 64 bits carry a 1 below the last
 real bit, and the number of bits used is the position of that 1, one count-trailing-zeros at the
-stream's refill ([chapter 13](#ch-literals-dec)). Even so, on the A55 the 8 stream pointers went to
+stream's refill ([the sentinel](#ch-literals-dec--sentinel)). Even so, on the A55 the 8 stream pointers went to
 the stack; they are needed only at a refill, once per {{ch03.lit_rounds}} literals of a stream.
 
 Registers also decided a choice in the matcher. Like `lz4`, it once moved on faster and faster when it

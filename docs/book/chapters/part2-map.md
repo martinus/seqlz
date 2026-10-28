@@ -56,7 +56,7 @@ step marked, and a box "In short" of its main points, each a link to the section
 <text x="10" y="288" font-size="11.5" text-anchor="start">read a page</text>
 <a href="#ch-literals-dec"><rect class="fill-sheet" x="500" y="300" width="210" height="92" rx="4" stroke="currentColor" stroke-width="1"/>
 <text x="605.0" y="318" font-size="12.5" text-anchor="middle" font-weight="700">literal decoder</text>
-<g class="acc"><text x="605.0" y="333" font-size="11" text-anchor="middle">chapter 13</text></g>
+<g class="acc"><text x="605.0" y="333" font-size="11" text-anchor="middle">seqlz_decompress_literals.c</text></g>
 <text x="605.0" y="350" font-size="11" text-anchor="middle">seqlz_decode_literals()</text>
 <text x="605.0" y="364" font-size="11" text-anchor="middle">levels 2 and 3, 8 streams</text>
 </a>
@@ -123,10 +123,10 @@ sequences.
 
 zram calls `seqlz_decode()` with the compressed page, the 4096 bytes to fill, and a scratch buffer.
 
-1. **The literal decoder** ([chapter 13](#ch-literals-dec)), only for a page with coded literals:
+1. **The literal decoder** ([`seqlz_decompress_literals.c`](#ch-literals-dec)), only for a page with coded literals:
    `seqlz_decode_literals()` reads the header, takes one of the 8 fixed tables or builds the page's own,
    and decodes the 8 streams side by side into the scratch ([from the header to the
-   bitstream](#ch-literals-dec--main)).
+   bitstream](#ch-literals-dec)).
 2. **The sequence loop** ([chapter 14](#ch-decode)), `decode_block()`: one lookup in the token table
    gives a sequence's `ll`, `ml` and how to read its offset, then the literals are copied from the
    scratch or the input and the match from the page itself. Most sequences take the fast path, with
@@ -163,7 +163,7 @@ changes them.
 | How does a page pick its literal table? | [pricing](#ch-literals-enc--pricing), [the choice](#ch-literals-enc--choice) |
 | When does a page get a literal table of its own? | [own table](#ch-literals-enc--own) |
 | What are the deltas, and where are they undone? | [format](#ch-format--deltas), [encoder](#ch-literals-enc--deltas), [decoder](#ch-literals-dec--undelta) |
-| Why 8 streams of literals? | [chains](#ch-cpu--chains), [8 side by side](#ch-literals-dec--main) |
+| Why 8 streams of literals? | [chains](#ch-cpu--chains), [8 side by side](#ch-literals-dec--cost) |
 | What makes the decoder fast? | [fast path](#ch-decode--fast), [next token](#ch-decode--next-token), [prefetch](#ch-dec-basics--prefetch) |
 | Why can no input make the decoder write out of bounds? | [the loop](#ch-decode--safety), [the literals](#ch-literals-dec--safety) |
 | Where do the tables come from? | [training](#ch-codes--lengths), [fixed tables](#ch-codes--fixed) |

@@ -570,7 +570,7 @@ The delta's byte is byte 3 with every code, a fixed table's or the page's own, a
 description and the streams move one byte up behind it. `seqlz_delta_last()`
 ([its values](#ch-internal--delta-last)) computes the distance of `SEQLZ_DELTA_LAST`, the encoder picks the
 delta in `seqlz_delta_literals()` ([the deltas](#ch-literals-enc--deltas)), and the decoder adds the
-bytes back in `undelta_literals()` ([chapter 13](#ch-literals-dec--undelta)). On ten samples of 20 000
+bytes back in `undelta_literals()` ([the deltas](#ch-literals-dec--undelta)). On ten samples of 20 000
 pages, level 3 stores 869.7 bytes per page with deltas, 915.6 without, 5.0% less, measured on 21st and
 22nd October 2026
 ([explored-designs.md](https://github.com/martinus/seqlz/blob/main/docs/explored-designs.md#level-3-stores-its-literals-as-deltas-not-xors-084-fewer-bytes-than-the-xor-kept),
