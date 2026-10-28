@@ -1,41 +1,39 @@
 # The decoder's tools: prefetches, copies and a bit reader {#ch-dec-basics}
 
 ::: key
-- `prefetch_lines()` asks for the decoder's tables before a page is decoded, 8 cache lines per round, so that the misses of a cold read overlap: {{ch12.lines_coded}} lines for a page with coded literals ([prefetches](#ch-dec-basics--prefetch)).
-- `copy8()` loads before it stores, so from offset 8 on it copies a match that overlaps the bytes it writes; `copy16()` loads both halves first, and is only for literals ([copies](#ch-dec-basics--copies)).
-- `copy_literals()` copies 16 bytes also where fewer literals follow, so most sequences need one copy and no loop, and the next sequence writes over the extra bytes ([copy_literals()](#ch-dec-basics--literals)).
-- For offsets below 8, `repeat_pattern()` builds the match's 8 bytes in a register with a mask and a multiply, and the copy stores that register again and again, with no load after the first ([offsets below 8](#ch-dec-basics--pattern)).
-- `copy_match()` copies the slow path's matches, up to a page long, 8 or 16 bytes at a time, and byte by byte only near the end of the page ([copy_match()](#ch-dec-basics--copy-match)).
-- The bit reader keeps 64 bits with the next bit on top; a refill loads 8 bytes and leaves 56 to 63 bits, and a read past the end gets zeros, which one check at the end of the page catches ([the bit reader](#ch-dec-basics--bit-reader)).
+- The tables are prefetched before a page is decoded, 8 cache lines per round, so that the waits for memory of a cold read happen at the same time instead of one after the other ([prefetches](#ch-dec-basics--prefetch)).
+- `copy8()` may read what the copy before it just wrote, `copy16()` may not, so matches are copied in pieces of 8 ([copies](#ch-dec-basics--copies)).
+- Copying 16 bytes where 3 are asked for is faster than copying 3, and safe, because the next sequence writes over the rest ([copy_literals()](#ch-dec-basics--literals)).
+- A match at offset 1 to 7 is one register, built with a multiply and stored again and again ([offsets below 8](#ch-dec-basics--pattern), [copy_match()](#ch-dec-basics--copy-match)).
+- The bit reader is 64 bits and a count of how many of them are real; after a refill `count |= 56` is the new count without computing it ([the bit reader](#ch-dec-basics--bit-reader), [count \|= 56](#ch-dec-basics--or56)).
+- The refill's byte loop keeps the count exact at the end of the stream, which the decoder's check of a damaged page needs ([the byte loop](#ch-dec-basics--byte-loop)).
+- `seqlz_br_value()` returns a plain number: the literals or match bytes a long sequence has beyond what its token can say ([a length value](#ch-dec-basics--value)).
 :::
 
-`src/seqlz_decompress.c` is the decoder, {{ch12.lines}} lines. Its first 214 lines, this chapter, are
-what every decoder of an LZ format needs in some form: copies of 8 and 16 bytes, a copy for the
-literals, one for matches that overlap the bytes they write, and a reader for the bitstream; the
-prefetch of the tables is in `seqlz_internal.h`, which the decoder of the coded literals uses too.
-Lines 216 to 301 turn deltas back into literals ([chapter 13](#ch-literals-dec--undelta)), the rest is
-`seqlz_decode()`, the loop over the sequences of a page ([chapter 14](#ch-decode)). The coded literals
-are decoded in a file of their own, `seqlz_decompress_literals.c` ([chapter 13](#ch-literals-dec)).
+The first 214 lines of `src/seqlz_decompress.c`, and the prefetch in `seqlz_internal.h`, are the tools
+of the decoder's loop: copies of 8 and 16 bytes, a copy for the literals and one for matches, and a
+reader for the bitstream. The annotated source goes through them block by block. This chapter takes
+the questions those blocks raise, one per section; each starts from its lines of code and goes through
+an example step by step.
 
-@listing src/seqlz_decompress.c 1-5
-
-Everything but `seqlz_decode()` is `static`. The copies are `__always_inline`, the kernel's spelling of
-`inline __attribute__((__always_inline__))`, because a copy of 8 bytes that becomes a call costs more
-than the copy. The other helpers are plain `inline`: with `-O2` and `-O3`, and the kernel copy is built
-with `-O3`, they are inlined too, with `-Os` gcc keeps `prefetch_lines()`, `seqlz_br_refill()` and
-`seqlz_br_value()` as functions. The tests and the fuzzers reach all of them through `seqlz_decode()`.
-
-## The tables are prefetched, 8 lines per iteration {#ch-dec-basics--prefetch}
-
-When a swap-in comes, whatever ran since the last one may have pushed the decoder's tables out of the
-caches. Then each first lookup into a line is a miss of about 100 ns, and prefetches issued back to back
-let these misses overlap instead of one after the other ([chapter 3](#ch-cpu--prefetch)).
-<!-- undated: a typical latency, explained in chapter 3 -->
+## Why the tables are prefetched, 8 lines at a time {#ch-dec-basics--prefetch}
 
 @listing src/seqlz_internal.h 108-133
 
-`L1_CACHE_BYTES` is the kernel's size of a cache line, 64 on x86-64 and arm64. `prefetch()` is `prfm` on
-arm64 and `prefetcht0` on x86-64, the latter with a patch to the kernel ([chapter 5](#ch-compat--prefetch)).
+The decoder looks things up in tables: one lookup in the token table, 8 KiB, per sequence, and for
+coded literals one lookup per literal in a literal table of 2 KiB. Memory comes into the cache in lines
+of 64 bytes. When a page is read back from swap, whatever ran since the last read has often pushed the
+tables out of the caches, and the first lookup into each line then waits for memory, about 100 ns
+([chapter 3](#ch-cpu--prefetch)).
+<!-- undated: a typical latency, explained in chapter 3 -->
+
+Left alone, the decoder would pay these waits one after the other, each time a lookup reaches a line
+that is not there yet. `prefetch(p)` says "the line of `p` will be needed soon" and does not wait for
+it. Issued for every line of the tables at the start, before the header is read, the trips to memory
+run at the same time, and by the time the loop does its lookups most lines have arrived. `prefetch()` is
+`prfm` on arm64 and `prefetcht0` on x86-64, the latter with a patch to the kernel
+([chapter 5](#ch-compat--prefetch)); `L1_CACHE_BYTES` is the line size, 64 on both.
+
 The inner loop has constant bounds, and the compiler unrolls it to 8 prefetches in a row. The token
 table takes {{ch12.tok.rounds}} rounds, each length table {{ch12.ll.rounds}} and a literal table
 {{ch12.lit.rounds}}: {{ch12.lines_raw}} cache lines for a page with raw literals, {{ch12.lines_coded}},
@@ -90,24 +88,35 @@ otherwise its last round would form pointers past `end` and prefetch lines behin
 asserts stop the build when a table stops being one, e.g. length codes of at most 6 bits, 64 entries of
 4 bytes. `sizeof_field(type, member)` is the kernel's `sizeof(((type *)0)->member)`.
 
-## Copies of 8 and 16 bytes, and what overlap each allows {#ch-dec-basics--copies}
+## copy8() and copy16(): who may read what was just written {#ch-dec-basics--copies}
 
 @listing src/seqlz_decompress.c 7-29
 
-`__builtin_memcpy()` of a constant size is one load and one store of any alignment. It is the builtin and
-not `memcpy()` because with `CONFIG_FORTIFY_SOURCE` the kernel's `memcpy()` can become a call
-([chapter 6](#ch-header--summary)).
+Both copy bytes from `s` to `d` with plain loads and stores: `__builtin_memcpy()` of a constant size
+is one load and one store of any alignment. It is the builtin and not `memcpy()` because with
+`CONFIG_FORTIFY_SOURCE` the kernel's `memcpy()` can become a call ([chapter 6](#ch-header--summary)).
+The two differ only in when they load. `copy8()` loads 8 bytes, then stores them. `copy16()` loads 16
+bytes, both halves, and only then stores.
 
-What matters is the order of loads and stores. `copy8()` loads 8 bytes, then stores them, so its source
-may end in bytes the store just before it wrote, as long as `s + 8 <= d`. `copy16()` loads both halves
-before it stores either, so its source and destination must not overlap at all; it is only for
-literals, which come from the compressed page or the scratch.
+That matters for a match, which may copy bytes it is writing itself. A match of offset 10 and length 16
+after `0123456789` must write `0123456789012345`: its last 6 bytes are copies of its own first 6, as the
+format copies byte by byte ([chapter 2](#ch-compression--overlap)).
 
-A match with offset 10 and length 16 after `0123456789` must write `0123456789012345`: the format copies
-byte by byte ([chapter 2](#ch-compression--overlap)), so the last 6 bytes repeat the first 6 of the match
-itself. The first `copy8()` stores `01234567` at `d`. The second loads `d - 2` to `d + 5`, `89` and the
-`012345` just stored, and writes `89012345` at `d + 8`. One `copy16()` from `d - 10` would have loaded
-`d` to `d + 5` before anything was written there.
+| copy | loads | stores at | gives |
+| --- | --- | --- | --- |
+| first `copy8()` | `d - 10` to `d - 3`: `01234567` | `d` | `01234567` |
+| second `copy8()` | `d - 2` to `d + 5`: `89` and the `012345` just stored | `d + 8` | `89012345`, right |
+| one `copy16()` instead | `d - 10` to `d + 5`, before anything is stored | `d` | its last 6 bytes are what was at `d` to `d + 5` before: wrong |
+
+So `copy16()` is only for literals, whose source, the compressed page or the scratch, never overlaps
+the page being written, and matches are copied in pieces of 8, which is right from offset 8 on.
+
+**Why not `copy16()` for matches from offset 16 on?** From offset 16 the source ends before the
+destination starts, and `copy16()` would give the same bytes. It would not be faster: here it is two
+loads and two stores of 8 bytes, the same four operations as two `copy8()`, only in another order. And
+choosing between the two needs a test of `off >= 16`, a branch whose direction depends on the page,
+which the CPU guesses wrong often; a wrong guess costs more than the copy
+([chapter 3](#ch-cpu--branches)).
 
 ::: cpu A load right after a store to the same bytes
 A store waits in a store buffer before it reaches the cache. A load of bytes a recent store wrote takes
@@ -120,28 +129,30 @@ September 2026
 Offsets below 8 avoid it: they store one register again and again, with no load after the first.
 :::
 
-## copy_literals(): 16 bytes at a time, also past the end {#ch-dec-basics--literals}
+## Copying more than asked: copy_literals() {#ch-dec-basics--literals}
 
 @listing src/seqlz_decompress.c 31-60
 
-The caller, the slow path of `seqlz_decode()`, has checked that the `nl` literals are there and fit into
-the page. `lit_bound` is not the end of the literals but of the memory behind them that may be read,
-the `lit_bound` of [chapter 14](#ch-decode): the end of the compressed page for raw literals, of the
-scratch for coded ones. Until 23rd October 2026 the parameter was `s_end`, the end of the input, a
-name that was wrong for coded literals (commit `3ae2e09`). Copying 16 bytes where `nl` is smaller is the wild copy of
-[chapter 3](#ch-cpu--wild-copy): the next sequence writes its match over the extra bytes.
+A sequence with 3 literals gets 16 bytes copied. The 13 bytes too many land where the sequence's match
+goes, and the match writes over them right after. Copying exactly 3 would need a loop that runs 3
+times, and `nl` is different for every sequence, so the CPU would guess the loop's end wrong again and
+again. One copy of 16 bytes is always the same two loads and two stores, and most sequences have fewer
+than 16 literals. This is the wild copy of [chapter 3](#ch-cpu--wild-copy).
 
-The first `copy16()` runs whenever 16 bytes fit on both sides, also for `nl = 0`; as the comment says, a
-loop that runs once or not at all, depending on the page, is a branch that mispredicts. The `while` loop
-takes 16 bytes more as long as they fit, so the byte loop only runs within 15 bytes of the end of the
-page or of the readable input, e.g. for the last sequence of a page. The casts make each compare one of
-two unsigned numbers, the same on 32-bit and 64-bit builds; the differences are never negative.
+Two limits make it safe. The 16 bytes written must fit into the page, `d_end - d >= 16`, and the 16
+bytes read must be readable, `lit_bound - lit >= 16`. `lit_bound` is not the end of the literals but of
+the buffer they are in: the end of the compressed page for raw literals, where the bytes after the
+literals are the bitstream, and the end of the scratch for coded ones, which has 16 spare bytes for
+this. Only within 15 bytes of either end does the function go byte by byte, e.g. for the last sequence
+of a page. The caller, the slow path of `seqlz_decode()`, has checked that the `nl` literals are there
+and fit into the page.
 
 ## Offsets below 8: one register, stored again and again {#ch-dec-basics--pattern}
 
-A match may start fewer bytes back than it is long and then repeats what it just wrote: offset 1 after
+A match may start fewer bytes back than it is long, and then repeats what it just wrote: offset 1 after
 an `a` with length 6 writes `aaaaaa`, which is how a run of zeros compresses to a few bits. `copy8()` is
-right only from offset 8 on. For offsets 1 to 7 the decoder builds the repeated pattern in a register.
+right only from offset 8 on, as its load must end before the bytes it stores. For offsets 1 to 7 the
+decoder builds the repeated pattern in a register instead.
 
 @listing src/seqlz_decompress.c 62-66
 
@@ -196,13 +207,29 @@ multiply needs the pattern's first byte in the lowest byte ([chapter 3](#ch-cpu-
 <figcaption>A match of offset 3 and length 20: one register, stored 4 times 6 bytes apart; the stores overlap by 2 bytes, and the last one writes 6 bytes past the match, which the next sequence overwrites.</figcaption>
 </figure>
 
-## copy_match(): the slow path's match copy {#ch-dec-basics--copy-match}
+## copy_match(): stores only, and a & 7U that does nothing {#ch-dec-basics--copy-match}
 
-`copy_match()` copies the matches that do not take the fast path of [chapter 14](#ch-decode): those
-with a length value, up to a page long, and those near the end of the page. The fast path has its own
-copy, `copy_match_fast()`.
+`copy_match()` copies the matches that the fast path of [chapter 14](#ch-decode) does not take: those
+with a length value, up to a page long, and those near the end of the page.
 
-@listing src/seqlz_decompress.c 89-106
+@listing src/seqlz_decompress.c 107-124
+
+Below offset 8 it is the pattern of the section above: build the register once, store it every `step`
+bytes, and no load waits for a store. With fewer than 8 bytes left in the page, the byte loop at the
+end copies all of the match. The comment on lines 112 to 115 bounds the load of `repeat_pattern()`: it
+reads up to `d - off + 7`, at most `d + 6`, inside the page also when the page is nearly full. For
+`off = 3, len = 20` the stores are at `k = 0, 6, 12, 18`, as in the figure. For the example page's match
+of [chapter 4](#ch-format--example), `off = 2, len = 4094`, the loop stops at `k = 4088`, where 8 more
+bytes would not fit, and the byte loop copies the last 6.
+@assert ch10.ab.s1.ml == 4094 and ch10.ab.s1.off == 2
+
+**The `& 7U` changes nothing.** `repeat_step[off & 7U]` is inside `if (off < 8)`, and for `off` from 1
+to 7, `off & 7U` is `off`. It is left over from the line
+`step = off >= 8 ? 8U : repeat_step[off & 7U]` before commit `b163902` moved it into this branch.
+There the mask made the array read safe for any `off`, most likely so that the compiler could read
+before it knew which side of the `?:` it needed; the commit does not say. gcc 16.2.1 and clang 22.1.8
+make the same machine code with and without it, on x86-64 and arm64, and commit `4147b58` removed it,
+after the commit this book describes.
 
 The caller has checked that `d - off` is inside the page and `d + len` at most `d_end`. The last sentence
 of the first paragraph has a measurement behind it: the first decoder of seqlz, in September 2026,
@@ -210,18 +237,6 @@ copied a match that ran up to the end of the page byte by byte, all of it. On a 
 run of zeros that is up to 4000 single bytes with offset 1, each load waiting for the store before it,
 and the slowest 1% of pages took 5700 ns, where `lz4` took 500
 ([explored-designs.md](https://github.com/martinus/seqlz/blob/main/docs/explored-designs.md#seqlz-lz4s-matches-huffman-coded-sequences-with-static-tables)).
-
-@listing src/seqlz_decompress.c 107-124
-
-`off & 7U` changes nothing, `off` is below 8 here. It is left from the older
-`step = off >= 8 ? 8U : repeat_step[off & 7U]`, which commit `b163902` moved into this branch. With
-fewer than 8 bytes left in the page, the byte loop at the end copies all of the match. The comment on
-lines 112 to 115 bounds the load of `repeat_pattern()`: it reads up to `d - off + 7`, at most `d + 6`,
-inside the page also when the page is nearly full. For `off = 3, len = 20` the stores are at `k = 0, 6,
-12, 18`, as in the figure. For the example page's match of [chapter 4](#ch-format--example),
-`off = 2, len = 4094`, the loop stops at `k = 4088`, where 8 more bytes would not fit, and the byte loop
-copies the last 6.
-@assert ch10.ab.s1.ml == 4094 and ch10.ab.s1.off == 2
 
 ::: measured Stores only, no loads, for short offsets
 Before 24th September 2026 the code built the first 8 bytes in a register as now, and then copied `step`
@@ -238,10 +253,9 @@ The format has changed since; the numbers say which way the change went, not wha
 
 From offset 8 on, `copy8()` is right: each load ends at `d + k - off + 7`, before the bytes its store
 writes. The second of the first two copies reads what the first wrote, e.g. `d - 2` to `d + 5` for
-`off = 10`, the example above. `k = 16` also when `len` was shorter: the extra bytes are inside the page,
-and the next sequence overwrites them. The byte loop, shared by both branches, is the format's own
-definition of a match, and runs only within the last 7 bytes of the page or for a match on a page with
-fewer than 8 or 16 bytes left.
+`off = 10`, the table of [the copies](#ch-dec-basics--copies). `k = 16` also when `len` was shorter: the
+extra bytes are inside the page, and the next sequence overwrites them. The byte loop at the end is the
+format's own definition of a match, and runs only within the last 7 bytes of the page.
 
 ::: why 16 bytes first, not 32
 79% of the matches are at most 16 bytes, 32 bytes cover 91%
@@ -258,47 +272,87 @@ stayed
 :::
 @assert ch12.ml_tok == ch03.token_ml_max + 1
 
-Until 10th October 2026 a second loop after both branches ran only for offsets of 8 and more. Moved into
-its branch, it gave the same bytes and moved the decoder's timing no more than moving its code to
-another address does
-([explored-designs.md](https://github.com/martinus/seqlz/blob/main/docs/explored-designs.md#copy_match-without-its-dead-branch-within-what-the-codes-place-moves-kept)).
+## The bit reader: 64 bits and a count {#ch-dec-basics--bit-reader}
 
-## The bit reader: 64 bits, most significant bit first {#ch-dec-basics--bit-reader}
-
-After the literals, a compressed page has the bitstream: per sequence the token's code, the offset bits
-and the length values, with no alignment to bytes ([chapter 4](#ch-format--bitstream)).
+After the literals comes the bitstream: per sequence the token's code, the offset bits and the length
+values, one after the other without regard to bytes ([chapter 4](#ch-format--bitstream)).
 
 @listing src/seqlz_decompress.c 148-162
 
-`bits` is **left-aligned**: the next bit of the stream is bit 63, so the next `n` bits as a number are
-`bits >> (64 - n)`, and a code indexes its table with the register's top bits. `count` says how many of
-the top bits are real; below them can be bits of a byte that is only partly in, or zeros. `p` is the
-first byte not yet in whole.
+Think of `bits` as a window onto the stream: its top bit, bit 63, is the next bit of the stream. The
+next `n` bits as a number are `bits >> (64 - n)`, and a code can index its table with the top bits
+directly. `count` says how many of the top bits are real; below them may be the rest of a byte that is
+only partly in, or zeros. Reading moves the window on:
 
-`count` is an `int` on purpose. The decoder does not check before every read: past the end of the
-stream it gets zeros, and `count` goes negative. One check at the end of the page finds that
-([chapter 14](#ch-decode--end)). As the comment says, zeros instead of real bits can give wrong lengths
-and offsets but never a wrong memory access, because each is checked against the room where it is used.
+@listing src/seqlz_decompress.c 188-193
 
-### seqlz_br_refill(): one load of 8 bytes, and count ends at 56 to 63
+`seqlz_br_drop()` shifts the bits used out of the top and takes them off `count`. `n` is never 64: the
+largest drop is a token's code with its offset bits, $11 + 14$ bits with 16 KiB pages.
 
-@listing src/seqlz_decompress.c 164-186
+`count` is an `int` on purpose, and `(int)n` keeps the subtraction signed. The decoder does not check
+before each read whether bits are left: past the end of the stream it reads zeros, and `count` goes
+negative. One check at the end of the page finds that ([chapter 14](#ch-decode--end)). Zeros instead of
+real bits can give wrong lengths and offsets but never a wrong memory access, because each length and
+offset is checked where it is used.
 
-While 8 bytes of the stream are left, the refill loads 8 at once, `seqlz_br_refill_8()`, which the
-fast path of [chapter 14](#ch-decode--next-token) calls by itself, as it knows that 8 bytes are there; in the last 7
-it goes byte by byte,
-because zram hands the decoder a buffer of exactly the compressed size, and the byte after it may belong
-to another allocation. `get_unaligned_be64()` puts the byte at `p` into the top 8 bits, the stream's
-order; on x86-64 and arm64 it is a load and a byte swap. `v >> count` puts it right below the `count`
-real bits, and what does not fit falls off the bottom.
+## Why count \|= 56 is the count after a refill {#ch-dec-basics--or56}
 
-The next two lines need a worked example. Write `count` as $8a + b$, with $b$ from 0 to 7. Then
-`63 - count` is $8(7 - a) + (7 - b)$, so `(63 - count) >> 3` is $7 - a$, the bytes that fit in whole,
-and `p` moves on by them. The new count is $8a + b + 8(7 - a) = 56 + b$, and `count | 56` is $56 + b$
-too, because $8a$ is at most 56 and has only bits that 56 has. So after a refill `count` is 56 to 63, and
-the rest of the decoder can count on 56 bits; Python confirms the identity for all 64 values of `count`.
-The bits of the partial byte at the bottom are not counted. The next refill loads that byte again, from
-`p`, and shifts it to the same place, so the OR writes the same bits over them and needs no mask.
+@listing src/seqlz_decompress.c 164-174
+
+A refill loads the next 8 bytes at `p`, big-endian, so that the byte at `p` is on top, the stream's
+order; on x86-64 and arm64 `get_unaligned_be64()` is a load and a byte swap. `>> count` puts them right
+below the `count` real bits, and what does not fit falls off the bottom. Then `p` has to move on by the
+bytes that went in whole, and `count` has to grow by 8 for each of them. The fast path of
+[chapter 14](#ch-decode--next-token) calls this half alone, where it knows that 8 bytes are there.
+
+So the new count should be `count + 8 * ((63 - count) >> 3)`, and the code writes `count |= 56`. Why
+are they the same? Write `count` as $8a + b$: $a$ whole bytes, 0 to 7, and $b$ bits of a byte that is
+only partly in, 0 to 7.
+
+- The bytes that go in whole are $(63 - 8a - b) \gg 3 = 7 - a$, and `p` moves on by them.
+- The new count is $8a + b + 8(7 - a) = 56 + b$.
+- As a 6-bit number, `count` has $a$ in bits 3 to 5 and $b$ in bits 0 to 2. 56 is `0b111000`, so
+  `count | 56` sets bits 3 to 5 and keeps $b$: also $56 + b$.
+
+The OR throws $a$ away and puts 7 in its place, which is exactly what filling the register up to whole
+bytes does. It is one instruction, and it does not wait for the shift that works out how far `p` moves,
+so the two updates run side by side. After a refill `count` is 56 to 63, and the rest of the decoder can
+count on 56 bits.
+
+::: try Check it for every count
+This program prints the two forms for a few counts and compares them for all 64; the book runs it when
+it is built:
+
+```c
+#include <stdio.h>
+
+int main(void)
+{
+	static const int some[] = { 0, 13, 40, 57, 63 };
+	int k, c, bad = 0;
+
+	printf("count  bytes in whole  count + 8 * bytes  count | 56\n");
+	for (k = 0; k < 5; k++) {
+		c = some[k];
+		printf("%5d  %14d  %17d  %10d\n", c, (63 - c) >> 3,
+		       c + 8 * ((63 - c) >> 3), c | 56);
+	}
+	for (c = 0; c < 64; c++)
+		bad += (c | 56) != c + 8 * ((63 - c) >> 3);
+	printf("counts 0 to 63: %d differ\n", bad);
+	return 0;
+}
+```
+@program ch12-or56
+
+It prints:
+
+@output ch12-or56
+:::
+
+The $b$ bits of the partly loaded byte at the bottom are not counted. The next refill loads that byte
+again, from `p`, and shifts it to the same place, so the OR writes the same bits over them and needs no
+mask.
 
 A made-up stream, `dc 65 ef db 8a 11 22 33 44 55 66 77 88 99 aa bb ...`, run through
 `seqlz_br_refill()` and `seqlz_br_drop()`:
@@ -320,32 +374,64 @@ followed by `0x44` and the top 7 bits of `0x55`. `p` moves on by 2 and stops at 
 
 @anim refill wide The example of the table, one operation per step: each refill loads, shifts, ORs, moves p and sets count, and the decoder drops 15 and then 23 bits between them. Computed in the browser with 64-bit integers, as the code does it.
 
+## Why the refill has a byte loop {#ch-dec-basics--byte-loop}
+
+@listing src/seqlz_decompress.c 176-186
+
+While 8 bytes of the stream are left, the refill is the one of the section above. In the last 7 bytes
+it goes byte by byte, for two reasons.
+
+**The end of the buffer.** zram hands the decoder exactly the compressed bytes, and the byte after them
+may belong to another allocation, so an 8-byte load near the end could read memory that is not the
+decoder's.
+
+**An exact count for the end check.** Why not load the last bytes with zeros behind them, as
+`lit_load_tail()` does for the literal streams ([chapter 13](#ch-literals-dec--refill))? Because the end
+of `decode_block()` rejects a page unless every byte of the bitstream was read, `br.p == br.end`, fewer
+than 8 bits are left, and those are 0 ([chapter 14](#ch-decode--end)). A load with zeros behind it
+would move `p` past `end` and count the zeros as real bits, and a page cut short would look complete.
+The byte loop counts only bytes that are there, and when the bits run out, `count` goes negative, which
+that check catches.
+
+Each of the loop's three conditions has a job:
+
+- `p < end`: stop at the end of the input.
+- `count <= 56`: a whole byte still fits below the real bits, so `56 - count` is not negative.
+- `count >= 0`: once more bits were taken than there are, `56 - count` would be a shift by more than
+  56, and below -7 by 64 or more, which C leaves undefined.
+
 The fast half needs `count` from 0 to 63 for its shift. It never sees a negative one, which only happens
 after the stream ran out, and never 64, which only the byte half reaches, after which `end - p` stays
-below 8. The byte half puts one byte below the counted bits per round and stops when no whole byte fits,
-when the stream is used up, or when `count` is negative, where `56 - count` would be a shift past 56 and,
-below -7, by 64 or more. The example page of [chapter 4](#ch-format--example) has a bitstream of
+below 8. The branch `end - p >= 8` goes the same way for every refill but the last few of a page, which
+the CPU predicts. The example page of [chapter 4](#ch-format--example) has a bitstream of
 {{ab.b.bytes}} bytes, `{{ab.b.hex}}`, so its first refill is the byte half: `bits = {{ch12.ab.bits}}`,
 `count = {{ch12.ab.count}}`, `p = end`, and every later refill does nothing.
 @assert ab.b.bytes < 8 and ch12.ab.at_end == 1
 
-### seqlz_br_drop(): taking bits
-
-@listing src/seqlz_decompress.c 188-193
-
-The `(int)n` keeps the subtraction signed, so `count` can go negative. `n` is never 64: the largest drop
-is a token's code with its offset bits, $11 + 14$ bits with 16 KiB pages.
-
-### seqlz_br_value(): a length value, with two shifts where one would do
+## What seqlz_br_value() returns {#ch-dec-basics--value}
 
 @listing src/seqlz_decompress.c 195-214
 
-A length value is a symbol of the `ll` or `ml` table and then `x` extra bits, added to a base
-([chapter 4](#ch-format--length-values)). One lookup with the next 8 bits gives the code's length `n` in
-bits 0 to 3, `x` in bits 4 to 7 and the base in bits 8 to 23 ([chapter 7](#ch-internal--value-table)).
-The `x` bits after the code would be `(bits << n) >> (64 - x)`, a shift by 64 for `x = 0`, which x86-64
-does as a shift by 0 ([chapter 3](#ch-cpu--ubsan)). `>> 1` and then `>> (63 - x)` gives 0 for `x = 0`
-and the same as one shift by `64 - x` otherwise, without a branch.
+A plain number: how many literals or match bytes a long sequence has beyond what its token can say. The
+token holds `ll` from 0 to 15 and `ml` from 4 to 35, and the top value of each means "this many or
+more". With `ll` 15 a literal length value follows and the count of literals is 15 plus the value; with
+`ml` 35 a match length value follows and the match is 35 plus the value. That is what `decode_block()`
+does with it, `nl += seqlz_br_value(...)` and `len += seqlz_br_value(...)`
+([chapter 14](#ch-decode--slow)).
+
+The value is sent as a symbol's code and extra bits ([chapter 4](#ch-format--length-values)). Values 0
+to 15 are their own symbol, with no extra bits. From 16 on, the symbol says where the value's top bit
+is, and the bits below that top bit follow the code; the top bit itself is not sent, the symbol says it.
+One lookup with the next 8 bits gives three things packed into one entry, `code length | extra bits << 4
+| base << 8` ([chapter 7](#ch-internal--value-table)): the code's length `n`, the number of extra bits
+`x`, and the base, `2^x` from symbol 16 on and the value itself below. The function returns the base plus
+the `x` bits right after the code, and drops `n + x` bits.
+
+**The two shifts.** The `x` bits after the code are `(bits << n) >> (64 - x)`: shift the code out of the
+top, then bring the top `x` bits down to the bottom. The code writes `>> 1` and then `>> (63 - x)`,
+which is the same shift by `64 - x` in two steps, because for `x = 0` one shift by 64 is undefined in C
+([chapter 3](#ch-cpu--ubsan)); with two steps `x = 0` gives `>> 1` and `>> 63`, which is 0, as it should
+be. `r->bits` itself does not change until `seqlz_br_drop()`.
 
 The match length value of the example page, with the 4 KiB tables: after the escape's code, the token's
 12 bits and the offset, {{ch12.ab.tokdrop}} bits, the register is `{{ch12.ab.bits2}}` with
@@ -371,7 +457,3 @@ has at most 8 bits, a value at most {{ch10.len_extra_max}} extra bits with 4 KiB
 {{k16.ch10.len_extra_max}} with 16 KiB pages, and the caller refills before, which leaves at least 56.
 The largest base, {{k16.ch12.base_max|grp}} with 16 KiB pages, fits the entry's 16 bits.
 @assert F("k16.ch12.base_max") < 65536
-
-These three functions and a token lookup that [chapter 14](#ch-decode--next-token) writes inline are
-all the decoder does with the bitstream. The literal streams of [chapter 13](#ch-literals-dec) have a
-reader without a `count`, because 8 of them have to fit into the registers at once.
