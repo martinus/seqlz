@@ -298,8 +298,9 @@ One line per entry, by area, newest first: date measured, verdict, link, result,
 
 **Matcher**
 
+- 2026-10-28 **not kept** [Hash with a 40-bit mask and a 64-bit multiplier](#the-matchers-hash-with-a-40-bit-mask-and-a-64-bit-multiplier-better-avalanche-001-to-002-more-memory-not-kept): every input bit reaches every hash bit, mean bias of single bit flips 0.277 to 0.258; 0.01% to 0.02% more zsmalloc cost at every level on the ten samples, not timed. Code: `seqlz_hash5()` in src/seqlz_match.h, the variant not committed. Now: current.
 - 2026-10-15 **kept** [Matcher without its step back, levels 1 and 2](#the-matcher-without-its-step-back-writes-66-faster-on-the-a76-and-1-to-2-in-the-vm-kept): Mi 9T zram, p3: seqlz-2 writes 0.8 µs (6.6%) faster on A76, 3% on A55, reads same. Kernel VM writes 1.0% to 2.3% faster; pages 1.6 bytes smaller to 3.7 larger; seqlz-1 up to 15 bytes (1.3%) larger. Code: seqlz_match_page() in src/page_lz.h; PR #213 (commit 474c552). Now: current for levels 1 and 2; level 3 keeps the step back ("Level 3, a lazy matcher").
-- 2026-10-05 **kept** [Matcher hash: 5 bytes, 4096 slots stays](#5-the-matchers-hash-5-bytes-into-4096-slots-stays): 4-byte hash: seqlz-2 18 to 35 bytes per page larger, not timed. 2048 slots: 939.6 vs 936.9 bytes, no time saved. 8192 slots: A55 write 1.6 µs slower and 16 KiB per CPU. 5 bytes into 4096 slots stays. Code: src/page_lz.h, SEQLZ_HASH_BITS in src/seqlz.h (12 for 4 KiB pages). Now: current.
+- 2026-10-05 **kept** [Matcher hash: 5 bytes, 4096 slots stays](#5-the-matchers-hash-5-bytes-into-4096-slots-stays): 4-byte hash: seqlz-2 18 to 35 bytes per page larger, not timed. 2048 slots: 939.6 vs 936.9 bytes, no time saved. 8192 slots: A55 write 1.6 µs slower and 16 KiB per CPU. 5 bytes into 4096 slots stays. Code: src/page_lz.h, SEQLZ_HASH_BITS in src/seqlz.h (12 for 4 KiB pages). Now: current; the hash's mixing measured 2026-10-28, [a 64-bit multiplier](#the-matchers-hash-with-a-40-bit-mask-and-a-64-bit-multiplier-better-avalanche-001-to-002-more-memory-not-kept), not kept.
 - 2026-10-04 **not built** [Offline ratio ideas on phone pages](#ratio-from-the-parse-and-the-tables-on-phone-pages-measured-offline-not-built): Offline, phone samples, seqlz-1 second dump 916.8 bytes per page: lazy 1 step -1.0%, offset priced 4 bits lower -1.2%, fixed step 2 +4.9%, last offset unchecked +3.7%. Literal deltas, 2-3 byte repeats, phone-trained tables (0.3% to 0.6% on own dump): not worth cost. Code: none in src/; commit 5c0bf8a. Now: Lazy step built into level 3 ("Level 3, a lazy matcher"); tables later trained on phone sessions ("The tables trained on phone sessions").
 - 2026-10-04 **not kept** [Matcher table with bytes, arm64 assembly loop](#the-matchers-table-with-the-bytes-its-loop-in-assembly-on-arm64-9-fewer-compress-cycles-on-the-a55-not-kept): Assembly: A55 compress loop 38 000 vs 42 000 cycles per page. C version: 2.5% in the harness, nothing in the phone kernel (clang 9), 16 392 vs 8192 bytes per CPU, 1.27 and 1.95 bytes per page more. Codec must stay C. Code: branch seqlz-matcher-asm, commit 0288b1e, reverted in f1db05d, PR #66. Now: current; inline assembly still ruled out. Untried: No clearing of the table per page took twice the time, 41% of cycles at the table store: why is not clear.
 - 2026-10-03 **not kept** [Memory for speed: growing step, 4-byte hash](#memory-for-speed-on-the-phone-no-trade-worth-it-not-kept): Mi 9T, first phone dump, write + 0.34 × cold read: step and hash4 together save 1.0 µs (4%) on A55 for 2.7% more memory, slower on A76 like every variant. seqlz-1 already gives 2.5 µs less on A55 for 5% more memory. Code: compile-time switches in match_page(); commit 8f6d1c2. Now: lz4's growing step retried on the A76 in "The matcher without its step back": write +4.4% / +6.4%, not kept.
@@ -4219,7 +4220,7 @@ id in a codec is arm64 specific and new for zram's backends.
 
 ### 5. The matcher's hash: 5 bytes into 4096 slots stays
 
-Status: kept, 2026-10-05. Now: current.
+Status: kept, 2026-10-05. Now: current; [a hash with a 64-bit multiplier](#the-matchers-hash-with-a-40-bit-mask-and-a-64-bit-multiplier-better-avalanche-001-to-002-more-memory-not-kept) mixes better and stores 0.01% to 0.02% more (2026-10-28), not kept.
 
 A hash of 4 bytes instead of 5 finds more matches, which on x86-64 cost 5% more compress cycles for 0.6
 points of memory then. With today's tables it is the other way round: `seqlz-fast-lit` gets 18 to 35
@@ -7171,6 +7172,47 @@ within the 2 µs its rounds move. A first run without `mc` gave 14.55 against 14
 So the functions cost nothing that these runs can show. The order of the modules was not swapped; a run
 with the functions loaded first would show the place directly. With the functions, checkpatch has no
 `MACRO_ARG_REUSE` left in `tools/kernel-port/`.
+
+## The matcher's hash with a 40-bit mask and a 64-bit multiplier: better avalanche, 0.01% to 0.02% more memory, not kept
+
+Status: not kept, 2026-10-28. Now: current.
+
+*`seqlz_hash5()` is zstd's hash of 5 bytes, `((v << 24) * 889523592379) >> 52` for 4 KiB pages. That is
+bits 28 to 39 of the low 40 bits of `v` times a 40-bit prime: a product's bit k depends only on the bits
+0 to k of its factors, so the input bits 28 to 39 reach only the hash bits at and above their place, bit
+39 only the top one. `((v & 0xffffffffff) * 0x9e3779b97f4a7c15) >> 52` takes the hash from bits 52 to 63,
+which every input bit reaches; `0x9e3779b97f4a7c15` is 2^64 divided by the golden ratio. With single bit
+flips the mixing gets better, mean |p − 0.5| 0.277 against 0.258, but on the ten samples the pages get
+0.01% to 0.02% larger at every level. The mask with zstd's 40-bit prime mixes worse than now: its low
+input bits reach the hash bits only through carries. Not kept: no fewer bytes; the hash's spread is not
+what limits the matcher, a table of half the slots cost 2.7 bytes per page
+([5. The matcher's hash](#5-the-matchers-hash-5-bytes-into-4096-slots-stays)). Not timed.* Code:
+`seqlz_hash5()` in `src/seqlz_match.h`; the variant was not committed.
+
+**Mixing.** 200 000 random 40-bit inputs, each of the 40 bits flipped, how often each of the 12 hash
+bits flips (0.5 is ideal), x86-64, gcc 16.2.1 `-O2`:
+
+| hash | mean \|p − 0.5\| | weakest input byte | input/hash bit pairs that never flip |
+| --- | ---: | --- | ---: |
+| `(v << 24) * 889523592379`, now | 0.277 | byte 4, 0.404 | 66 of 480 |
+| `(v & 0xffffffffff) * 889523592379` | 0.340 | byte 0, 0.499 | 24 of 480 |
+| `(v & 0xffffffffff) * 0x9e3779b97f4a7c15` | 0.258 | byte 3, 0.302 | 0 of 480 |
+
+**Memory.** `seqlz-bench-interleaved --no-timing --codecs seqlz-1,seqlz-2,seqlz-3` on the ten 20 000-page
+samples, Release builds of main at `842f337` and of the variant, gcc 16.2.1. Column `cost` of the sizes
+(the bench's zsmalloc model) and compressed bytes, mean per page over the ten samples:
+
+| level | cost, now | cost, variant | bytes, now | bytes, variant |
+| --- | ---: | ---: | ---: | ---: |
+| `seqlz-1` | 1074.3 | 1074.5 (+0.02%) | 1046.1 | 1046.2 (+0.01%) |
+| `seqlz-2` | 984.5 | 984.6 (+0.02%) | 958.8 | 958.9 (+0.01%) |
+| `seqlz-3` | 894.2 | 894.2 (+0.01%) | 870.4 | 870.5 (+0.01%) |
+
+Per sample the cost moved by −0.1 to +0.5 bytes, +0.0 or more on 27 of the 30 rows.
+
+Not measured: the time to write a page. The variant has the same multiply; on x86-64 an `and` with a
+40-bit constant instead of a `shl`, on arm64 one `and` with a bitmask immediate. Without fewer bytes, a
+time would not change the verdict.
 
 ## Level 3 without its second try of the plain literals: 0.71 bytes per page more, writes 1.8% and 2.0% faster on the Mi 9T, kept
 
