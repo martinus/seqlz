@@ -255,7 +255,7 @@ The diff between `src/seqlz_decompress.c` and its copy, on the tree CI uses, `98
 ```
 
 - **The kernel's headers**, from a list in `port.py`. `seqlz_compat.h` would pull them in anyway
-  ([chapter 5](#ch-compat--kernel)), but a reviewer expects a file's includes in the file.
+  ([its kernel half](#ch-compat--kernel)), but a reviewer expects a file's includes in the file.
 - **`#define SEQLZ_BLOCK_BITS 12U`** in place of `SEQLZ_PAGE_BITS`, whatever the kernel's
   `PAGE_SIZE` is: the library compresses blocks of 4 KiB, `SEQLZ_BLOCK_SIZE` of the interface, and
   builds with 16 KiB and 64 KiB pages too. The values for 16 KiB blocks are cut, e.g.
@@ -512,7 +512,7 @@ and `Makefile`, and a paragraph to zram's documentation.
 
 On x86-64 the kernel's `prefetch()` was `__builtin_prefetch()`, which clang drops under `-mno-sse`, so a
 kernel built with clang, as Android's are, had no prefetches in the decoder
-([chapter 5](#ch-compat--prefetch) has the story and the measurement). No inline assembly goes into
+([the story and the measurement](#ch-compat--prefetch)). No inline assembly goes into
 `lib/`, so the fix is a patch to the kernel, `tools/kernel-port/x86-prefetcht0.patch`, which defines
 `ARCH_HAS_PREFETCH` for 64-bit in `arch/x86/include/asm/processor.h`:
 
@@ -636,7 +636,7 @@ MemorySanitizer.
 
 The format's multi-byte values are little endian, and the code reads and writes them with
 `get_unaligned_le16()` and its relatives. Until commit `91fa53e` on 5th October 2026 it did not, and on
-the big-endian s390x every page failed to round trip ([chapter 5](#ch-compat--endian)).
+the big-endian s390x every page failed to round trip ([how](#ch-compat--endian)).
 `test/seqlz_endian.c` keeps it fixed: 600 generated pages of six kinds, each compressed at every level
 and decoded again, all compressed bytes hashed with FNV-1a. It is plain C, so it builds in
 seconds under qemu. Its output on x86-64, and the same with `-m32`:

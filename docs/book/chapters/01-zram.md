@@ -348,13 +348,13 @@ be slow decodes in 1.33 times the p99 time of real pages; for `lz4` the same is 
   ([`docs/plan.md` §3.2](https://github.com/martinus/seqlz/blob/main/docs/plan.md#32-decompression-is-a-tail-latency-problem-not-a-throughput-problem)).
 - **Every architecture.** The same source runs on little-endian x86-64 and arm64, on big-endian s390
   and on 32-bit arm, and CI checks that x86-64, 32-bit x86 and s390x write the same compressed bytes
-  for the same pages ([chapter 5](#ch-compat--endian)).
+  for the same pages ([how](#ch-compat--endian)).
 - **No inline assembly, nothing that depends on the CPU model.** A maintainer of `lib/` reads one C
   source for all machines. A gap in the kernel is fixed in the kernel, with a patch of its own;
-  [chapter 5](#ch-compat--prefetch) shows the one seqlz needs.
+  [the x86-64 `prefetch()`](#ch-compat--prefetch) is the one seqlz needs.
 
-`src/seqlz_compat.h` supplies the kernel's names outside the kernel, so that the benchmarks, the tests
-and the fuzzers build the same code ([chapter 5](#ch-compat)).
+[`src/seqlz_compat.h`](#ch-compat) supplies the kernel's names outside the kernel, so that the
+benchmarks, the tests and the fuzzers build the same code.
 
 ## The score: bytes against time {#ch-zram--score}
 

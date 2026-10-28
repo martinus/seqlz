@@ -467,7 +467,7 @@ after it copied them, before the match after them ([chapter 14](#ch-decode--delt
 
 `add4()` and `add8()` add the word `dist` bytes before `p` to the word at `p`, byte by byte, modulo 256:
 a load, a load, the addition and a store, `put_unaligned_le32()` being the store of
-[chapter 5](#ch-compat). A plain addition of two words is not 4 or 8 additions of bytes: a byte whose
+[`seqlz_compat.h`](#f-seqlz_compat-h-b158). A plain addition of two words is not 4 or 8 additions of bytes: a byte whose
 sum is 256 or more carries 1 into the byte above. So the top bit of each byte is added apart, the way
 [`sub_bytes()`](#ch-literals-enc--sub-bytes) of the encoder subtracts. `a & low` and `b & low` keep
 bits 0 to 6 of each byte; two such bytes sum to at most `0x7f + 0x7f = 0xfe`, so no byte carries into

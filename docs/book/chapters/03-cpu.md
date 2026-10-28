@@ -105,7 +105,7 @@ reads from 5600 to 3891 ns in the kernel VM
 ([explored-designs.md](https://github.com/martinus/seqlz/blob/main/docs/explored-designs.md#zram-prefetch-the-compressed-data-before-decompression)).
 :::
 
-Two traps around prefetches are handled in `src/seqlz_compat.h` ([chapter 5](#ch-compat--prefetch)):
+Two traps around prefetches are handled in `src/seqlz_compat.h` ([`prefetch()`](#ch-compat--prefetch), [`L1_CACHE_BYTES`](#ch-compat--cache-line)):
 clang drops `__builtin_prefetch()` without a word when x86-64 is built without SSE, as the kernel is,
 and the Mi 9T's 4.14 kernel says that arm64 cache lines are 128 bytes, while its cores have 64.
 
@@ -436,7 +436,7 @@ spare. Without it, the pages that compress are written 5% faster, and in the ker
 
 The code reads 2, 4 and 8 bytes at any position of a byte array, so through `memcpy()` into a local,
 which gcc and clang turn into one load, never through a cast pointer
-([chapter 5](#ch-compat--endian)). x86-64 and arm64 load from any address at full speed in most cases.
+([what that compiles to](#ch-compat--loads)). x86-64 and arm64 load from any address at full speed in most cases.
 They are little endian, and s390x, which Linux also runs on, is big endian, so each load names its
 byte order, `get_unaligned_le64()` or `get_unaligned_be64()`, and a page has the same bytes on every
 CPU; CI checks that on s390x. Both orders are used on purpose:

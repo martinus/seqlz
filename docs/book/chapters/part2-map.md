@@ -77,7 +77,7 @@ step marked, and a box "In short" of its main points, each a link to the section
 <text x="10" y="414" font-size="11.5" text-anchor="start">under both</text>
 <a href="#ch-compat"><rect class="fill-sheet" x="100" y="400" width="145" height="44" rx="4" stroke="currentColor" stroke-width="1"/>
 <text x="172.5" y="418" font-size="12" text-anchor="middle" font-weight="700">kernel names</text>
-<g class="acc"><text x="172.5" y="434" font-size="11" text-anchor="middle">chapter 5</text></g></a>
+<g class="acc"><text x="172.5" y="434" font-size="11" text-anchor="middle">seqlz_compat.h</text></g></a>
 <a href="#ch-header"><rect class="fill-sheet" x="255" y="400" width="145" height="44" rx="4" stroke="currentColor" stroke-width="1"/>
 <text x="327.5" y="418" font-size="12" text-anchor="middle" font-weight="700">format constants</text>
 <g class="acc"><text x="327.5" y="434" font-size="11" text-anchor="middle">chapter 6</text></g></a>
@@ -140,7 +140,7 @@ zram calls `seqlz_decode()` with the compressed page, the 4096 bytes to fill, an
 
 ## Under both {#map--shared}
 
-- [Chapter 5](#ch-compat), `seqlz_compat.h`: the kernel's types and helpers, so that the same code
+- [`seqlz_compat.h`](#ch-compat): the kernel's types and helpers, so that the same code
   builds outside the kernel.
 - [Chapter 6](#ch-header), `seqlz_format.h` and `seqlz.h`: the format as constants, the token, the
   offset classes and the caps, and the functions for userspace.

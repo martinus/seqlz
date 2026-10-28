@@ -122,7 +122,7 @@ one after the other, each time a lookup reaches a line that is not there yet. `p
 line of `p` will be needed soon" and does not wait for it. Issued for every line of the tables at the
 start, before the header is read, the trips to memory run at the same time, and by the time the loop
 does its lookups most lines have arrived. `prefetch()` is `prfm` on arm64 and `prefetcht0` on x86-64,
-the latter with a patch to the kernel ([chapter 5](#ch-compat--prefetch)); `L1_CACHE_BYTES` is the
+the latter with a patch to the kernel ([`prefetch()` without SSE](#ch-compat--prefetch)); `L1_CACHE_BYTES` is the
 line size, 64 on both.
 
 The inner loop has constant bounds, and the compiler unrolls it to 8 prefetches in a row. The token

@@ -391,7 +391,7 @@ $2^{-l} \le p$, the lengths sum to at most 1, and only the cut can overfill the 
 $f \cdot 2^l / n$ is then between 1 and 2, and it is what the code calls the gain: shortening the byte
 to `l - 1` bits saves `f` bits and takes $2^{-l}$ more of the code space, so $f \cdot 2^l$ is the bits
 saved per code space. `inv` turns the division into a multiply, computed once with `div_u64()`
-([chapter 5](#ch-compat--min)), and `q` is 16 times the ratio, 16 to 31,
+([`div_u64()`](#f-seqlz_compat-h-b127)), and `q` is 16 times the ratio, 16 to 31,
 so `q - 16` is a bucket from 0 to 15. Bytes cut to 10 bits get bucket 0. Then a counting sort, `at[]`,
 lists the bytes by bucket in `by_gain[]`, within a bucket by byte value. For the text page:
 
