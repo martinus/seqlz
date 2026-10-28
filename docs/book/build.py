@@ -213,7 +213,7 @@ def render_code_list():
         if g != group:
             out.append(("</ul>" if group else "") + f'<p class="codegroup">{html.escape(title)}</p><ul class="codelist">')
             group = g
-        intro, _ = annotate.parse_notes(NOTES[f])
+        intro, *_ = annotate.parse_notes(NOTES[f])
         first = re.split(r"(?<=\.)\s", re.sub(r"\[([^]]*)\]\([^)]*\)", r"\1", intro), maxsplit=1)[0]
         out.append(f'<li><a href="{notes_href(f)}"><code>{html.escape(pathlib.Path(f).name)}</code></a> '
                    f'{md(first)[3:-4]}</li>')
@@ -1034,7 +1034,7 @@ def build():
         body = add_ids(body, annotate.file_id(src))
         collect_ids(body, where, ids)
         code_html.append(body)
-        _, secs = annotate.parse_notes(NOTES[src])
+        _, secs, _ = annotate.parse_notes(NOTES[src])
         file_sections[src] = [(annotate.section_id(annotate.file_id(src), s["title"]), s["title"]) for s in secs]
     allhtml, renumbered = chapter_numbers(chapters.replace(CODE_MARK, "\n".join(code_html)), labels)
     if renumbered:

@@ -27,6 +27,9 @@ A notes file:
   @anchor <id>
       one more id at the block, e.g. the id of a chapter that its blocks replaced
 
+@more, @anim and @stepper in the intro, before the first section, are about the whole file: their
+buttons are under the intro.
+
 The blocks have to cover the file, in order, without gaps. A link `#b<line>` goes to that block of the
 same file, `<file>.html` and `<file>.html#b<line>` to another file of src/ and its block, `book:#<id>`
 or `#<id>` to an id of the book; build.py fails the build on a link to an id the book does not have.
@@ -71,9 +74,10 @@ def only_comment(h):
 
 
 def parse_notes(path, text=None):
-    """the intro, and the sections, each a title and its blocks. text: the notes, if not path's"""
+    """the intro, the sections, each a title and its blocks, and the figures and panels of the intro.
+    text: the notes, if not path's"""
     lines = (path.read_text() if text is None else text).split("\n")
-    intro, sections = [], []
+    intro, sections, top = [], [], []
     cur, more = intro, None
     for k, line in enumerate(lines[1:], 2):
         if more is not None:
@@ -94,20 +98,20 @@ def parse_notes(path, text=None):
             sections[-1]["blocks"].append(block)
             cur = block["text"]
             continue
-        if line.startswith("@") and (cur is intro or cur is None):
+        if line.startswith("@") and cur is None:
             fail(f"{path}:{k}: {line.split()[0]} outside a block")
+        extra = top if cur is intro else sections[-1]["blocks"][-1]["extra"] if cur is not None else None
         m = re.match(r"@(anim|stepper)\s+([\w-]+)\s+(\S.*)$", line)
         if m:
-            sections[-1]["blocks"][-1]["extra"].append({"kind": m.group(1), "name": m.group(2),
-                                                        "title": m.group(3).strip(), "at": k})
+            extra.append({"kind": m.group(1), "name": m.group(2), "title": m.group(3).strip(), "at": k})
             continue
         m = MORE.match(line)
         if m:
             more = {"kind": "more", "id": m.group(1), "title": m.group(2).strip(), "text": [], "at": k}
-            sections[-1]["blocks"][-1]["extra"].append(more)
+            extra.append(more)
             continue
         m = re.match(r"@anchor\s+([\w-]+)\s*$", line)
-        if m:
+        if m and cur is not intro:
             sections[-1]["blocks"][-1]["anchors"].append(m.group(1))
             continue
         if line.startswith("@"):
@@ -120,7 +124,7 @@ def parse_notes(path, text=None):
         cur.append(line)
     if more is not None:
         fail(f"{path}:{more['at']}: @more without its @end")
-    return "\n".join(intro).strip(), sections
+    return "\n".join(intro).strip(), sections, top
 
 
 def render(path, text, src, lines, refs, rich, fig, files, label, near=(None, None)):
@@ -129,7 +133,7 @@ def render(path, text, src, lines, refs, rich, fig, files, label, near=(None, No
     first line): markdown with the chapters' directives to HTML; fig(kind, name, where): a figure's
     markup; files: the names of the files with notes; label: the chapter's label; near: the files
     before and after it in the reading order, or None"""
-    intro, sections = parse_notes(path, text)
+    intro, sections, top = parse_notes(path, text)
     blocks = [b for s in sections for b in s["blocks"]]
     nxt = 1
     for b in blocks:
@@ -157,7 +161,36 @@ def render(path, text, src, lines, refs, rich, fig, files, label, near=(None, No
             return m.group(0)
         return re.sub(r'href="([^"]+)"', one, h)
 
-    used, sec_html, cells = [], [], []
+    used = []
+
+    def extras(items, owner):
+        """the buttons and the panels of a block's or the intro's figures and longer explanations"""
+        buttons, panels = [], []
+        for x in items:
+            where = f"{path}:{x['at']}"
+            if x["kind"] == "more":
+                pid = x["id"] or f"{owner}-" + re.sub(r"[^\w]+", "-", x["title"].lower()).strip("-")[:48].strip("-")
+                body = rich("\n".join(x["text"]), str(path), x["at"] + 1)
+                what = ""
+            else:
+                if (x["kind"], x["name"]) in used:
+                    fail(f"{where}: {x['kind']} {x['name']} twice in this file")
+                used.append((x["kind"], x["name"]))
+                body = fig(x["kind"], x["name"], where)
+                pid = re.search(r'<figure[^>]* id="([^"]+)"', body).group(1) + "-p"
+                what = "Step through" if x["kind"] == "stepper" else "Animation"
+            buttons.append(f'<button type="button" class="pbtn pbtn-{x["kind"]}" aria-expanded="false" aria-controls="{pid}">'
+                           f'<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l7 6-7 6"/></svg>'
+                           f'<span>' + (f'<span class="fk">{what}</span> ' if what else "")
+                           + f'{md_inline(x["title"])}</span></button>')
+            panels.append(f'<div class="bpanel bpanel-{x["kind"]}" id="{pid}" hidden="until-found">'
+                          f'<div class="phead"><p class="ptitle">' + (f'<span class="fk">{what}</span> ' if what else "")
+                          + f'{md_inline(x["title"])}</p><button type="button" class="icon pclose" aria-label="Close" title="Close">'
+                          f'<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button></div>'
+                          f'<div class="pbody">{links(body)}</div></div>')
+        return buttons, panels
+
+    sec_html, cells = [], []
     for si, s in enumerate(sections):
         sid = section_id(fid, s["title"])
         a0, b0 = s["blocks"][0]["a"], s["blocks"][-1]["b"]
@@ -175,29 +208,7 @@ def render(path, text, src, lines, refs, rich, fig, files, label, near=(None, No
                     seen.add((chap, title))
                     ref_html.append(f'<li><a href="{href}"><span class="rc">{html.escape(chap)}</span> '
                                     f'{html.escape(title)}</a></li>')
-            buttons, panels = [], []
-            for k, x in enumerate(b["extra"]):
-                where = f"{path}:{x['at']}"
-                if x["kind"] == "more":
-                    pid = x["id"] or f"{bid}-" + re.sub(r"[^\w]+", "-", x["title"].lower()).strip("-")[:48].strip("-")
-                    body = rich("\n".join(x["text"]), str(path), x["at"] + 1)
-                    what = ""
-                else:
-                    if (x["kind"], x["name"]) in used:
-                        fail(f"{where}: {x['kind']} {x['name']} twice in this file")
-                    used.append((x["kind"], x["name"]))
-                    body = fig(x["kind"], x["name"], where)
-                    pid = re.search(r'<figure[^>]* id="([^"]+)"', body).group(1) + "-p"
-                    what = "Step through" if x["kind"] == "stepper" else "Animation"
-                buttons.append(f'<button type="button" class="pbtn pbtn-{x["kind"]}" aria-expanded="false" aria-controls="{pid}">'
-                               f'<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l7 6-7 6"/></svg>'
-                               f'<span>' + (f'<span class="fk">{what}</span> ' if what else "")
-                               + f'{md_inline(x["title"])}</span></button>')
-                panels.append(f'<div class="bpanel bpanel-{x["kind"]}" id="{pid}" hidden="until-found">'
-                              f'<div class="phead"><p class="ptitle">' + (f'<span class="fk">{what}</span> ' if what else "")
-                              + f'{md_inline(x["title"])}</p><button type="button" class="icon pclose" aria-label="Close" title="Close">'
-                              f'<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button></div>'
-                              f'<div class="pbody">{links(body)}</div></div>')
+            buttons, panels = extras(b["extra"], bid)
             rng = f"line {b['a']}" if b["a"] == b["b"] else f"lines {b['a']}&ndash;{b['b']}"
             arts.append(
                 f'<article class="blk" id="{bid}" data-sec="{sid}">'
@@ -213,6 +224,7 @@ def render(path, text, src, lines, refs, rich, fig, files, label, near=(None, No
         sec_html.append(f'<section class="sec"><h2 class="sech" id="{sid}"><span class="secno">{si + 1}</span>'
                         f'{html.escape(s["title"])}</h2>{"".join(arts)}</section>')
 
+    top_buttons, top_panels = extras(top, fid)
     nav = "".join(f'<a class="{cls}" href="#{file_id(f)}"><span class="fnk">{what}</span>'
                   f'<code>{html.escape(pathlib.Path(f).name)}</code></a>'
                   for f, cls, what in ((near[0], "fprev", "previous file"), (near[1], "fnext", "next file")) if f)
@@ -226,7 +238,9 @@ def render(path, text, src, lines, refs, rich, fig, files, label, near=(None, No
             f'hide comments</button></p></header>'
             f'<nav class="fmap" aria-label="Sections of {html.escape(name)}">{"".join(cells)}</nav>'
             f'<div class="fintro">{links(rich(intro, str(path), 2))}</div>'
-            f'{"".join(sec_html)}'
+            + (f'<div class="ftop"><div class="pbtns">{"".join(top_buttons)}</div>{"".join(top_panels)}</div>'
+               if top_buttons else "")
+            + f'{"".join(sec_html)}'
             f'<nav class="filenav" aria-label="Files of Part II">{nav}</nav></section>')
 
 
