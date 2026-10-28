@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """remap.py [<commit>] [--write]: the book brought up to the code of <commit>, HEAD if not given.
-The book describes the code of one commit, "src" in book.json; this moves its @listing lines and the
-line numbers its prose quotes ("line 24", "lines 21 to 26", "seqlz_decompress.c:17") from the files at
-that commit to the files at <commit>. The old and the new file are matched line by line (difflib); a
+The book describes the code of one commit, "src" in book.json; this moves its @listing lines, the
+line numbers its prose quotes ("line 24", "lines 21 to 26", "seqlz_decompress.c:17") and the blocks of
+the annotated sources, annotated/*.md, from the files at that commit to the files at <commit>. The old and the new file are matched line by line (difflib); a
 number moves with its line, or with the nearest line that kept its text. --write also sets "src" to
 <commit>, so a second run finds nothing to move.
 
@@ -98,6 +98,39 @@ for ch in sorted((ROOT / "docs/book/chapters").glob("*.md")):
             changed = True
     if write and changed:
         ch.write_text("\n".join(lines))
+
+# the notes of annotate.py: each block starts where its first line went and ends before the next one,
+# so they still cover the file; links to a block (#b<first line>) move with it
+for nf in sorted((ROOT / "docs/book/annotated").glob("*.md")):
+    lines = nf.read_text().split("\n")
+    m = re.match(r"#\s+(\S+)\s*$", lines[0])
+    if not m:
+        continue
+    path = m.group(1)
+    mp = linemap(path)
+    n_new = len(newtext[path]) - (newtext[path][-1] == "")
+    blocks = [(idx, int(b.group(1)), int(b.group(2))) for idx, line in enumerate(lines)
+              if (b := re.match(r"@@\s+(\d+)-(\d+)\s*$", line))]
+    starts = [1] + [near(mp, a, 1) for _, a, _ in blocks[1:]]
+    if None in starts:
+        sys.exit(f"{nf.name}: block {blocks[starts.index(None)][1]}: no line near it kept its text, move it by hand")
+    moved, changed = {}, False
+    for k, (idx, a, b) in enumerate(blocks):
+        na, nb = starts[k], (starts[k + 1] - 1 if k + 1 < len(blocks) else n_new)
+        moved[a] = na
+        same = all(j in mp for j in range(a, b + 1)) and mp[b] - mp[a] == b - a
+        if (na, nb) != (a, b) or not same:
+            tag = "" if same else "  CHANGED" if nb >= na else "  EMPTY, remove it"
+            print(f"{nf.name}:{idx+1}: @@ {a}-{b} -> {na}-{nb}{tag}")
+            lines[idx] = f"@@ {na}-{nb}"
+            changed = True
+    for idx, line in enumerate(lines):
+        nl = re.sub(r"\(#b(\d+)\)", lambda r: f"(#b{moved.get(int(r.group(1)), r.group(1))})", line)
+        if nl != line:
+            print(f"{nf.name}:{idx+1}: {line.strip()[:110]}\n{'':>{len(nf.name)+len(str(idx+1))+2}}  -> {nl.strip()[:110]}")
+            lines[idx], changed = nl, True
+    if write and changed:
+        nf.write_text("\n".join(lines))
 if write:
     book = BOOK_JSON.read_text()
     BOOK_JSON.write_text(book.replace(f'"src": "{old_rev}"', f'"src": "{new_rev}"', 1))

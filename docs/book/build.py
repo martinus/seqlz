@@ -75,6 +75,8 @@ import markdown
 from pygments.lexers import get_lexer_by_name
 from pygments.token import Token
 
+from annotate import notes_files
+
 HERE = pathlib.Path(__file__).resolve().parent
 REPO = HERE.parent.parent  # docs/book in the repository
 GITHUB = "https://github.com/martinus/seqlz/blob"
@@ -101,7 +103,7 @@ if PINNED not in os.environ:
         book = pathlib.Path(root) / "docs" / "book"
         shutil.rmtree(book, ignore_errors=True)
         shutil.copytree(HERE, book, ignore=shutil.ignore_patterns("node_modules", "__pycache__",
-                                                                  "seqlz-line-by-line*.html"))
+                                                                  "seqlz-line-by-line*.html", "*.[ch].*html"))
         if (HERE / "node_modules").exists():
             (book / "node_modules").symlink_to(HERE / "node_modules")
         args = [a for i, a in enumerate(sys.argv[1:]) if a != "--out" and sys.argv[i] != "--out"]
@@ -175,6 +177,8 @@ def src_lines(path):
 
 
 COVERED = {}  # path -> set of line numbers
+# the files with an annotated source, annotate.py: their listings link to the same lines there
+NOTES = notes_files(HERE)
 LISTINGS = []
 LANG = {".c": "c", ".h": "c", ".inc": "c", ".py": "python", ".sh": "bash", ".patch": "diff", ".cpp": "cpp"}
 
@@ -196,6 +200,9 @@ def render_listing(path, a, b):
         f'<span class="line"><span class="ln" data-n="{a + i}"></span><span class="lc">{h}</span></span>'
         for i, h in enumerate(hl))
     rng = f"line {a}" if a == b else f"lines {a}&ndash;{b}"
+    if path in NOTES:
+        rng += (f' &middot; <a class="lnotes" href="annotated/{pathlib.Path(path).name}.standalone.html#L{a}" '
+                f'title="These lines in the annotated source, a short note next to each block">notes</a>')
     return (f'<figure class="listing" id="L-{path.replace("/", "-").replace(".", "-")}-{a}">'
             f'<figcaption><a class="lfile" href="{GITHUB}/{file_commit(path)}/{path}#L{a}-L{b}">{html.escape(path)}</a>'
             f'<span class="lrange">{rng}</span></figcaption>'
@@ -889,6 +896,12 @@ def build():
             toc_html.append(f'<li class="tocchap" data-for="{cid}"><a href="#{cid}"><span class="tocno">{label}</span>'
                             f'<span class="toct">{html.escape(title)}</span></a>'
                             + (f'<ol class="tocsub">{sub}</ol>' if sub else "") + "</li>")
+    if NOTES:
+        first = pathlib.Path(next(iter(NOTES))).name
+        toc_html.append(f'<li class="tocpart"><a href="annotated/{first}.standalone.html">Annotated source</a></li>')
+        toc_html += [f'<li class="tocchap"><a href="annotated/{pathlib.Path(p).name}.standalone.html">'
+                     f'<span class="tocno">Code</span><span class="toct">{html.escape(pathlib.Path(p).name)}</span></a></li>'
+                     for p in NOTES]
     commit = f"{SRC_COMMIT[:7]}, {SRC_DATE}"
     tpl = (HERE / "template.html").read_text()
     out = (tpl.replace("{{KATEX_CSS}}", katex_css(allhtml))
@@ -906,6 +919,10 @@ def build():
         + '\n<script src="https://cdn.jsdelivr.net/npm/mermaid@11.4.1/dist/mermaid.min.js"></script>\n'
         + MERMAID_SCRIPT + '</body>\n</html>\n')
     print(f"wrote {STANDALONE}")
+    # the annotated sources, from the page just written
+    if NOTES and subprocess.run([sys.executable, str(HERE / "annotate.py"), "--out", str(OUT_DIR),
+                                 *map(str, NOTES.values())]).returncode:
+        sys.exit("annotate.py failed")
 
 
 # the charts drawn again in the other theme when the reader switches it, from their source
