@@ -18,7 +18,13 @@
     },
     {
       "id": "part-2", "label": "Part II", "title": "The code, line by line",
-      "intro": "Every line of <code>src/</code>, in the order a reader needs it: the kernel's vocabulary, the constants of the format, the tables, the compressor and the decompressor, and the glue to zram.",
+      "intro": "The code of <code>src/</code>, file by file, with a short note next to each block: start there, in the order of the contents. The chapters after the files explain what needs more than a note.",
+      "code": [
+        {"group": "zram", "title": "zram's glue", "files": ["src/zram_seqlz.c", "src/seqlz.h"]},
+        {"group": "write", "title": "writing a page", "files": ["src/seqlz_compress.c", "src/seqlz_match.h", "src/seqlz_compress_literals.c"]},
+        {"group": "read", "title": "reading a page", "files": ["src/seqlz_decompress.c", "src/seqlz_decompress_literals.c"]},
+        {"group": "below", "title": "what both use", "files": ["src/seqlz_format.h", "src/seqlz_internal.h", "src/seqlz_tables.h", "src/seqlz_codes.c", "src/seqlz_compat.h", "src/seqlz_default_tables.c", "src/seqlz_default_tables_4k.inc", "src/seqlz_lit_sets.c", "src/seqlz_lit_sets_4k.inc", "src/seqlz_default_tables_16k.inc", "src/seqlz_lit_sets_16k.inc"]}
+      ],
       "chapters": [
         {"file": "part2-map.md", "numbered": false, "label": "Map"},
         {"file": "05-compat.md"},

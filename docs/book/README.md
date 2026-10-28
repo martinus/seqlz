@@ -44,9 +44,10 @@ python3 docs/book/lint.py            # dashes, banned words, measurements withou
 - The book describes the code of one commit, `"src"` in `book.json`, not the checkout's. `build.py`
   builds in that commit's tree, extracted to a temporary directory, with this `docs/book/` over it, so
   a change of `src/` needs no change of the book. The page says which commit it describes.
-- `build.py --check` fails if a non-blank line of `src/` at that commit (the generated `.inc` tables
-  aside) is in no listing, if an id is on the page twice, or if a link goes to an id that does not
-  exist. `--out <dir>` writes the page there instead.
+- `build.py --check` fails if a non-blank line of a file of `src/` without notes at that commit (the
+  generated `.inc` tables aside) is in no listing, if an id is on the page twice, or if a link goes to
+  an id that does not exist. A file with notes is covered by them, so a chapter shows only the lines
+  it explains. `--out <dir>` writes the page there instead.
 - To bring the book up to newer code: `remap.py [<commit>]` (default `HEAD`) prints how the listings
   and the line numbers in the prose move from the book's commit to that one; `--write` applies them and
   sets `"src"` to it. Then read the prose next to each listing marked CHANGED, and `build.py --check`.
@@ -58,8 +59,11 @@ python3 docs/book/lint.py            # dashes, banned words, measurements withou
   animations under the blocks they belong to. The notes are `annotated/<file>.md`. `build.py` makes
   the page `annotated/<file>.html` from them, with the code, the listings and the figures it built,
   and fails with a note that misses lines or links to an id the book does not have; every listing of
-  the file gets a link "notes" to its lines there, the contents an entry. `remap.py` moves the
-  blocks with their lines. `build.py --site DIR` writes the site of GitHub Pages, job `book` uses it.
+  the file gets a link "notes" to its lines there. Part II's `"code"` in `book.json` is the reading
+  order of the annotated files, in groups: the contents list them at the start of Part II, each page
+  links to the file before and after it, `@code` in a chapter lists them, and the build fails when
+  that list and `annotated/*.md` differ. `remap.py` moves the blocks with their lines.
+  `build.py --site DIR` writes the site of GitHub Pages, job `book` uses it.
 
 After a change of the format or the tables, build the book: what the code computes follows by
 itself, and a false `@assert` names the paragraph to read again. Prose that explains a value in words
