@@ -19,7 +19,7 @@ of 20 000 pages, 5.0% fewer, for about 4 µs more to write a page on the Mi 9T's
 [one rule](https://github.com/martinus/seqlz/blob/main/docs/explored-designs.md#one-rule-for-which-literals-are-deltas-045-fewer-bytes-a-simpler-spec-kept)).
 With that, in the kernel VM on 22nd October 2026, the mean over four zram dumps of a phone and a
 desktop, `seqlz-3` stores 3.8% less than `zstd` 3, in 72% of its time to write a page, and its swap-ins
-take 36% less time ([chapter 17](#ch-decisions--score)).
+take 36% less time ([chapter 6](#ch-decisions--score)).
 
 All of that is {{ch00.src_lines|grp}} lines of C in one directory, `src/`, plus the trained code
 lengths in four `.inc` files, two for each page size.
@@ -45,33 +45,32 @@ Skip what you know; Part II links back where it needs a term.
 and [the format on one page](#ch-format), which takes two compressed pages apart bit by bit and is the
 map for everything after it.
 
-**Part II, the code**, goes through `src/` file by file: the headers first, because every `.c` file
-builds on their constants and structs, then the code that builds the Huffman tables, the compressor,
-the decompressor, and the glue that makes seqlz a zram backend. It opens with [a map](#map) of the
-path of a page through the code, and each of its chapters starts with its place on that map and a
-box "In short" of its main points: read those to find the chapter you need.
+**Part II, the code**, is `src/` itself, file by file, with a short note next to each block. Under a
+note, buttons open the details: why it is written this way, a worked example with real numbers, what
+it was measured at. It opens with [a map](#map) of the path of a page through the code, and the files
+in the order to read them: zram's glue, writing a page, reading a page, then what both use.
 
 **Part III** follows [one page through every function](#ch-trace) with the numbers each step
 produces, and collects [the design decisions](#ch-decisions) with what they were measured against.
 [The glossary](#glossary) is at the end.
 
-## The files, and where each is explained {#preface--files}
+## The files {#preface--files}
 
-| file | lines | what it is | chapter |
-| --- | --- | --- | --- |
-| [`src/seqlz_compat.h`](#f-seqlz_compat-h) | {{ch00.lines.seqlz_compat_h}} | the kernel's types and helpers, also outside the kernel | [5](#ch-compat) |
-| [`src/seqlz_format.h`](#f-seqlz_format-h) | {{ch00.lines.seqlz_format_h}} | the format's constants | [6](#ch-header) |
-| [`src/seqlz_internal.h`](#f-seqlz_internal-h) | {{ch00.lines.seqlz_internal_h}} | what the compressor's and decompressor's files share: work memory, levels | [6](#ch-header) |
-| [`src/seqlz.h`](#f-seqlz-h) | {{ch00.lines.seqlz_h}} | the functions for userspace: tests, tools, the harness | [6](#ch-header) |
-| [`src/seqlz_tables.h`](#f-seqlz_tables-h) | {{ch00.lines.seqlz_tables_h}} | the layout of the tables in memory, the token table's entries | [7](#ch-internal) |
-| [`src/seqlz_codes.c`](#f-seqlz_codes-c) | {{ch00.lines.seqlz_codes_c}} | builds codes and decode tables from code lengths | [8](#ch-codes) |
-| `src/seqlz_default_tables.c`, `src/seqlz_lit_sets.c` and their `.inc` files | ${{ch00.lines.seqlz_default_tables_c}} + {{ch00.lines.seqlz_lit_sets_c}} + 2 \times {{ch00.lines.seqlz_default_tables_4k_inc}} + 2 \times {{ch00.lines.seqlz_lit_sets_4k_inc}}$ | the trained code lengths, part of the format | [8](#ch-codes) |
-| [`src/seqlz_match.h`](#f-seqlz_match-h) | {{ch00.lines.seqlz_match_h}} | the matcher: finds the repeats in a page | [9](#ch-matcher) |
-| [`src/seqlz_compress.c`](#f-seqlz_compress-c) | {{ch00.lines.seqlz_compress_c}} | the encoder | [10](#ch-encoder) |
-| [`src/seqlz_compress_literals.c`](#f-seqlz_compress_literals-c) | {{ch00.lines.seqlz_compress_literals_c}} | the coding of literals | [11](#ch-literals-enc) |
-| [`src/seqlz_decompress.c`](#f-seqlz_decompress-c) | {{ch00.lines.seqlz_decompress_c}} | the decoder | [14](#ch-decode) |
-| [`src/seqlz_decompress_literals.c`](#f-seqlz_decompress_literals-c) | {{ch00.lines.seqlz_decompress_literals_c}} | the decoding of literals | [13](#ch-literals-dec) |
-| [`src/zram_seqlz.c`](#f-zram_seqlz-c) | {{ch00.lines.zram_seqlz_c}} | seqlz as a zram backend, for the benchmarks | [15](#ch-zram-glue) |
+| file | lines | what it is |
+| --- | --- | --- |
+| [`src/seqlz_compat.h`](#f-seqlz_compat-h) | {{ch00.lines.seqlz_compat_h}} | the kernel's types and helpers, also outside the kernel |
+| [`src/seqlz_format.h`](#f-seqlz_format-h) | {{ch00.lines.seqlz_format_h}} | the format's constants |
+| [`src/seqlz_internal.h`](#f-seqlz_internal-h) | {{ch00.lines.seqlz_internal_h}} | what the compressor's and decompressor's files share: work memory, levels |
+| [`src/seqlz.h`](#f-seqlz-h) | {{ch00.lines.seqlz_h}} | the functions for userspace: tests, tools, the harness |
+| [`src/seqlz_tables.h`](#f-seqlz_tables-h) | {{ch00.lines.seqlz_tables_h}} | the layout of the tables in memory, the token table's entries |
+| [`src/seqlz_codes.c`](#f-seqlz_codes-c) | {{ch00.lines.seqlz_codes_c}} | builds codes and decode tables from code lengths |
+| [`src/seqlz_default_tables.c`](#f-seqlz_default_tables-c), [`src/seqlz_lit_sets.c`](#f-seqlz_lit_sets-c) and their `.inc` files | ${{ch00.lines.seqlz_default_tables_c}} + {{ch00.lines.seqlz_lit_sets_c}} + 2 \times {{ch00.lines.seqlz_default_tables_4k_inc}} + 2 \times {{ch00.lines.seqlz_lit_sets_4k_inc}}$ | the trained code lengths, part of the format |
+| [`src/seqlz_match.h`](#f-seqlz_match-h) | {{ch00.lines.seqlz_match_h}} | the matcher: finds the repeats in a page |
+| [`src/seqlz_compress.c`](#f-seqlz_compress-c) | {{ch00.lines.seqlz_compress_c}} | the encoder |
+| [`src/seqlz_compress_literals.c`](#f-seqlz_compress_literals-c) | {{ch00.lines.seqlz_compress_literals_c}} | the coding of literals |
+| [`src/seqlz_decompress.c`](#f-seqlz_decompress-c) | {{ch00.lines.seqlz_decompress_c}} | the decoder |
+| [`src/seqlz_decompress_literals.c`](#f-seqlz_decompress_literals-c) | {{ch00.lines.seqlz_decompress_literals_c}} | the decoding of literals |
+| [`src/zram_seqlz.c`](#f-zram_seqlz-c) | {{ch00.lines.zram_seqlz_c}} | seqlz as a zram backend, for the benchmarks |
 @assert len(ch00.lines) == 18
 @assert ch00.lines.seqlz_default_tables_4k_inc == ch00.lines.seqlz_default_tables_16k_inc and ch00.lines.seqlz_lit_sets_4k_inc == ch00.lines.seqlz_lit_sets_16k_inc
 
@@ -130,5 +129,5 @@ spends on the pages ([chapter 1](#ch-zram--size-classes)). A number like
 **`src/` is not exactly what the kernel gets.** A script, `tools/kernel-port/port.py`, generates the
 kernel's copy from `src/`: it replaces the compatibility header with the kernel's own headers, drops
 what only the benchmarks and tests use, and adds the kernel's interface around it
-([chapter 15](#ch-zram-glue)). The codec's files are kernel C already, without libc, floating point
+([how `port.py` writes it](#ch-zram-glue--port)). The codec's files are kernel C already, without libc, floating point
 or inline assembly, so that copy is a mechanical step.

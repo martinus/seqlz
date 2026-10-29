@@ -3,8 +3,8 @@
 A page compressed by seqlz is a string of bytes, and zram stores it together with its length. This
 chapter is about those bytes, as
 [`docs/format.md`](https://github.com/martinus/seqlz/blob/main/docs/format.md) specifies them, and
-it is the map for Part II: when `seqlz_decode()` in [chapter 14](#ch-decode) checks the top bit of the
-first two bytes, or [chapter 13](#ch-literals-dec) reads 8 streams of literals, this is where the
+it is the map for Part II: when [`seqlz_decode()`](#ch-decode) checks the top bit of the
+first two bytes, or [`seqlz_decode_literals()`](#ch-literals-dec) reads 8 streams of literals, this is where the
 bytes they read are described as a whole.
 
 The spec is about {{ch04.format_lines}} lines, written so that a decoder can be built from it alone. Two such decoders
@@ -182,7 +182,7 @@ condition, and a page that does not meet it gets raw literals.
 </svg>
 </div>
 <figcaption>The steps of each level, left to right, and the layouts they end in; the dashed boxes are
-the rule of <a href="#ch-literals-enc--rule">chapter 11</a> on whether the coded literals save enough.</figcaption>
+the rule of <a href="#ch-literals-enc--rule"><code>code_literals()</code></a> on whether the coded literals save enough.</figcaption>
 </figure>
 
 **Raw literals.** With the top bit clear, the `n` literals follow as they are, in page order, and
@@ -231,7 +231,7 @@ Every table is [complete](#ch-compression--complete). For the token table that i
 and {{tok.codes_of.11}} of 11 bits, {{tok.with_code}} codes, and in units of $\frac{1}{2048}$:
 ${{tok.codes_of.4}} \cdot 128 + {{tok.codes_of.5}} \cdot 64 + {{tok.codes_of.6}} \cdot 32 + {{tok.codes_of.7}} \cdot 16 + {{tok.codes_of.8}} \cdot 8 + {{tok.codes_of.9}} \cdot 4 + {{tok.codes_of.10}} \cdot 2 + {{tok.codes_of.11}} = 2048$.
 So `seqlz_decode()` can look up 11 bits in a table of 2048 entries without checking the entry; the
-table is built in [chapter 8](#ch-codes).
+table is built by [`seqlz_codes.c`](#ch-codes).
 @assert tok.codes_of[4] * 128 + tok.codes_of[5] * 64 + tok.codes_of[6] * 32 + tok.codes_of[7] * 16 + tok.codes_of[8] * 8 + tok.codes_of[9] * 4 + tok.codes_of[10] * 2 + tok.codes_of[11] == 2048 and tok.with_code == tok.codes_of[4] + tok.codes_of[5] + tok.codes_of[6] + tok.codes_of[7] + tok.codes_of[8] + tok.codes_of[9] + tok.codes_of[10] + tok.codes_of[11]
 
 ## The bitstream {#ch-format--bitstream}
@@ -328,8 +328,8 @@ shortest codes in the real 4 KiB table, with the escape among them:
 Token 49 is the sequence of an array of 8-byte pointers that differ from the one 8 bytes back only in
 their lowest byte: 1 literal and 7 bytes from 8 back, the same offset as before, in {{tok.len.49}}
 bits. Where the lowest byte carries into the next one, the sequence is 2 literals and 6 bytes, token
-34, at {{tok.len.34}} bits. Of the {{ch04.ptr.tokens}} tokens of [chapter 9](#ch-matcher)'s page of
-512 pointers, {{ch04.ptr.t49}} are token 49 and {{ch04.ptr.t34}} token 34.
+34, at {{tok.len.34}} bits. Of the {{ch04.ptr.tokens}} tokens of [the matcher's page of
+512 pointers](#ch-matcher--back), {{ch04.ptr.t49}} are token 49 and {{ch04.ptr.t34}} token 34.
 @assert ch04.ptr.t49 + ch04.ptr.t34 + 1 == ch04.ptr.tokens
 
 **The escape.** Codes of at most 11 bits have room for 2048 symbols, fewer than the 3072 tokens, so
@@ -372,7 +372,7 @@ written so far; class 1 with the bit `0` gives offset 0, and that page is invali
 The format does not care which class a compressor uses, as long as the offset comes out: class 3 can
 send offset 5, class 2 can send 2 and 8. `seqlz_compress()` uses class 0 for the offset before, else
 the class with the fewest offset bits that holds it, chosen in `seqlz_off_class()` without a branch
-([chapter 6](#ch-header--offsets)):
+([how](#ch-header--off-class)):
 
 | offset | offset before | class | offset bits |
 | --- | --- | --- | --- |
@@ -464,7 +464,7 @@ first match's offset is at most that sequence's `ll`.
 
 The {{ab.len}} bytes `{{ab.hex}}` are a 4 KiB page of `ab` 2048 times. `seqlz-1` and
 `seqlz-2` both write exactly these bytes: 2 literals are far from saving the {{ch01.LIT_CODED_MIN}} bytes
-that coding them needs ([chapter 11](#ch-literals-enc)).
+that coding them needs ([the rule](#ch-literals-enc--rule)).
 
 - `{{ch04.ab.hdr}}`: `h = {{ab.lits}}`, raw literals.
 - `{{ch04.ab.lithex}}`: the {{ab.lits}} literals, `a` and `b`.
@@ -503,7 +503,7 @@ python3 -c "import hashlib; print(hashlib.sha256(b'ab' * 2048).hexdigest())"
 
 Flip any bit of the {{ab.len}} bytes and run it again: most flips make the page invalid. The same
 bytes go through the real `seqlz_decode()` one statement at a time in
-[chapter 14](#ch-decode--example).
+[the decoder's step-through](#ch-decode--example).
 :::
 
 ## A second page: {{second.seqs}} sequences and {{second.b.pad}} bits of padding {#ch-format--example2}
@@ -547,7 +547,7 @@ bytes 25 to 4095: z, 4071 times
 @assert second.seqs == 4 and second.escapes == 0 and ch04.second.s[0].cls == 0 and ch04.second.s[1].cls == 4 and ch04.second.s[2].cls == 2 and ch04.second.s[0].mlf < 31 and ch04.second.s[1].mlf < 31 and ch04.second.s[2].mlf == 31 and ch04.second.s[2].llf < 15
 
 - **The first match uses the repeat offset.** `last` starts at 1, and `llll` is 4 bytes from 1 back,
-  in 0 offset bits; the matcher finds it with that same candidate ([chapter 9](#ch-matcher)).
+  in 0 offset bits; the matcher finds it with that same candidate ([the matcher](#ch-matcher--state)).
 - **Token 12 has an {{tok.len.12}}-bit code.** 12 literals and a match of exactly 4 bytes at the
   repeat offset is rare on real pages, so its code is long; escaped it would have taken
   {{ch04.esc_bits}} bits.
@@ -666,7 +666,7 @@ Widths of 3 and 4 bits are left out: few pages would use them.
 
 Why the literals are in 8 streams is a question of the decoder's speed
 ([chains of dependent steps](#ch-cpu--chains)). How the encoder picks the table, and when it codes the
-literals at all, is in [chapter 11](#ch-literals-enc).
+literals at all, is in [`code_literals()`](#ch-literals-enc).
 
 ## A page's own literal table, in byte order {#ch-format--own}
 
@@ -712,7 +712,7 @@ the number's first bit, and as many bits follow as it counted zeros. A run of 5 
 `00101`, and a run of 32 is `00000100000`, 11 bits. The
 [Exp-Golomb code](https://en.wikipedia.org/wiki/Exponential-Golomb_coding) of order 0 is the same code
 for numbers that start at 0: it writes `n` as Elias gamma writes `n + 1`, so a run as `run - 1`
-gives the same bits. [Chapter 17](#ch-decisions--level3) has its other orders.
+gives the same bits. [Chapter 6](#ch-decisions--level3) has its other orders.
 
 `OWN` does not write the zeros: the width is one of its symbols, in the same prefix code as the
 lengths. This does two things. One symbol says that a run comes and how wide it is; with Elias gamma
@@ -805,8 +805,8 @@ A page is invalid if the sum goes above 1, if a byte value above 255 would get a
 the last symbol in its byte is not 0, or if $3 + w + e + d$ is beyond `len`. `seqlz_decode()` reads zeros
 past the end of the page, and a code of zeros, `{{own.code.8}}`, is a length, so a table that never
 fills the code space still ends there, and the last of those checks rejects it. How the encoder chooses the lengths and which pages get a
-table is in [chapter 11](#ch-literals-enc--own); how the decoder builds a decode table from them
-without any memory of its own, in [chapter 13](#ch-literals-dec--own).
+table is in [`code_literals()`](#ch-literals-enc--own); how the decoder builds a decode table from them
+without any memory of its own, in [`read_own_table()`](#ch-literals-dec--own).
 
 ## Literals as deltas {#ch-format--deltas}
 
@@ -837,9 +837,9 @@ few small values, which a literal table codes in fewer bits
 ([`docs/format.md`](https://github.com/martinus/seqlz/blob/main/docs/format.md#literals-as-deltas)).
 A delta, not a XOR: a field that grows by 1 from `0x0f` to `0x10` has a delta of 1, but `0x0f` XOR
 `0x10` is `0x1f`, every bit the carry flipped. The first form of `e`, on 21st October 2026, XORed the
-literals; the subtraction replaced it the same day, before it was merged ([chapter 17](#ch-decisions--deltas)).
+literals; the subtraction replaced it the same day, before it was merged ([chapter 6](#ch-decisions--deltas)).
 
-The page of 512 pointers of [chapter 9](#ch-matcher--back) at level 3 begins with
+[The page of 512 pointers](#ch-matcher--back) at level 3 begins with
 `{{delta.ptr.l3.head}}`: `h` says {{delta.ptr.l3.n}} coded literals, `t = {{delta.ptr.l3.t}}` is code
 {{delta.ptr.l3.code}} with `w = {{delta.ptr.l3.w}}` and `e = 1`, byte {{delta.ptr.l3.dt_at}} is
 `dt = {{delta.ptr.l3.dt}}`, so `x = 8`, and 5 bytes of sizes follow. Its first literals,
@@ -873,7 +873,7 @@ A page is valid for a page size and its tables if all of these hold:
 
 A header with more literals than the sequences use breaks rule 10 or 12: the end is never reached,
 and the next token's `ll` or match does not fit. `seqlz_decode()` checks every rule, in its own order
-and often in a cheaper form ([chapter 14](#ch-decode)), and the fuzz target `fuzz/seqlz_diff_fuzz.c`
+and often in a cheaper form ([`decode_block()`](#ch-decode)), and the fuzz target `fuzz/seqlz_diff_fuzz.c`
 fails if it and `tools/seqlz-ref/seqlz_ref.c` disagree on whether any input is valid or on what it
 decodes to.
 
@@ -967,6 +967,6 @@ The one of level 3, from 15th October 2026, is built only where the page's liter
 enough, and on the Mi 9T's Cortex-A76 it got zram's pages to the size of `zstd` 3's in less than half
 its time to write a page
 ([explored-designs.md](https://github.com/martinus/seqlz/blob/main/docs/explored-designs.md#level-3-a-lazy-matcher-and-a-literal-table-of-the-pages-own-zstd-3s-memory-in-less-than-half-its-time-on-the-phone-kept)),
-[chapter 17](#ch-decisions--level3) has the numbers.
-How the code lengths become the encoder's codes and the decoder's tables at run time is
-[chapter 8](#ch-codes).
+[chapter 6](#ch-decisions--level3) has the numbers.
+[`seqlz_codes.c`](#ch-codes) turns the code lengths into the encoder's codes and the decoder's
+tables when seqlz is built.

@@ -10,9 +10,9 @@ The page is made up, since real pages from a zram dump hold keys and passwords. 
 like one: a small header, an array of records with a pointer, a few small integers and a name each, a
 stretch of English text, and zeros to the end. It compresses to {{ch16.coded.len}} bytes,
 {{ch16.coded.pct}}% of the page, and with raw literals to {{ch16.raw.len}}. Four figures of the book show
-it sequence by sequence: the matcher finding it ([chapter 9](#stepper-match)), the encoder writing it
-([chapter 10](#anim-ends)), the cache line of each token's lookup ([chapter 3](#anim-lines)) and the
-decoder reading it ([chapter 14](#stepper-decode)). A row of links under each one's sentence jumps the
+it sequence by sequence: the matcher finding it ([`seqlz_match.h`](#stepper-match)), the encoder writing it
+([`seqlz_compress.c`](#f-seqlz_compress-c-b43)), the cache line of each token's lookup ([chapter 3](#anim-lines)) and the
+decoder reading it ([`seqlz_decompress.c`](#stepper-decode)). A row of links under each one's sentence jumps the
 others to the same sequence.
 
 ## The page {#ch-trace--page}
@@ -61,7 +61,7 @@ passes the rule for coded literals.
 
 The program calls nothing to get the tables: `seqlz_tables`, {{size.tables|grp}} bytes of codes and
 decode tables, is compiled in, generated from the code lengths when seqlz was built
-([chapter 8](#ch-codes--kernel)). Some we meet below:
+([at build time](#ch-codes--kernel)). Some we meet below:
 the escape has the {{tok.len.3072}}-bit code `{{tok.code.3072}}`, and only {{ch14.tokens_coded}} of the
 {{const.TOKEN_SYMBOLS}} tokens have a code of their own. Literal table 0, the one for text, gives `e`
 {{lit.0.len.101}} bits, the space {{lit.0.len.32}}, `0x00` {{lit.0.len.0}}; the encoder will pick table 3
@@ -73,8 +73,7 @@ for this page, which gives `0x00` {{lit.3.len.0}} bits.
 The backend calls `seqlz_compress(st, page, dst, 8192, 2)`: the per-CPU state of {{size.state}}
 bytes, an output buffer of 2 pages, and level 2, the default. `compress_block()` checks that `dst_cap` is at
 least {{ch16.enc_min}} bytes, sets up the encoder with the bitstream growing down from `dst + 8192` and
-the literals up from `dst + 2` ([chapter 10](#ch-encoder--layout)), and runs `seqlz_match_block()`
-([chapter 9](#ch-matcher)) with `encode_emit()` as its callback. The matcher clears its
+the literals up from `dst + 2` ([both ends](#ch-encoder--layout)), and runs [`seqlz_match_block()`](#ch-matcher) with `encode_emit()` as its callback. The matcher clears its
 {{ch16.hash_entries}} entries of hash table and starts at position 1.
 
 Up to position 13 nothing matches: neither the repeat offset 1 nor the hash table's candidate, at first
@@ -86,7 +85,7 @@ zeros, and the zeros reach byte {{ch16.e0.zeros_to}}. The first sequence is {{ch
 
 ## encode_emit(): the first sequence in bits {#ch-trace--emit}
 
-`encode_emit()` ([chapter 10](#ch-encoder--emit)) copies the 14 literals with one 16-byte copy. `off`
+`encode_emit()` ([`encode_seq()`](#ch-encoder--emit)) copies the 14 literals with one 16-byte copy. `off`
 is the repeat offset, so class 0, without offset bits. The token, `14 + 16 * min(46, 31) + 512 * 0`, is
 {{ch16.s.0.tok}}, which has no code, so it goes as the escape and 12 bits, `{{ch16.e0.word}}`,
 {{ch16.e0.word_bits}} bits in one `enc_put()`. `ml - 4 = {{ch16.e0.ml4}}` is at least 31, so a length
@@ -177,7 +176,7 @@ matcher emits {{ch16.s.98.ml}} bytes at offset {{ch16.s.98.off}} and then {{ch16
 
 The literals fill `dst + 2` to `dst + {{ch16.raw.lit_end}}`, the bitstream the last {{ch16.bytes}}
 bytes of the buffer, {{ch16.bits}} bits, so {{ch16.pad_bits}} bits are left in the last flush, already
-written on top of the byte below `p`. `encoder_finish()` ([chapter 10](#ch-encoder--finish)) writes the
+written on top of the byte below `p`. [`encoder_finish()`](#ch-encoder--finish) writes the
 count, `{{ch16.raw.u16}}`, and moves the bitstream to right after the literals, turned around in
 {{ch16.raw.copies}} copies of 8 bytes and {{ch16.raw.singles}} single bytes; the gap of
 {{ch16.raw.gap}} bytes is far more than the bitstream, so they cannot overlap. That is
@@ -186,7 +185,7 @@ $2 + {{ch16.lits}} + {{ch16.bytes}} = {{ch16.raw.len}}$ bytes, the page as `seql
 
 ## seqlz_code_literals(): {{ch16.coded.saved}} bytes less {#ch-trace--literals}
 
-`seqlz_code_literals()` ([chapter 11](#ch-literals-enc)) prices the {{ch16.lits}} literals in all 8 tables,
+`seqlz_code_literals()` ([`code_literals()`](#ch-literals-enc)) prices the {{ch16.lits}} literals in all 8 tables,
 in chunks of {{ch16.lt.chunk}}. The trace program recomputes it one literal at a time:
 
 @output ch16-trace 27-35
@@ -286,8 +285,8 @@ one, {{ch16.zs.lower}}.
 ## Level 3: {{ch16.l3.len}} bytes, without a table of its own {#ch-trace--level3}
 
 At level 3, `seqlz-3`, `seqlz_compress()` takes `compress_own()` instead of `compress_block()`: the
-matcher with its lazy step and the step back ([chapter 9](#ch-matcher--lazy)), and a record in front of
-each sequence's literals for the deltas ([chapter 10](#ch-encoder--records)). On this page it finds
+matcher with its lazy step and the step back ([level 3](#ch-matcher--lazy)), and a record in front of
+each sequence's literals for the deltas ([the records](#ch-encoder--records)). On this page it finds
 {{ch16.l3.seqs}} sequences instead of {{ch16.l2.seqs}}, with {{ch16.l3.lits}} literals instead of
 {{ch16.lits}}; with raw literals that would be {{ch16.l3.raw_len}} bytes instead of {{ch16.raw.len}}.
 
@@ -301,7 +300,7 @@ many pages. But the page has to carry it: its description takes {{ch16.l3.own_de
 the header the literals would take {{ch16.l3.own_total}} bytes, {{ch16.l3.own_more}} more than with
 table {{ch16.l3.set}}, where they would have to fit in {{ch16.l3.own_needs}}, {{own.enc.saves_min}}
 bytes less. `own_code()` does not even build that table: its estimate from the counts already says it
-cannot save enough ([chapter 11](#ch-literals-enc--own)). The numbers here come from building it
+cannot save enough ([the estimate](#ch-literals-enc--entropy)). The numbers here come from building it
 anyway. {{ch16.l3.lits}} literals are not many more than the {{own.enc.min_lits}} below which level 3
 does not try a table of its own: the fewer the literals, the more the description weighs.
 
@@ -316,17 +315,17 @@ So level 3 stores the page in {{ch16.l3.len}} bytes, {{ch16.l3.saved}} fewer tha
 @assert ch16.l3.set == ch16.lt.set and ch16.l3.len < ch16.coded.len and ch16.l3.own_more > 0
 
 Where the literals have an order of their own, level 3's other two tools pay as well: the page of
-counters of [chapter 13](#anim-undelta) is {{counter.coded.len}} bytes at level 2 and
+counters of [the deltas' animation](#anim-undelta) is {{counter.coded.len}} bytes at level 2 and
 {{counter.l3.len}} at level 3, with a table of its own and its literals as deltas.
 @assert counter.l3.own == 1 and counter.l3.delta == 1
 
 ## seqlz_decode(): the literals first {#ch-trace--decode}
 
 The backend calls `seqlz_decode(src, {{ch16.coded.len}}, dst, scratch)` with the per-CPU scratch of
-{{const.SCRATCH}} bytes ([chapter 14](#ch-decode)). Bit 7 of byte 2 is 0, so it runs the copy of
+{{const.SCRATCH}} bytes ([`decode_block()`](#ch-decode)). Bit 7 of byte 2 is 0, so it runs the copy of
 `decode_block()` without deltas. That prefetches the token and length tables, finds the
-top bit of `{{ch16.coded.u16}}` set and `n_lit = {{ch16.lits}}`, and `seqlz_decode_literals()`
-([chapter 13](#ch-literals-dec)) reads table {{ch16.lt.set}} and width {{ch16.lt.width}} from byte 2,
+top bit of `{{ch16.coded.u16}}` set and `n_lit = {{ch16.lits}}`, and [`seqlz_decode_literals()`](#ch-literals-dec)
+reads table {{ch16.lt.set}} and width {{ch16.lt.width}} from byte 2,
 prefetches the literal table, and reads the sizes, {{ch16.lt.sizes_sp}}. {{ch16.lits}} literals are
 {{ch16.d.rounds}} full rounds of 40 and a rest of {{ch16.d.rest}}: {{ch16.d.steps}} steps of all 8 streams
 and one in which streams 0 to {{ch16.d.r_last}} take their literal, while streams
@@ -371,7 +370,7 @@ the loop leaves without a token. The bit reader has read every byte, and the {{c
 the zero padding of the last byte ([chapter 4](#ch-format--validity)). `seqlz_decode()` returns 0, and
 `dst` holds the page we started with. Without the scratch the same bytes are `-EINVAL`, which is why
 `seqlz-2` has a decompression context and `seqlz-1` does not
-([chapter 15](#ch-zram-glue--fast-lit)).
+([the scratch](#ch-zram-glue--fast-lit)).
 @assert ch16.pad == 3 and ch16.pad_bits == 5
 
 ## The program {#ch-trace--program}

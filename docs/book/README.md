@@ -22,7 +22,7 @@ python3 docs/book/lint.py            # dashes, banned words, measurements withou
   `facts=<prefix>,...` after the name adds the facts under those prefixes, the same values the text
   quotes. `shot.py <name> --steps 0,5,last [--narrow] [--dark]` takes screenshots of the built
   animation with headless Chrome and fails if a step scrolls sideways.
-  `@stepper decode` and `@stepper match` are the step-throughs of chapters 14 and 9:
+  `@stepper decode` and `@stepper match` are the step-throughs in the notes of `seqlz_decompress.c` and `seqlz_match.h`:
   `stepper/instrument.py` puts a hook in front of the statements of a copy of `seqlz_decode()` or
   `seqlz_match_block()`, on the same line, `stepper/trace.c` and `trace_match.c` run the copy on the
   pages, and `stepper.js` and `match.js` play the trace. Both need a C compiler.
@@ -51,8 +51,6 @@ python3 docs/book/lint.py            # dashes, banned words, measurements withou
 - To bring the book up to newer code: `remap.py [<commit>]` (default `HEAD`) prints how the listings
   and the line numbers in the prose move from the book's commit to that one; `--write` applies them and
   sets `"src"` to it. Then read the prose next to each listing marked CHANGED, and `build.py --check`.
-- `"map"` in `book.json` is the path of a page through Part II, rows of chapter ids: `build.py` draws it
-  at the top of each chapter it names, that chapter marked, linked to the map chapter `#map`.
 - `STYLE.md` is the brief the chapters were written to, `REVIEW.md` the one they were checked with.
 - Part II is the code itself: `annotate.py` makes a chapter of each file of `src/` with notes,
   `annotated/<file>.md`: the file at the book's commit, a short note next to each block, and under a

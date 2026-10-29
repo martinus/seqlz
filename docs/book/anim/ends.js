@@ -361,7 +361,7 @@ BookAnim.define('ends', function (ctx) {
     steps: steps, draw: draw, interval: 700, wide: 760,
     // step k shows dst after sequence k
     link: {
-      label: 'written into dst (chapter 10)',
+      label: 'written into dst (seqlz_compress.c)',
       seqAt: function (k) { return k >= 1 && k <= nSeq() ? k - 1 : null; },
       stepOf: function (seq) { return Math.min(seq + 1, nSeq()); }
     }

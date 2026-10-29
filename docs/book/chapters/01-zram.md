@@ -198,7 +198,7 @@ Three things follow, and the book comes back to each:
 
 - **A few bytes per page are cheap.** A format can afford a byte of header, a flag per page, a field
   that makes the decoder faster. Coding the literals pays only if it saves $\frac{1}{16}$ of them and
-  {{ch01.LIT_CODED_MIN}} bytes more ([chapter 11](#ch-literals-enc)).
+  {{ch01.LIT_CODED_MIN}} bytes more ([the rule](#ch-literals-enc--rule)).
 - **The cliff is the largest step.** A page moved from 3625 to 3600 bytes saves 455 bytes, 18 times
   the 25 bytes of compression it took. And the decoder only ever sees pages below 3625 bytes.
 - **The measure of size is not the mean ratio.** The project counts the **stored size**, the sum of
@@ -240,7 +240,7 @@ struct zcomp_ops {
   tables (`seqlz-2`, the default), 3 also searches a little longer for matches, may give a page a
   literal table of its own and stores the literals as deltas to earlier bytes of the page where that pays
   (`seqlz-3`). Its tables are fixed and part of the format, so the kernel
-  backend refuses a dictionary with `-EOPNOTSUPP` ([chapter 15](#ch-zram-glue)).
+  backend refuses a dictionary with `-EOPNOTSUPP` ([the backend's setup](#ch-zram-glue--backend-params)).
 - `create_ctx()` runs once per CPU and allocates the codec's work memory, `void *context`, never
   while a page is compressed.
 - `compress()` gets the page in `src`, always `PAGE_SIZE` bytes, and the stream's buffer of
@@ -255,8 +255,7 @@ writing and one for reading, with `create_cctx()` and an optional `create_dctx()
 kernel backend is written for both forms
 ([`docs/plan.md` §3.3](https://github.com/martinus/seqlz/blob/main/docs/plan.md#33-per-cpu-workspace-is-real-memory-on-a-phone)).
 
-The benchmarks call seqlz through a copy of this interface in C, `src/zram_seqlz.c`
-([chapter 15](#ch-zram-glue)). Its decompress function is the whole contract:
+The benchmarks call seqlz through a copy of this interface in C, [`src/zram_seqlz.c`](#ch-zram-glue). Its decompress function is the whole contract:
 
 @listing src/zram_seqlz.c 114-124
 
@@ -303,7 +302,7 @@ exactly {{ch01.union_kib}} KiB. With the split streams they are two allocations,
 KiB. The tables, {{size.tables|grp}} bytes, are not per CPU: they are generated when the kernel is
 built, and are part of its read-only data.
 @assert ch01.union == 1024 * ch01.union_kib and ch01.cctx_kib == ch01.dctx_kib and ch01.split_kib < 20
-[Chapter 6](#ch-header) and [chapter 15](#ch-zram-glue) have the details, and why 16 KiB pages need
+[`struct seqlz_state`](#ch-header--state) and [the backend](#ch-zram-glue--backend) have the details, and why 16 KiB pages need
 twice `lz4`'s work memory.
 
 ## The decoder must survive any input {#ch-zram--safety}
@@ -323,8 +322,8 @@ Eric Biggers's words: *"You cannot just ignore fuzz-safety in the decompressor e
 ([`docs/plan.md` §2.2](https://github.com/martinus/seqlz/blob/main/docs/plan.md#22-the-failure-zbewalgo-benjamin-warnke-2018-reached-v7-never-merged)).
 seqlz's decoder checks every length and offset against the room left before it uses them, stops
 after at most `PAGE / 4 + 1` sequences, and requires that a page ends exactly where its bits end
-([chapter 14](#ch-decode)). Fuzzers, programs that feed a function random and damaged inputs and
-report every crash and every access out of bounds ([chapter 15](#ch-zram-glue--fuzzing)), fed it
+([the end checks](#ch-decode--end)). Fuzzers, programs that feed a function random and damaged inputs and
+report every crash and every access out of bounds ([the fuzzers](#ch-zram-glue--fuzzing)), fed it
 billions of pages. On the Mi 9T's small core, a Cortex-A55, the slowest page the project built to
 be slow decodes in 1.33 times the p99 time of real pages; for `lz4` the same is 1.57
 ([explored-designs.md, "The worst case"](https://github.com/martinus/seqlz/blob/main/docs/explored-designs.md#the-worst-case-the-slowest-pages-found-cost-13-times-the-p99-of-real-ones-as-for-lz4)).
@@ -341,20 +340,20 @@ be slow decodes in 1.33 times the p99 time of real pages; for `lz4` the same is 
   frame above `CONFIG_FRAME_WARN`, 2048 bytes on 64-bit and 1280 on most 32-bit builds in the kernel
   of September 2026, 1024 in older ones. Every frame of seqlz's kernel copy stays below 1024; the
   deepest, `seqlz_decode_literals()` and `seqlz_code_own()`, are 640 and 600 bytes with gcc for x86-64
-  ([chapter 15](#ch-zram-glue--check)).
+  ([`check.sh`](#ch-zram-glue--check)).
 - **No sleeping in compress and decompress.** zram called the codec with preemption disabled, older
   kernels such as the phone's 4.14 still do, and a fix proposed in August 2026 would bring that back
   for backends like seqlz. So no allocation, no lock, no page fault in the codec
   ([`docs/plan.md` §3.2](https://github.com/martinus/seqlz/blob/main/docs/plan.md#32-decompression-is-a-tail-latency-problem-not-a-throughput-problem)).
 - **Every architecture.** The same source runs on little-endian x86-64 and arm64, on big-endian s390
   and on 32-bit arm, and CI checks that x86-64, 32-bit x86 and s390x write the same compressed bytes
-  for the same pages ([chapter 5](#ch-compat--endian)).
+  for the same pages ([how](#ch-compat--endian)).
 - **No inline assembly, nothing that depends on the CPU model.** A maintainer of `lib/` reads one C
   source for all machines. A gap in the kernel is fixed in the kernel, with a patch of its own;
-  [chapter 5](#ch-compat--prefetch) shows the one seqlz needs.
+  [the x86-64 `prefetch()`](#ch-compat--prefetch) is the one seqlz needs.
 
-`src/seqlz_compat.h` supplies the kernel's names outside the kernel, so that the benchmarks, the tests
-and the fuzzers build the same code ([chapter 5](#ch-compat)).
+[`src/seqlz_compat.h`](#ch-compat) supplies the kernel's names outside the kernel, so that the
+benchmarks, the tests and the fuzzers build the same code.
 
 ## The score: bytes against time {#ch-zram--score}
 
@@ -443,7 +442,7 @@ from 22 to 131 bytes per µs, and `seqlz-3` below 22. `zstd` 3 is not on it any 
 3.8% less in 72% of its time per page written. `lzo-rle` is not on it either, its swap-ins are slower
 than `lz4`'s
 ([explored-designs.md, "One rule for which literals are deltas"](https://github.com/martinus/seqlz/blob/main/docs/explored-designs.md#one-rule-for-which-literals-are-deltas-045-fewer-bytes-a-simpler-spec-kept)).
-[Chapter 17](#ch-decisions--score) has the chart.
+[Chapter 6](#ch-decisions--score) has the chart.
 
 ## The codecs zram has, and where seqlz sits {#ch-zram--codecs}
 
@@ -510,7 +509,7 @@ cost in time, not a faster read.
 
 **No recompression.** zram can compress idle pages a second time with a slower algorithm. The project
 measured that with `zstd` 3 and with an optimal parser for seqlz's format, and did not pursue it
-([chapter 17](#ch-decisions--not-kept)). Every design in this book compresses a page once.
+([chapter 6](#ch-decisions--not-kept)). Every design in this book compresses a page once.
 
 $r = 0.73$ is one phone's, in one week of one person's use. Its swap-ins come in bursts: in 15 minutes
 of use on 16th October 2026, 92% of the pages came in bursts of 1024 pages and more, and 114 of 366 241

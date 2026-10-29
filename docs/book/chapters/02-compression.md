@@ -128,8 +128,8 @@ seqlz's table has {{ch02.HASH_SLOTS}} slots of 2 bytes, 8 KiB, all of its work m
 compression, and it is cleared for every page. Its hash covers the next **5 bytes**, not 4, which
 finds fewer and longer matches; a match of exactly 4 bytes is still found at the repeat offset, which
 needs no table. E.g. `,dog=` goes to slot {{ch02.hash.dog}} at position 5 and again at position 17,
-which is how the match of sequence 2 is found. [Chapter 9](#ch-matcher--hash) has the hash and the
-measurements behind 5 bytes.
+which is how the match of sequence 2 is found. [`seqlz_hash5()`](#ch-matcher--hash) has the hash and the
+[measurements behind 5 bytes](#ch-matcher--five-bytes).
 @assert size.state == 2 * ch02.HASH_SLOTS == 8192 and ch02.hash.dog == ch02.hash.dog17
 
 ::: try The real matcher on the example
@@ -146,7 +146,7 @@ the other {{ch02.cat.2.ml}} zeros with one match at offset 1. That match ends at
 and the matcher still passes a last sequence with no literals and no match, for which the format
 writes no bits.
 @assert ch02.cat.n == 4 and ch02.cat[2].ll == 3 and ch02.cat[2].off == 1 and ch02.cat[3].ll == 0
-[Chapter 9](#ch-matcher--back) has a program that prints every sequence the matcher finds; give it
+[The page of pointers](#ch-matcher--back) has a program that prints every sequence the matcher finds; give it
 this page, and others.
 :::
 
@@ -157,7 +157,7 @@ chain, picked the match that saves the most bits by the tables and looked one po
 pages 3.3% smaller for about twice the time to write; it was not kept, nor a deeper one
 ([`docs/plan.md` §1.1](https://github.com/martinus/seqlz/blob/main/docs/plan.md#11-the-score-memory-against-time-not-bars)).
 seqlz's level 3 of today looks one position ahead only for a match shorter than 20 bytes
-([chapter 9](#ch-matcher--lazy)).
+([the lazy step](#ch-matcher--lazy)).
 
 ## Fixed-width numbers waste bits {#ch-compression--entropy}
 
@@ -185,7 +185,7 @@ the least number of bits per value any code can reach on average, here {{ch02.cl
 Class 0, at {{ch02.cls.0.share}}%, carries {{ch02.cls.0.info}} bits; class 1, at
 {{ch02.cls.1.share}}%, carries {{ch02.cls.1.info}}. A good code gives class 0 fewer than 3 bits and
 class 1 more. (On a desktop's zram pages of September 2026, 18% to 25% of the matches use the repeat
-offset, see [chapter 9](#ch-matcher--plan).)
+offset, see [two candidates](#ch-matcher--plan).)
 @assert ch02.cls[0].info < "3" < ch02.cls[1].info
 
 ## Prefix codes {#ch-compression--prefix-codes}
@@ -231,7 +231,7 @@ seqlz does not give the offset class a code of its own: it puts the class into o
 with `ll` and `ml`, the **token**, which has {{const.TOKEN_SYMBOLS}} values, and the same method
 builds its code. A Huffman code for that many symbols, some very rare, can have codes of 20 bits and
 more, and a decoder that decodes with a table, as below, needs $2^L$ entries for a longest code of
-$L$ bits. So the trainer that builds seqlz's tables ([chapter 8](#ch-codes--lengths)) limits the code
+$L$ bits. So the trainer that builds seqlz's tables ([the generator](#ch-codes--training-counts-then-lengths)) limits the code
 lengths, {{ch02.TOKEN_BITS}} bits for tokens, {{ch02.LIT_BITS}} for literals, {{ch02.MAX_BITS}} for
 [length values](#ch-format--length-values), at a small cost in bits, and gives the rarest tokens no
 code at all: they share one code, the **escape**, followed by the token in {{ch02.ESCAPE_BITS}} plain
@@ -263,7 +263,7 @@ where the length before ended, shifted one bit to the left. For the offset class
 | codes of 3 bits | class 1: 4 = `100`, class 2: 5 = `101`, class 3: 6 = `110`, class 5: 7 = `111` |
 
 The encoder and every decoder get the same codes from 6 bytes of lengths. In `src/` this is
-`first_codes()` in `src/seqlz_codes.c` ([chapter 8](#ch-codes--first-codes)).
+[`first_codes()`](#ch-codes--first-codes) in `src/seqlz_codes.c`.
 
 ## Complete codes: every bit pattern starts a code {#ch-compression--complete}
 
@@ -274,14 +274,14 @@ enough string of bits starts with exactly one code. With only A = `0` and B = `1
 $\frac{3}{4}$, and the bits `11` start no code, which a decoder has to check for. Huffman codes are
 always complete, because every node of the tree has two children. seqlz requires it of every table:
 `first_codes()` adds `2^(bits - l)` for each code, the number of decode table entries the code fills,
-and the sum must be exactly `2^bits` ([chapter 8](#ch-codes--first-codes)).
+and the sum must be exactly `2^bits` ([every way it can fail](#ch-codes--first-codes)).
 
 That buys a decoder without the check: any bits decode to some symbol, so there is no "invalid code"
 branch from one sequence to the next. When the project made all its codes complete, the decoder ran
 6% fewer instructions
 ([`docs/seqlz.md`](https://github.com/martinus/seqlz/blob/main/docs/seqlz.md#the-choices-with-their-numbers)).
 A damaged page then decodes to wrong symbols, not to an error, and the checks on lengths, offsets and
-the end of the page catch it ([chapter 14](#ch-decode)).
+the end of the page catch it ([`decode_block()`](#ch-decode)).
 
 ## Table-driven decoding {#ch-compression--table-decoding}
 
@@ -307,7 +307,7 @@ after it can be anything, so it fills $2^{3-l}$ entries in a row: class 0, code 
 The last peek may need bits past the end, e.g. when the last code is `00`; a decoder reads zeros
 there, or the format guarantees that bytes follow. For a token of code `c` with `l` bits, the entries
 from `c << (11 - l)` up to `(c + 1) << (11 - l)` are the 11-bit numbers whose top `l` bits are `c`
-([chapter 8](#ch-codes--build-token)). seqlz's token table has `SEQLZ_TOKEN_BITS` =
+([`build_token()`](#ch-codes--build-token)). seqlz's token table has `SEQLZ_TOKEN_BITS` =
 {{ch02.TOKEN_BITS}}, {{ch02.tok_entries}} entries of {{ch02.tok_entry_bytes}} bytes,
 {{ch02.tok_table_kib}} KiB. Token 49, "1 literal, a match of 7 bytes, the repeat offset", the sequence
 of an array of 8-byte pointers that differ only in their lowest byte, has a code of {{tok.len.49}} bits
@@ -316,7 +316,7 @@ fills $2^{ {{ch02.TOKEN_BITS}}-{{tok.len.49}} } = {{ch02.tok49_entries}}$ entrie
 table. The longest codes, {{ch02.TOKEN_BITS}} bits, fill one entry each.
 @assert ch02.tok49 == 49 and 16 * ch02.tok49_entries == ch02.tok_entries and tok.codes_of[ch02.TOKEN_BITS] > 0
 A token's entry holds more than the symbol and the code length: the two lengths and what is needed to
-cut the offset bits out of the bits that follow ([chapter 7](#ch-internal)).
+cut the offset bits out of the bits that follow ([the token entry](#ch-internal--token-entry)).
 
 The table's size is the reason for the length limits above: it has to stay in the CPU's fastest
 cache, or every lookup waits for memory ([chapter 3](#ch-cpu--cache)).

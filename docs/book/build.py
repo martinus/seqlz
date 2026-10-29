@@ -213,7 +213,7 @@ def render_code_list():
         if g != group:
             out.append(("</ul>" if group else "") + f'<p class="codegroup">{html.escape(title)}</p><ul class="codelist">')
             group = g
-        intro, _ = annotate.parse_notes(NOTES[f])
+        intro, *_ = annotate.parse_notes(NOTES[f])
         first = re.split(r"(?<=\.)\s", re.sub(r"\[([^]]*)\]\([^)]*\)", r"\1", intro), maxsplit=1)[0]
         out.append(f'<li><a href="{notes_href(f)}"><code>{html.escape(pathlib.Path(f).name)}</code></a> '
                    f'{md(first)[3:-4]}</li>')
@@ -844,37 +844,6 @@ def chapter_labels():
     return labels
 
 
-def map_block(cid, labels):
-    """
-    The map of book.json under each chapter it names: one row per path of a page, each chapter on it a
-    link with its number, the chapter cid marked. "" if cid is on no row.
-    """
-    arrow = "\u2192"
-    rows = BOOK.get("map", {}).get("rows", [])
-    if not any(cid == n["id"] for r in rows for n in r["nodes"]):
-        return ""
-    out = [f'<nav class="onmap" aria-label="Where this chapter is"><div class="onmap-head">'
-           f'<a href="#{BOOK["map"]["chapter"]}">Where this chapter is in the code</a></div>']
-    for r in rows:
-        items = []
-        if r.get("from"):
-            items.append(f'<span class="onmap-data">{html.escape(r["from"])}</span><span class="onmap-sep">{arrow}</span>')
-        for k, n in enumerate(r["nodes"]):
-            if k:
-                items.append(f'<span class="onmap-sep">{html.escape(n.get("join", arrow))}</span>')
-            cur = ' class="cur" aria-current="location"' if n["id"] == cid else ""
-            # a node in the code of Part II has no chapter number
-            no = labels.get(n["id"])
-            items.append(f'<a href="#{n["id"]}"{cur}>' + (f'<span class="onmap-no">{no}</span> ' if no else "")
-                         + f'{html.escape(n["label"])}</a>')
-        if r.get("to"):
-            items.append(f'<span class="onmap-sep">{arrow}</span><span class="onmap-data">{html.escape(r["to"])}</span>')
-        out.append(f'<div class="onmap-row"><span class="onmap-what">{html.escape(r["what"])}</span>'
-                   f'<span class="onmap-path">{"".join(items)}</span></div>')
-    out.append("</nav>")
-    return "".join(out)
-
-
 def add_ids(body, cid):
     """an id for every h2, h3 and h4 without one: cid--<its slug>"""
     def one(hm):
@@ -995,7 +964,6 @@ def build():
             body = (body[:m.start()]
                     + f'<header class="chapterhead"><span class="chapno">{label}</span>'
                       f'<h1 id="{cid}">{title}</h1>{notes_html}</header>'
-                    + map_block(cid, labels)
                     + body[m.end():])
             body = add_ids(body, cid)
             collect_ids(body, ch["file"], ids)
@@ -1034,7 +1002,7 @@ def build():
         body = add_ids(body, annotate.file_id(src))
         collect_ids(body, where, ids)
         code_html.append(body)
-        _, secs = annotate.parse_notes(NOTES[src])
+        _, secs, _ = annotate.parse_notes(NOTES[src])
         file_sections[src] = [(annotate.section_id(annotate.file_id(src), s["title"]), s["title"]) for s in secs]
     allhtml, renumbered = chapter_numbers(chapters.replace(CODE_MARK, "\n".join(code_html)), labels)
     if renumbered:
@@ -1122,13 +1090,18 @@ MERMAID_SCRIPT = """<script>
     var t = document.documentElement.getAttribute('data-theme');
     return (t ? t === 'dark' : system.matches) ? 'dark' : 'neutral';
   }
-  function draw() {
-    charts.forEach(function (c, i) { c.removeAttribute('data-processed'); c.innerHTML = sources[i]; });
+  /* a chart in a closed panel is drawn when the panel opens: hidden with display: none, as in
+     Safari, it has no size, and mermaid draws it squeezed */
+  function draw(only) {
+    var nodes = charts.filter(function (c) { return !c.closest('.bpanel[hidden]') && (!only || only.contains(c)); });
+    if (!nodes.length) return;
+    nodes.forEach(function (c) { c.removeAttribute('data-processed'); c.innerHTML = sources[charts.indexOf(c)]; });
     mermaid.initialize({ startOnLoad: false, theme: theme() });
-    mermaid.run({ nodes: charts });
+    mermaid.run({ nodes: nodes });
   }
-  document.addEventListener('book-theme', draw);
-  system.addEventListener('change', draw);
+  document.addEventListener('book-theme', function () { draw(); });
+  document.addEventListener('book-panel', function (e) { draw(e.detail); });
+  system.addEventListener('change', function () { draw(); });
   draw();
 })();
 </script>
