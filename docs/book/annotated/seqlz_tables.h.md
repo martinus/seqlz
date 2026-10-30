@@ -26,7 +26,8 @@ fields are wide enough. A reading order:
 It includes only `linux/build_bug.h`, for its `static_assert()`s, and `seqlz_format.h`, so a program on
 the build machine can include it too: that program generates the tables as C when seqlz is built
 ([at build time](book:#ch-codes--kernel)). The guard, `_LIB_SEQLZ_SEQLZ_TABLES_H`, is named after the
-file's place in the kernel, `lib/seqlz/`, as every guard of `src/`.
+file's place in the kernel, `lib/seqlz/`, as the guards of every header that goes into `lib/seqlz/` as a
+file of its own.
 
 @@ 14-29
 The first paragraph is the trick of every table decoder here. In a table indexed by 8 bits, a 3-bit

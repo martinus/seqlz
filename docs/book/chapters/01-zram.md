@@ -313,7 +313,7 @@ reads past its input or writes past the page corrupts the kernel's memory.
 
 So the project's second hard limit, **C6**: the decompressor is safe for any input and bounded in
 time. Whatever bytes it gets, it reads only its input and its tables, writes only the output page and
-its scratch, and returns after a fixed amount of work at most, with an error for an invalid page. zram
+its work memory, `wrkmem`, and returns after a fixed amount of work at most, with an error for an invalid page. zram
 then fails the read; one page is lost, the kernel is not.
 
 The reason C6 is a hard limit is history. The last new codec proposed for zram, zBeWalgo in 2018,

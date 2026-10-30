@@ -44,6 +44,9 @@ frequent symbol gets a short code.
 Only the 640 most frequent of the 3072 tokens get a code; all others go through the escape. The
 SPDX line is in the kernel's order. The head comment names the command that wrote the file: in the
 kernel's copy it is `scripts/gen-seqlz-lengths.py lib/seqlz/seqlz_counts.txt`, without `--extern`.
+The include guard is the kernel's, for `lib/seqlz/seqlz_lengths.h`; the 16 KiB file has the same one,
+and `seqlz_lengths.c` includes only one of them. `seqlz_format.h` gives `struct seqlz_lengths`. The
+`gen_seqlz_tables` of the comment is the kernel's program; in `src/` it is `tools/gen-tables/`.
 @anim huffman Building a Huffman code from counts, by hand
 @more {#ch-codes--training-counts-then-lengths} From counts to lengths: what the generator does
 `tools/kernel-port/gen-seqlz-lengths.py --extern` makes this file from `bench/seqlz_counts_4k.txt`, how

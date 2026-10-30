@@ -904,6 +904,20 @@ def chapter_refs(page, labels):
     return re.sub(r"\{\{chapter:([\w-]+)\}\}", one, page)
 
 
+# files of src/ that are gone, and where their notes went: their old pages go there, without the line
+MOVED = {"seqlz_compat.h": "ch-linux", "seqlz_default_tables.c": "f-seqlz_lengths-c",
+         "seqlz_lit_sets.c": "f-seqlz_lengths-c", "seqlz_default_tables_4k.inc": "f-seqlz_lengths-h",
+         "seqlz_lit_sets_4k.inc": "f-seqlz_lengths-h", "seqlz_default_tables_16k.inc": "f-seqlz_lengths_16k-h",
+         "seqlz_lit_sets_16k.inc": "f-seqlz_lengths_16k-h"}
+
+
+def moved(target, book):
+    """the page an old link to the notes of a file that is gone lands on: where they went"""
+    return ('<!doctype html>\n<meta charset="utf-8">\n<title>seqlz, line by line</title>\n'
+            f'<script>location.replace("../{book}#{target}");</script>\n'
+            f'<p>This file is gone, its notes are in <a href="../{book}#{target}">the book</a> now.</p>\n')
+
+
 def redirect(fid, book):
     """the page an old link to annotated/<file>.html#L<n>, #b<n> or #s-<section> lands on: the same
     place in the book"""
@@ -1066,6 +1080,8 @@ def build():
         (d / "annotated").mkdir(parents=True, exist_ok=True)
         for src in order:
             (d / "annotated" / f"{annotate.link_name(src)}.html").write_text(redirect(annotate.file_id(src), book))
+        for name, target in MOVED.items():
+            (d / "annotated" / f"{name}.html").write_text(moved(target, book))
     if SITE:
         (SITE / "index.html").write_text(page)
         print(f"wrote the site in {SITE}")

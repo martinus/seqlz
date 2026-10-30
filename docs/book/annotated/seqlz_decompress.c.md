@@ -1195,5 +1195,5 @@ It is the kernel's `seqlz_decompress()` itself, declared in [`linux/seqlz.h`](li
 and the `static_assert()` below checks that the interface's `SEQLZ_MEM_DECOMPRESS` is that size. The
 export makes it callable from a module, zram's backend among them
 ([`EXPORT_SYMBOL_GPL`](book:#ch-zram-glue--api)); `MODULE_LICENSE()` and `MODULE_DESCRIPTION()` are the
-module's, once for both files. Outside the kernel [`linux/export.h`](book:#ch-linux) and `linux/module.h`
+module's, once for the whole module. Outside the kernel [`linux/export.h`](book:#ch-linux) and `linux/module.h`
 make them declarations that do nothing.

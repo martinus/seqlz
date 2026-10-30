@@ -105,7 +105,8 @@ reads from 5600 to 3891 ns in the kernel VM
 ([explored-designs.md](https://github.com/martinus/seqlz/blob/main/docs/explored-designs.md#zram-prefetch-the-compressed-data-before-decompression)).
 :::
 
-Two traps around prefetches are handled outside the codec, in a patch for the kernel and in the builds of `src/` outside it ([`prefetch()`](#ch-compat--prefetch), [`L1_CACHE_BYTES`](#ch-compat--cache-line)):
+Two traps around prefetches are handled outside the codec, in a patch for the kernel, in `src/linux/prefetch.h` for userspace, and in
+the phone module's `compat/` for 4.14 ([`prefetch()`](#ch-compat--prefetch), [`L1_CACHE_BYTES`](#ch-compat--cache-line)):
 clang drops `__builtin_prefetch()` without a word when x86-64 is built without SSE, as the kernel is,
 and the Mi 9T's 4.14 kernel says that arm64 cache lines are 128 bytes, while its cores have 64.
 

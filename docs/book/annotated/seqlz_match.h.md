@@ -2,8 +2,9 @@
 
 The LZ part of seqlz: the matcher walks through a page and at each position asks whether the next bytes
 appeared earlier in the same page. What it finds are sequences, `ll` literals and a match of `ml`
-bytes from `offset` bytes back ([the format](book:#ch-format)), and it hands each one to a function
-it is given, in the compressor the encoder of `seqlz_compress.c`. All of it is inline, so matcher and
+bytes from `offset` bytes back ([the format](book:#ch-format)), and it hands each one to
+`encode_seq()`, which the including file provides: in `seqlz_compress.c` the encoder of
+`seqlz_encoder.h`. All of it is inline, so matcher and
 encoder become one loop.
 
 This loop alone took about as long as all of `lz4` takes to compress a page, 17 300 to 17 900 cycles
@@ -17,7 +18,7 @@ A reading order that follows the call:
 2. [One position](#b174): two candidates, one branch. The step-through there runs the real function
    on two pages.
 3. [A hit](#b200): [`seqlz_match_len()`](#b27) counts the match, at level 3
-   [`seqlz_lazy()`](#b78) may take a longer one, then [emit and insert](#b218).
+   [`seqlz_lazy()`](#b78) may take a longer one, then [`encode_seq()` and insert](#b218).
 4. [`seqlz_hash5()`](#b16), the hash of the table.
 
 ## The hash
@@ -197,7 +198,8 @@ and the last position with the same hash), and every position, with no skipping 
 without a match. Skipping needed state the loop has no register for; without it writes got faster,
 pages that do not compress slower.
 
-`lazy` is a constant at every call, so levels 1 and 2 have no trace of level 3's code. Each
+`lazy` is a constant at both calls in `seqlz_compress.c`, so levels 1 and 2 have no trace of level 3's
+code. Each
 sequence goes to `encode_seq()` the moment it is found: in `seqlz_compress.c` the encoder of
 `seqlz_encoder.h`, `__always_inline`, so matching and encoding are one loop. Two passes were 6% slower,
 the encoder's branches lost the history of the matcher's that predicted them.
@@ -211,8 +213,9 @@ matcher took a callback, `emit_fn`, and a `void *`, constant at every call, so t
 compiler saw which function it was and inlined it too; `port.py` replaced it with the direct call for
 the kernel's copy, and `src/` has the kernel's form since.
 
-The `bool lazy` of level 3 is a constant at every call: `compress_block()` passes `false` and
-`compress_own()`, level 3's, `true`. So each inlined copy of the loop sees a constant, and the one for
+The `bool lazy` of level 3 is a constant at both calls of `seqlz_compress.c`: `compress_block()` passes
+`false` and `compress_own()`, level 3's, `true`; `seqlz_find()` passes it as a variable, where speed
+does not matter. So each inlined copy of the loop sees a constant, and the one for
 levels 1 and 2 has no code of level 3 at all ([`compress_block()`](seqlz_compress.c.html#b16)). `lazy`
 is also `encode_seq()`'s last argument, `rec`: the lazy copy is the one that writes the records for
 the deltas ([the records](#ch-encoder--records)).

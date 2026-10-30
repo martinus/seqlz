@@ -566,7 +566,8 @@ prefetch that had cost the A76 1.3 to 2.6 µs of cold reads did not show again o
 
 ### Prefetch: the compressed data and every table
 
-The backend prefetches the compressed data, the decoder its tables, {{ch17.tok_lines}} lines of token
+The harness's backend, and a zram patch in the kernel VM, prefetch the compressed data; the decoder
+prefetches its tables, {{ch17.tok_lines}} lines of token
 table, {{ch17.len_lines}} for each length table and {{ch17.lit_lines}} for the page's literal table,
 {{ch17.prefetch_lines}} per loop iteration ([why](#ch-dec-basics--prefetch)). Even the 32 lines of
 the length tables were worth 2.8 µs to the A55

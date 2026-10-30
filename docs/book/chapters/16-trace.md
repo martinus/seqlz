@@ -70,8 +70,8 @@ for this page, which gives `0x00` {{lit.3.len.0}} bits.
 
 ## seqlz_compress_block(), and the matcher's first sequence {#ch-trace--matcher}
 
-The backend calls `seqlz_compress_block(st, page, dst, 8192, 2)`: the per-CPU state of {{size.state}}
-bytes, an output buffer of 2 pages, and level 2, the default. `compress_block()` checks that `dst_cap` is at
+zram's backend calls `seqlz_compress(page, dst, 8192, wrkmem, 2)`, which checks the level and calls
+`seqlz_compress_block(wrkmem, page, dst, 8192, 2)`: the per-CPU state of {{size.state}} bytes, an output buffer of 2 pages, and level 2, the default. `compress_block()` checks that `dst_cap` is at
 least {{ch16.enc_min}} bytes, sets up the encoder with the bitstream growing down from `dst + 8192` and
 the literals up from `dst + 2` ([both ends](#ch-encoder--layout)), and runs [`seqlz_match_block()`](#ch-matcher), which calls `encode_seq()` for each sequence. The matcher clears its
 {{ch16.hash_entries}} entries of hash table and starts at position 1.
@@ -321,8 +321,8 @@ counters of [the deltas' animation](#anim-undelta) is {{counter.coded.len}} byte
 
 ## seqlz_decompress(): the literals first {#ch-trace--decode}
 
-The backend calls `seqlz_decompress(src, {{ch16.coded.len}}, dst, scratch)` with the per-CPU scratch of
-{{const.SCRATCH}} bytes ([`decode_block()`](#ch-decode)). Bit 7 of byte 2 is 0, so it runs the copy of
+zram's backend calls `seqlz_decompress(src, {{ch16.coded.len}}, dst, wrkmem)` with the per-CPU scratch of
+{{const.SCRATCH}} bytes as `wrkmem` ([`decode_block()`](#ch-decode)). Bit 7 of byte 2 is 0, so it runs the copy of
 `decode_block()` without deltas. That prefetches the token and length tables, finds the
 top bit of `{{ch16.coded.u16}}` set and `n_lit = {{ch16.lits}}`, and [`seqlz_decode_literals()`](#ch-literals-dec)
 reads table {{ch16.lt.set}} and width {{ch16.lt.width}} from byte 2,
@@ -399,7 +399,7 @@ every CPU, so the output is too:
 /* from dec_counted.c, seqlz_decompress.c with two counters */
 extern unsigned int n_fast, n_slow;
 int seqlz_decompress_counted(const void *src, unsigned int src_len, void *dst,
-			 void *scratch);
+			     void *wrkmem);
 
 /* n bytes of v, little endian */
 static void le(u8 *p, unsigned long long v, unsigned int n)
@@ -645,8 +645,9 @@ sed -e 's/^#include "seqlz_internal.h"$/&\nunsigned int n_fast, n_slow;\n#define
     -e 's/^\t\t\ttok = next_token_fast(/\t\t\tn_fast++;\n&/' \
     -e 's|^\t\t/\* the slow path: length values, and every check \*/$|&\n\t\tn_slow++;|' \
     $R/src/seqlz_decompress.c > dec_counted.c
+$R/tools/gen-tables/gen-tables.sh seqlz_tables.c
 gcc -O2 -Wall -Wextra -I$R/src -o trace trace.c dec_counted.c \
-    $R/src/seqlz_*.c
+    $R/src/seqlz_*.c seqlz_tables.c
 ./trace
 ```
 

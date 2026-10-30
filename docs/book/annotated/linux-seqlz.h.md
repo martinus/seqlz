@@ -4,7 +4,7 @@ The kernel's interface of seqlz, `include/linux/seqlz.h` in the kernel's copy: t
 sizes of their work memory, and the levels. zram's backend calls nothing else, and the kernel exports
 nothing else. It has the shape of `include/linux/lz4.h`: work memory sizes as constants, functions
 that take the work memory as a `void *`, and no tables. The tests and tools have more, in
-[`seqlz.h`](seqlz.h.html), which includes this one.
+[`seqlz.h`](seqlz.h.html), which gets this one through `seqlz_internal.h`.
 
 ## Blocks, bounds and work memory
 
@@ -39,7 +39,8 @@ Three levels, and the one zram uses when nothing is set: level 2, the fixed lite
 @@ 43-64
 @anchor ch-zram-glue--kerneldoc
 The comment is **kernel-doc**, the kernel's format for documenting functions, which
-`scripts/kernel-doc` parses and checks.
+`scripts/kernel-doc` parses and checks. The work memory is `struct seqlz_state`, whose `work[]` is an
+array of `u64`, so it needs 8-byte alignment; what `kmalloc()` returns has at least that.
 
 - `Context: Any context` promises that the function may run where sleeping is not allowed. zram calls
   it under a mutex and does not need it; it holds because the codec never sleeps or allocates.

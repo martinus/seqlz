@@ -16,7 +16,7 @@ A reading order:
 
 @@ 1-11
 It includes `seqlz_internal.h`, so a test that includes `seqlz.h` reaches every constant and every
-table of the codec, not just these functions.
+table of the codec, besides these functions.
 
 @@ 12-18
 A sequence for code outside the compressor: `seqlz_find()` fills an array of them, `seqlz_encode()`

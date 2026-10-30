@@ -106,8 +106,9 @@ The whole diff between `src/seqlz_decompress.c` and its copy:
   ([format.md](https://github.com/martinus/seqlz/blob/main/docs/format.md#status)). A library in
   `lib/` that built only with 4 KiB pages would fail the first build bot with 64 KiB pages on arm64.
 - **The encoder and the matcher in place.** What follows the includes of `seqlz_encoder.h` and
-  `seqlz_match.h` goes into `seqlz_compress.c`, right before `compress_block()`: in the kernel they have
-  one user, and a reviewer reads one file.
+  `seqlz_match.h` goes into `seqlz_compress.c`, right before `compress_block()`, and its includes of
+  them and of `seqlz.h` become one of `seqlz_internal.h`: in the kernel they have one user, and a
+  reviewer reads one file.
 - **`seqlz_compress_block()` `static`**, without its test of the level, which the interface does; a
   one-line comment says that it is for the interface below, which checked the level.
 - **`seqlz_codes.c` as a program for the build machine**, `gen_seqlz_tables.c`

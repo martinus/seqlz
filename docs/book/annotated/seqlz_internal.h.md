@@ -137,8 +137,8 @@ writes there. `struct own_work`, what the encoder needs for a page's own table, 
 {{own.enc.work_at}}, behind that copy, which on a page that gets such a table is never longer
 ([own table](#ch-literals-enc--own)).
 
-In the kernel the hash table and the decoder's scratch share one allocation of 8 KiB per CPU
-([the backend](#ch-zram-glue--backend)).
+In a kernel without zram's split contexts the hash table and the decoder's scratch share one allocation
+of 8 KiB per CPU; with the split they are two allocations of 8 KiB ([the backend](#ch-zram-glue--backend)).
 @end
 
 @@ 105-115

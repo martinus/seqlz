@@ -81,7 +81,8 @@ sense given here.
   `ll` and the offset before, for `seqlz_delta_literals()`. [The records](#ch-encoder--records)
 - **repeat offset**: the offset of the match before, used again for 0 bits; 1 at the start of a page.
   [Chapter 4](#ch-format--offsets)
-- **scratch**: the per-CPU buffer the decoder decodes coded literals into, a page plus 16 bytes.
+- **scratch**: the per-CPU buffer the decoder decodes coded literals into, a page plus 16 bytes;
+  `seqlz_decompress()`'s `wrkmem`, `SEQLZ_MEM_DECOMPRESS` bytes.
   [`seqlz_decode_literals()`](#ch-literals-dec)
 - **sentinel**: the 1 bit a literal stream keeps below its valid bits, whose position counts the bits
   used. [The sentinel](#ch-literals-dec--sentinel)

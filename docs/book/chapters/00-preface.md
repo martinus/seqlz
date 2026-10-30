@@ -89,7 +89,7 @@ flowchart TB
     CO --> X["seqlz_delta_literals()<br/>level 3: the literals<br/>as deltas"]
     CP --> F["encoder_finish()<br/>bitstream behind<br/>the literals"]
     CO --> F
-    C --> L["seqlz_code_literals()<br/>Huffman codes<br/>the literals<br/>if that saves enough"]
+    C --> L["seqlz_code_literals()<br/>seqlz_code_own()<br/>Huffman codes<br/>the literals<br/>if that saves enough"]
     L --> OC["own_code()<br/>level 3: a table<br/>of the page's own"]
     R["zram: a page to read"] --> D["seqlz_decompress()"]
     D --> DL["seqlz_decode_literals()<br/>{{ch00.LIT_STREAMS}} streams side by side"]
@@ -130,9 +130,10 @@ spends on the pages ([chapter 1](#ch-zram--size-classes)). A number like
 
 **`src/` is the kernel's code, nearly.** A script, `tools/kernel-port/port.py`, generates the kernel's
 copy from `src/`, and since 30th October 2026 it changes little: it puts `seqlz_encoder.h` and
-`seqlz_match.h` into `seqlz_compress.c`, takes out the 16 KiB blocks and what only the benchmarks and
+`seqlz_match.h` into `seqlz_compress.c`, makes `seqlz_compress_block()` static, turns `seqlz_codes.c`
+into the build machine's table generator, takes out the 16 KiB blocks and what only the benchmarks and
 tests use, `seqlz.h` and `seqlz_harness.c`, and rewrites a few comments
-([what `port.py` changes](#ch-zram-glue--port)). The includes, the interface `src/linux/seqlz.h`, the
-exports and the module's licence are in `src/` as the kernel has them. Outside the kernel, the headers
+([what `port.py` changes](#ch-zram-glue--port)). The kernel headers each file includes, the interface
+`src/linux/seqlz.h`, the exports and the module's licence are in `src/` as the kernel has them. Outside the kernel, the headers
 in `src/linux/` stand in for the kernel's ([`src/linux/`](#ch-linux)). So a reviewer of the kernel patches can
 read this book.

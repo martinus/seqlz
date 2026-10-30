@@ -19,7 +19,7 @@ The escape has 4 bits again, below this page size's limit of 31 - 14 - 12 = 5. `
 symbols, two more than on 4 KiB pages: length values go up to 16 383.
 
 @@ 226-227
-Counted on the Android 17 emulator's pages, 26 933 of them, not on a phone and a desktop.
+The 8 literal tables, laid out as in the 4 KiB file.
 
 @@ 228-373
 The groups are different: every table here gives `0x00` the shortest code, 2 to 4 bits, and none is a

@@ -1,18 +1,5 @@
 # `src/linux/`: the kernel's headers outside the kernel {#ch-linux}
 
-::: key In short
-- Every file of `src/` includes the kernel's headers by name, `<linux/types.h>` and so on, exactly as
-  the kernel's copy does ([three builds](#ch-compat--builds)).
-- Outside the kernel, `-Isrc` finds the files of `src/linux/` under those names: each defines only what
-  the codec uses of its namesake ([the promise](#ch-compat--top)).
-- The ones whose name the C library uses too chain to the system's header first, with
-  `#include_next` ([types](#ch-compat--userspace)).
-- `prefetch()` is the one place with inline assembly, for userspace only, so that the benchmarks
-  measure what a patched kernel runs ([prefetch](#ch-compat--prefetch)).
-- Linux 4.14 on the test phone lacks four of these names; `tools/zram-phone/compat/` fills them in
-  there ([4.14](#ch-compat--kernel)).
-:::
-
 The code of `src/` is written as the kernel's code is: it says `u8`, `get_unaligned_le64()`,
 `prefetch()` and `min()`, and includes `<linux/types.h>`, `<linux/unaligned.h>`, `<linux/prefetch.h>`
 and `<linux/minmax.h>` for them. In a kernel build those are the kernel's headers. Everywhere else, in
@@ -102,7 +89,8 @@ sequence or per literal costs more than the helper's work. glibc's `sys/cdefs.h`
 `__always_inline`, which means the same, so it is defined only where it is missing.
 
 The decoder uses `noinline` and `__cold` on `lit_load_tail()`, which runs only at the end of a literal
-stream, and `noinline` on `seqlz_decode_literals()` ([why](#ch-literals-dec--main)).
+stream, and `noinline` on `seqlz_decode_literals()` ([why](#ch-literals-dec--main)); `compress_own()`
+and `read_own_table()` are `noinline` too.
 :::
 
 ## `static_assert()`, exports and the module
@@ -303,13 +291,13 @@ little endian ([the layout](#ch-format--layout)), the bitstreams are read most s
 
 | accessor | used by | why that order |
 | --- | --- | --- |
-| `get_unaligned_le16()`, `put_unaligned_le16()` | the `u16` at the start of a page, in `seqlz_decompress()` and the encoder | the format says little endian |
+| `get_unaligned_le16()`, `put_unaligned_le16()` | the `u16` at the start of a page, in `seqlz_decompress()`, the encoder and the literal coder; level 3's records | the format says little endian; the records any order |
 | `get_unaligned_le32()` | the matcher's 4-byte compare of a candidate, the stream sizes of coded literals | any fixed order works for a compare; the sizes are little endian |
 | `get_unaligned_le32()`, `put_unaligned_le32()`, `get_unaligned_le64()`, `put_unaligned_le64()` | the deltas of level 3's literals, 4 or 8 bytes at a time, in `seqlz_delta_literals()` and in the decoder's `add4()` and `add8()` | any order works, as long as the load and the store use the same one |
 | `get_unaligned_le64()` | the matcher's hash and match length, the decoder's pattern for offsets below 8 | the byte at `p` in the low bits, so that bit tricks find the first byte that differs at the bottom |
 | `get_unaligned_be64()` | the decoder's bit reader for the sequences, the literal streams | the bitstreams are most significant bit first |
 | `put_unaligned_le64()` | the encoder's flush of its bits, the literal coder, the decoder's pattern copy | see [`enc_flush()`](#f-seqlz_encoder-h) |
-| `put_unaligned_be64()` | the encoder's final copy of the bitstream | turns 8 bytes around |
+| `put_unaligned_be64()` | the encoder's final copy of the bitstream, `own_put()` for a page's own table | turns 8 bytes around; the description is most significant bit first |
 
 ### The bitstream turned around, on 8 example bytes {#ch-compat--reverse}
 

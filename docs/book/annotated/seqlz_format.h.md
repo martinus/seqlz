@@ -26,7 +26,8 @@ includes this file too, and may only use the few headers the kernel has for such
 ([at build time](book:#ch-codes--kernel)). The guard is named after the file's place in the kernel,
 `lib/seqlz/`.
 @more {#ch-header--summary} The kernel's copy: four headers, and no `static_assert()` here
-The kernel's copy has four headers: `include/linux/seqlz.h`, the interface zram calls, which
+The kernel's copy has four headers written from `src/`, and `seqlz_lengths.h`, generated in the tree:
+`include/linux/seqlz.h`, the interface zram calls, which
 `port.py` writes from [`src/linux/seqlz.h`](linux-seqlz.h.html), and in `lib/seqlz/` this file, `seqlz_tables.h`
 and `seqlz_internal.h`, with the guards they have in `src/`. `seqlz_encoder.h` and `seqlz_match.h` are
 not among them: in the kernel they are part of `seqlz_compress.c`.

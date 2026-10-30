@@ -60,7 +60,8 @@ python3 docs/book/lint.py            # dashes, banned words, measurements withou
   II's `"code"` in `book.json` is the reading order of the files, in groups, and `{"code": true}` in its
   chapters is where they go; `@code` in a chapter lists them, and the build fails when that list and
   `annotated/*.md` differ. `remap.py` moves the blocks with their lines. The files had pages of their
-  own until October 2026: `annotated/<file>.html` is now a redirect to the same place in the book.
+  own until October 2026: `annotated/<file>.html` is now a redirect to the same place in the book; a file
+  that is gone, `MOVED` in `build.py`, to where its notes went.
 - A chapter folded into the notes keeps its ids as `@more {#id}` and `@anchor <id>`, so links to it
   still work. Links that say "chapter 13", or only "13", get the number of the chapter they go to, and
   `{{chapter:<id>}}` is a chapter's number anywhere else, so taking a chapter out renumbers the rest.

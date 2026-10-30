@@ -353,7 +353,8 @@ from the callers that write records, level 3's lazy matcher in `compress_own()` 
 not 0, because a sequence without literals has no deltas. The room check counts the record too.
 
 The cast to `size_t` makes the compare unsigned, so a negative room would look huge. `p` never goes
-below `lit`, because both callers reject a `dst_cap` below {{ch10.dst_min}}, and a failed check stops
+below `lit`, because all three callers, `compress_block()`, `compress_own()` and `encode_raw()` in
+`seqlz_harness.c`, reject a `dst_cap` below {{ch10.dst_min}}, and a failed check stops
 at `p == lit`.
 @end
 

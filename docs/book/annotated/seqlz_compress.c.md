@@ -83,8 +83,10 @@ interface's `seqlz_compress()` [below](#b98) is its one caller and tests it.
 The interface's `seqlz_compress()`, which zram's backend calls, declared in
 [`linux/seqlz.h`](linux-seqlz.h.html). The compressor's 0 becomes `-E2BIG`, "output too small", and a
 level outside 1 to 3 is `-EINVAL`. The `static_assert`s tie the interface's numbers to the codec's:
-the work memory is the matcher's state, and the levels start at 1, which `seqlz_compress_block()`
-takes for granted.
+the work memory is the matcher's state, and the interface's levels are the codec's, so
+`seqlz_compress()` passes `level` on unchanged. The last one ties the 32 bytes that `seqlz_compress()`'s
+kernel-doc names ([`linux/seqlz.h`](linux-seqlz.h.html#b43)) to `ENC_ROOM`, so the documentation
+cannot drift from the encoder.
 
 ::: kernel EXPORT_SYMBOL_GPL
 Modules are linked at load time against a table of exported symbols, and a function is in it only if

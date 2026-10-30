@@ -32,7 +32,7 @@ link to the code of each step.
 </a>
 <a href="#ch-encoder"><rect class="fill-sheet" x="324" y="74" width="190" height="92" rx="4" stroke="currentColor" stroke-width="1"/>
 <text x="419.0" y="92" font-size="12.5" text-anchor="middle" font-weight="700">encoder</text>
-<g class="acc"><text x="419.0" y="107" font-size="11" text-anchor="middle">seqlz_compress.c</text></g>
+<g class="acc"><text x="419.0" y="107" font-size="11" text-anchor="middle">seqlz_encoder.h</text></g>
 <text x="419.0" y="124" font-size="11" text-anchor="middle">encode_seq()</text>
 <text x="419.0" y="138" font-size="11" text-anchor="middle">literals front, bits back</text>
 </a>
@@ -122,7 +122,8 @@ sequences.
 
 ## Reading a page {#map--read}
 
-zram calls `seqlz_decompress()` with the compressed page, the 4096 bytes to fill, and a scratch buffer.
+zram calls `seqlz_decompress()` with the compressed page, the 4096 bytes to fill, and `wrkmem`, the
+scratch, or `NULL` for level 1.
 
 1. **The literal decoder** ([`seqlz_decompress_literals.c`](#ch-literals-dec)), only for a page with coded literals:
    `seqlz_decode_literals()` reads the header, takes one of the 8 fixed tables or builds the page's own,

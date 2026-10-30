@@ -39,6 +39,11 @@ the byte `0x00` a 2-bit code, one that gives `0xff` a 2-bit code.
 "The most used table comes first" is out of date for the 4 KiB tables. `bench/seqlz_counts_4k.txt`
 says they are in the order that matches the tables trained before them, so that table 0 is still the
 one for text, and table 1 has more pages than table 0. The order means nothing to the format.
+
+In the kernel, `seqlz_lengths.h` has `static` tables, and only `gen_seqlz_tables` and the KUnit test
+include it. In `src/` the tests and tools reach the tables through the `extern` declarations of
+[`seqlz.h`](seqlz.h.html#b35), so they are defined once, here, from a header that
+`gen-seqlz-lengths.py --extern` writes without `static`.
 @more {#ch-codes--lit-sets-file} Why 8 literal tables, not 1, 16 or 64
 ::: measured 8 literal tables, not 1, 16 or 64
 k-means trained on the resident pages of a desktop and priced on its zram pages, as the share of
@@ -65,7 +70,7 @@ tables could be trained again on 13th and 14th October 2026: nobody uses the for
 tables only need new hashes in `format.md`.
 
 The 16 KiB tables, [`seqlz_lengths_16k.h`](seqlz_lengths_16k.h.html),
-is the same construction with counts from
+are the same construction with counts from
 {{ch08.counts16k.pages|grp}} pages of a zram dump of the Android 17 emulator with 16 KiB pages. They
 give {{k16.ch08.tok.coded}} tokens a code, with a {{k16.tok.len.3072}}-bit escape, below that page
 size's limit of $31 - 14 - 12 = 5$ bits. On pages of the emulator that were not in the training, they
