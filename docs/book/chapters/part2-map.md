@@ -13,12 +13,12 @@ link to the code of each step.
 
 <figure class="diagram">
 <div class="scroll">
-<svg viewBox="0 0 720 452" role="img" aria-label="The map of the code: zram calls seqlz_compress() and seqlz_decode(); writing a page goes from the matcher through the encoder and the literal coder to the compressed page, reading goes from the literal decoder through the sequence loop back to 4096 bytes; the format constants and tables are under both.">
+<svg viewBox="0 0 720 452" role="img" aria-label="The map of the code: zram calls seqlz_compress() and seqlz_decompress(); writing a page goes from the matcher through the encoder and the literal coder to the compressed page, reading goes from the literal decoder through the sequence loop back to 4096 bytes; the format constants and tables are under both.">
 <defs><marker id="map-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0 L10 5 L0 10 z" fill="currentColor"/></marker></defs>
 <a href="#ch-zram-glue"><rect class="fill-paper" x="10" y="8" width="700" height="34" rx="4" stroke="currentColor" stroke-width="1"/>
 <text x="20" y="30" font-size="12.5" text-anchor="start" font-weight="700">zram, through backend_seqlz.c</text>
 <g class="acc"><text x="268" y="30" font-size="11">zram_seqlz.c</text></g>
-<text x="700" y="30" font-size="11.5" text-anchor="end">write: seqlz_compress()   read: seqlz_decode()</text>
+<text x="700" y="30" font-size="11.5" text-anchor="end">write: seqlz_compress()   read: seqlz_decompress()</text>
 </a>
 <text x="10" y="64" font-size="11.5" text-anchor="start">write a page</text>
 <rect x="10" y="74" width="80" height="92" rx="4" fill="none" stroke="currentColor" stroke-width="1"/>
@@ -75,9 +75,9 @@ link to the code of each step.
 <path d="M562 250 C 520 270, 470 280, 444 298" fill="none" stroke="currentColor" stroke-width="1.3" stroke-dasharray="4 3" marker-end="url(#map-arrow)"/>
 <text x="496" y="266" font-size="11" text-anchor="middle">level 1</text>
 <text x="10" y="414" font-size="11.5" text-anchor="start">under both</text>
-<a href="#ch-compat"><rect class="fill-sheet" x="100" y="400" width="145" height="44" rx="4" stroke="currentColor" stroke-width="1"/>
+<a href="#ch-linux"><rect class="fill-sheet" x="100" y="400" width="145" height="44" rx="4" stroke="currentColor" stroke-width="1"/>
 <text x="172.5" y="418" font-size="12" text-anchor="middle" font-weight="700">kernel names</text>
-<g class="acc"><text x="172.5" y="434" font-size="11" text-anchor="middle">seqlz_compat.h</text></g></a>
+<g class="acc"><text x="172.5" y="434" font-size="11" text-anchor="middle">src/linux/</text></g></a>
 <a href="#ch-header"><rect class="fill-sheet" x="255" y="400" width="145" height="44" rx="4" stroke="currentColor" stroke-width="1"/>
 <text x="327.5" y="418" font-size="12" text-anchor="middle" font-weight="700">format constants</text>
 <g class="acc"><text x="327.5" y="434" font-size="11" text-anchor="middle">seqlz_format.h</text></g></a>
@@ -101,8 +101,9 @@ zram calls `seqlz_compress()` with the page, a buffer for the result and the lev
    into sequences: `ll` literals, bytes it found no match for, then a match of `ml` bytes copied from
    `offset` bytes back. It finds a candidate with a hash of the next 5 bytes in a table of positions
    ([the hash](#ch-matcher--hash)), and tries the repeat offset at every position too.
-2. **The encoder** ([`seqlz_compress.c`](#ch-encoder)) gets each sequence through a callback that the compiler
-   inlines ([the callback](#ch-matcher--emit)). `encode_seq()` copies the literals to the front of the
+2. **The encoder** ([`seqlz_encoder.h`](#ch-encoder)) gets each sequence the moment it is found: the
+   matcher calls `encode_seq()`, which the compiler inlines into its loop ([one loop](#ch-matcher--emit)),
+   all of it in `seqlz_compress.c`. `encode_seq()` copies the literals to the front of the
    output and puts the sequence's token code, offset bits and length values into a 64-bit accumulator,
    which goes to the back of the output in whole bytes ([both ends](#ch-encoder--layout)).
    `encoder_finish()` moves the bits to right after the literals, and that is a level 1 page.
@@ -121,7 +122,7 @@ sequences.
 
 ## Reading a page {#map--read}
 
-zram calls `seqlz_decode()` with the compressed page, the 4096 bytes to fill, and a scratch buffer.
+zram calls `seqlz_decompress()` with the compressed page, the 4096 bytes to fill, and a scratch buffer.
 
 1. **The literal decoder** ([`seqlz_decompress_literals.c`](#ch-literals-dec)), only for a page with coded literals:
    `seqlz_decode_literals()` reads the header, takes one of the 8 fixed tables or builds the page's own,
@@ -140,8 +141,8 @@ zram calls `seqlz_decode()` with the compressed page, the 4096 bytes to fill, an
 
 ## Under both {#map--shared}
 
-- [`seqlz_compat.h`](#ch-compat): the kernel's types and helpers, so that the same code
-  builds outside the kernel.
+- [`src/linux/`](#ch-linux): the kernel's headers outside the kernel, so that the same code
+  builds there.
 - [`seqlz_format.h`](#ch-header) and [`seqlz.h`](#f-seqlz-h): the format as constants, the token, the
   offset classes and the caps, and the functions for userspace.
 - [`seqlz_tables.h`](#ch-internal): the layout of the tables, shaped so that the decoder

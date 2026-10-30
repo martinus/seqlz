@@ -1,8 +1,9 @@
 // SPDX-License-Identifier: MIT OR GPL-2.0-only
 /*
  * ch00_02.c: the facts of the preface and chapters 1 and 2.
- *   ch00.lines.F    lines of src/F, F with _ for . (seqlz_h)    ch00.src_lines  of all *.c and *.h
- *   ch00.inc_files  the .inc files of src/
+ *   ch00.lines.F    lines of src/F, F with _ for . and / (seqlz_h, linux_types_h)
+ *   ch00.src_lines  of all *.c and *.h of src/ and src/linux/
+ *   ch00.linux_lines, ch00.linux_files   of the stand-ins in src/linux/, all but its seqlz.h
  *   ch01.*          the work memory per CPU, as the kernel's allocators round it
  *   ch02.cls.*      the offset classes' shares in bench/seqlz_counts_4k.txt, their entropy, the
  *                   Huffman code built from them by hand in the chapter
@@ -14,6 +15,7 @@
 #include <dirent.h>
 
 #include "facts.h"
+#include "seqlz_encoder.h" /* the matcher hands its sequences to encode_seq() */
 #include "seqlz_match.h"
 
 /* the repository, with a / at the end; FACTS_REPO for a copy of this file outside it */
@@ -58,35 +60,48 @@ static unsigned int file_lines(const char* path) {
     return n;
 }
 
-static void preface(void) {
+/* the lines of the *.c and *.h of src/<sub>, each as ch00.lines.<sub>_<name>; their sum */
+static unsigned int count_lines(const char* sub, unsigned int* stand_ins, unsigned int* n_stand_ins) {
     char dir[8192], path[512], key[512];
     struct dirent* e;
-    unsigned int total = 0, incs = 0, n, k;
+    unsigned int total = 0, n, k;
     DIR* d;
 
-    snprintf(dir, sizeof dir, "%ssrc", repo_dir());
+    snprintf(dir, sizeof dir, "%ssrc%s", repo_dir(), sub);
     d = opendir(dir);
     if (!d)
         exit(1);
     while ((e = readdir(d))) {
         const char* dot = strrchr(e->d_name, '.');
 
-        if (!dot || e->d_name[0] == '.')
+        if (!dot || e->d_name[0] == '.' || (strcmp(dot, ".c") && strcmp(dot, ".h")))
             continue;
-        snprintf(path, sizeof path, "src/%s", e->d_name);
+        snprintf(path, sizeof path, "src%s/%s", sub, e->d_name);
         n = file_lines(path);
-        snprintf(key, sizeof key, "ch00.lines.%s", e->d_name);
+        /* ch00.lines.seqlz_h for src/seqlz.h, ch00.lines.linux_seqlz_h for src/linux/seqlz.h */
+        snprintf(key, sizeof key, "ch00.lines.%s%s%s", *sub ? sub + 1 : "", *sub ? "_" : "", e->d_name);
         for (k = strlen("ch00.lines."); key[k]; k++)
             if (key[k] == '.')
                 key[k] = '_';
         fact_num(key, n);
-        if (!strcmp(dot, ".c") || !strcmp(dot, ".h"))
-            total += n;
-        incs += !strcmp(dot, ".inc");
+        total += n;
+        if (stand_ins && strcmp(e->d_name, "seqlz.h")) {
+            *stand_ins += n;
+            ++*n_stand_ins;
+        }
     }
     closedir(d);
+    return total;
+}
+
+static void preface(void) {
+    unsigned int stand_ins = 0, n_stand_ins = 0, total;
+
+    total = count_lines("", NULL, NULL);
+    total += count_lines("/linux", &stand_ins, &n_stand_ins);
     fact_num("ch00.src_lines", total);
-    fact_num("ch00.inc_files", incs);
+    fact_num("ch00.linux_lines", stand_ins);
+    fact_num("ch00.linux_files", n_stand_ins);
     fact_num("ch00.LIT_STREAMS", SEQLZ_LIT_STREAMS);
 }
 

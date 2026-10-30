@@ -1,12 +1,13 @@
 // SPDX-License-Identifier: MIT OR GPL-2.0-only
 /*
- * trace.c: the pages of chapter 14's step-through, compressed by seqlz_compress() and decoded by a
- * copy of seqlz_decode() that records every step (instrument.py). Prints JSON: per page its bytes,
+ * trace.c: the pages of chapter 14's step-through, compressed by seqlz_compress_block() and decoded by a
+ * copy of seqlz_decompress() that records every step (instrument.py). Prints JSON: per page its bytes,
  * the compressed bytes, the literals the decoder reads, and the steps. Fails if a page does not
  * decode to itself.
  *
- * cc -O1 -I<repo>/src -I<dir of dec_inst.c> trace.c <repo>/src/seqlz_{codes,compress,default_tables,lit_sets}.c
- *   seqlz_tables.c, the tables tools/gen-tables/gen-tables.sh writes
+ * cc -O1 -I<repo>/src -I<dir of dec_inst.c> trace.c
+ * <repo>/src/seqlz_{codes,compress,compress_literals,decompress_literals,lengths}.c seqlz_tables.c, the tables
+ * tools/gen-tables/gen-tables.sh writes
  */
 #include <stdio.h>
 #include <stdlib.h>
@@ -89,7 +90,7 @@ int main(void) {
         int coded;
 
         pages[k].make(page);
-        n = seqlz_compress(&st, page, comp, sizeof(comp), pages[k].coded ? 2U : 1U);
+        n = seqlz_compress_block(&st, page, comp, sizeof(comp), pages[k].coded ? 2U : 1U);
         if (!n)
             return 1;
         n_lit = get_unaligned_le16(comp);
@@ -102,7 +103,7 @@ int main(void) {
         memset(out, 0, sizeof(out));
         printf("%s\"%s\":{\"coded\":%d,", k ? "," : "", pages[k].id, coded);
         printf("\"steps\":[");
-        if (seqlz_decode(comp, n, out, scratch) || memcmp(out, page, SEQLZ_BLOCK_SIZE)) {
+        if (seqlz_decompress(comp, n, out, scratch) || memcmp(out, page, SEQLZ_BLOCK_SIZE)) {
             fprintf(stderr, "trace.c: page %s does not decode to itself\n", pages[k].id);
             return 1;
         }

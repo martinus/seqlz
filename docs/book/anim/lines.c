@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT OR GPL-2.0-only
 /*
  * lines.c: the token lookups of chapter 16's page. Compresses the page, walks the sequences'
- * bitstream as seqlz_decode() reads it, without copying bytes, and prints the 11-bit index of every
+ * bitstream as seqlz_decompress() reads it, without copying bytes, and prints the 11-bit index of every
  * token lookup and the code length of the entry it found. Fails if the walk does not end exactly at
  * the end of the bitstream, after as many tokens as the real decode reads: one for each sequence but
  * the last.
@@ -50,8 +50,8 @@ int main(void) {
     const u8* q;
 
     slab_page(page);
-    n = seqlz_compress(&st, page, comp, sizeof(comp), 2);
-    if (!n || seqlz_decode(comp, n, out, scratch) || memcmp(out, page, SEQLZ_BLOCK_SIZE)) {
+    n = seqlz_compress_block(&st, page, comp, sizeof(comp), 2);
+    if (!n || seqlz_decompress(comp, n, out, scratch) || memcmp(out, page, SEQLZ_BLOCK_SIZE)) {
         fprintf(stderr, "lines.c: the page does not decode to itself\n");
         return 1;
     }
@@ -61,7 +61,7 @@ int main(void) {
         return 1;
     }
     n_lit &= SEQLZ_LIT_CODED - 1U;
-    /* where the bitstream starts, as seqlz_decode() gets it; level 2 writes no deltas */
+    /* where the bitstream starts, as seqlz_decompress() gets it; level 2 writes no deltas */
     q = seqlz_decode_literals(comp, n, n_lit, scratch, out, &dt);
     if (q && dt) {
         fprintf(stderr, "lines.c: the page has literals as deltas\n");
@@ -73,7 +73,7 @@ int main(void) {
     g_nbits = 8UL * (unsigned long)(comp + n - q);
 
     /*
-     * as in seqlz_decode(): when the literals left fill the rest of the page, the matches so far
+     * as in seqlz_decompress(): when the literals left fill the rest of the page, the matches so far
      * cover all bytes but the literals, and the literals left are the last sequence, which has no
      * token
      */

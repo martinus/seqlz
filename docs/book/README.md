@@ -44,8 +44,8 @@ python3 docs/book/lint.py            # dashes, banned words, measurements withou
 - The book describes the code of one commit, `"src"` in `book.json`, not the checkout's. `build.py`
   builds in that commit's tree, extracted to a temporary directory, with this `docs/book/` over it, so
   a change of `src/` needs no change of the book. The page says which commit it describes.
-- `build.py --check` fails if a non-blank line of a file of `src/` without notes at that commit (the
-  generated `.inc` tables aside) is in no listing, if an id is on the page twice, or if a link goes to
+- `build.py --check` fails if a non-blank line of a file of `src/` or `src/linux/` without notes at that
+  commit is in no listing, if an id is on the page twice, or if a link goes to
   an id that does not exist. A file with notes is covered by them, so a chapter shows only the lines
   it explains. `--out <dir>` writes the page there instead.
 - To bring the book up to newer code: `remap.py [<commit>]` (default `HEAD`) prints how the listings

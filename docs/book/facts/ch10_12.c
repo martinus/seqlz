@@ -4,7 +4,7 @@
  * It includes seqlz_compress.c and seqlz_decompress.c to reach their static functions, so the worked
  * examples come from the real helpers:
  *   ch10.ab.*, ch10.ptr.*   the page of ab and the page of pointers put by put and flush by flush,
- *                           checked against what seqlz_compress() writes
+ *                           checked against what seqlz_compress_block() writes
  *   ch10.slab.*             one sequence of chapter 16's page, the same way
  *   ch10.esc.*              the escape, and token 10 escaped
  *   ch11.*                  chapter 11's page of letters through seqlz_code_literals(), step by step
@@ -152,7 +152,7 @@ static const char* value_bits(const struct value_table* vt, unsigned int v) {
 
 /*
  * The page through a copy of encode_emit()'s bits, the facts of the first r->seqs sequences and
- * r->flushes flushes; fails unless the page comes out as seqlz_compress() writes it.
+ * r->flushes flushes; fails unless the page comes out as seqlz_compress_block() writes it.
  */
 static void encode_traced(struct trace* r, void (*make)(u8*)) {
     static u8 page[SEQLZ_BLOCK_SIZE], ref[CAP];
@@ -262,7 +262,7 @@ static void encode_traced(struct trace* r, void (*make)(u8*)) {
     len = encoder_finish(e, dst, CAP);
     ref_len = fact_compress(page, ref, 0);
     if (len != ref_len || memcmp(dst, ref, len))
-        fail("the copy of encode_emit() does not write what seqlz_compress() writes");
+        fail("the copy of encode_emit() does not write what seqlz_compress_block() writes");
     str(key("ch10.%s.u16", r->name), "%s", hexb(dst, 2));
     str(key("ch10.%s.head8", r->name), "%s", hexb(e->lit, len - (e->lit - dst) < 8 ? len - (e->lit - dst) : 8));
 }
@@ -275,7 +275,7 @@ static unsigned int min_dst(void (*make)(u8*)) {
 
     make(page);
     for (cap = SEQLZ_HEADER + ENC_ROOM; cap <= CAP; cap++)
-        if (seqlz_compress(&st, page, out, cap, 1))
+        if (seqlz_compress_block(&st, page, out, cap, 1))
             return cap;
     fail("a page does not fit two pages");
     return 0;

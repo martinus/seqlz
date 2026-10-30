@@ -3,7 +3,7 @@
  * pricing.c: the data of the animation "pricing" in chapter 11. Compresses chapter 16's page with raw
  * literals, prices its literals with the encoder's own lit_sums(), and prints as JSON: the literals,
  * the code lengths in all 8 tables of each byte value they use (from seqlz_tables.lit_cost), each stream's bits
- * in each table (lit_bits()), and the table seqlz_compress() picked for the page.
+ * in each table (lit_bits()), and the table seqlz_compress_block() picked for the page.
  */
 #include <stdio.h>
 #include <stdlib.h>
@@ -22,7 +22,7 @@ int main(void) {
     const u8* lit;
 
     slab_page(page);
-    if (!seqlz_compress(&st, page, raw, sizeof(raw), 1) || !seqlz_compress(&st, page, comp, sizeof(comp), 2))
+    if (!seqlz_compress_block(&st, page, raw, sizeof(raw), 1) || !seqlz_compress_block(&st, page, comp, sizeof(comp), 2))
         return 1;
     n_lit = get_unaligned_le16(raw);
     lit = raw + SEQLZ_HEADER;

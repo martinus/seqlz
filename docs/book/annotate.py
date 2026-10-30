@@ -59,9 +59,16 @@ def notes_files(here=HERE):
     return out
 
 
+def link_name(src):
+    """the name of a file of src/ in links between notes, <name>.html: seqlz_decompress.c, and
+    linux-seqlz.h for src/linux/seqlz.h"""
+    return src.removeprefix("src/").replace("/", "-")
+
+
 def file_id(src):
-    """the id of a file's chapter: f-seqlz_decompress-c; its blocks, lines and sections start with it"""
-    return "f-" + pathlib.Path(src).name.replace(".", "-")
+    """the id of a file's chapter, for a file of src/ or its link name: f-seqlz_decompress-c,
+    f-linux-seqlz-h; its blocks, lines and sections start with it"""
+    return "f-" + link_name(src).replace(".", "-")
 
 
 def section_id(fid, title):
@@ -226,9 +233,9 @@ def render(path, text, src, lines, refs, rich, fig, files, label, near=(None, No
 
     top_buttons, top_panels = extras(top, fid)
     nav = "".join(f'<a class="{cls}" href="#{file_id(f)}"><span class="fnk">{what}</span>'
-                  f'<code>{html.escape(pathlib.Path(f).name)}</code></a>'
+                  f'<code>{html.escape(f.removeprefix("src/"))}</code></a>'
                   for f, cls, what in ((near[0], "fprev", "previous file"), (near[1], "fnext", "next file")) if f)
-    name = pathlib.Path(src).name
+    name = src.removeprefix("src/")
     return (f'<section class="chapter codefile" data-chapter="{fid}">'
             f'<header class="chapterhead"><span class="chapno">{html.escape(label)}</span>'
             f'<h1 id="{fid}"><code>{html.escape(name)}</code></h1>'

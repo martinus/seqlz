@@ -1,20 +1,21 @@
 // SPDX-License-Identifier: MIT OR GPL-2.0-only
 /*
  * ends.c: chapter 16's page compressed as compress_block() does, raw literals, into a dst of two
- * pages, into the smallest dst it fits, and into one byte less. A callback around encode_emit()
+ * pages, into the smallest dst it fits, and into one byte less. A receiver around encode_seq()
  * records after each sequence the two ends (lit and p), the accumulator's count, the bits the
  * sequence added and what they were, and which bytes the sequence wrote outside the page's bytes:
  * the literal copies past lit and the flush's store below p, found by running the sequence on two
  * copies of dst whose free room holds 0x00 and 0xff. Then what encoder_finish() does. Fails if
- * the page is not what seqlz_compress() writes, or if the bits do not add up.
+ * the page is not what seqlz_compress_block() writes, or if the bits do not add up. The matcher of
+ * seqlz_match.h calls rec_emit() here, as seqlz_harness.c has it call its recorder.
  */
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
 #include "pages.h"
-#include "seqlz_compress.c"
 #include "seqlz_compress_literals.c"
+#include "seqlz_encoder.h"
 
 #define CAP_MAX (2 * SEQLZ_BLOCK_SIZE)
 
@@ -32,7 +33,7 @@ struct run {
 };
 
 static u8 probe_a[CAP_MAX], probe_b[CAP_MAX];
-/* the page as seqlz_compress() writes it: its bitstream, byte 0 first */
+/* the page as seqlz_compress_block() writes it: its bitstream, byte 0 first */
 static const u8* ref_bs;
 static unsigned int ref_bs_len;
 
@@ -47,7 +48,7 @@ static unsigned int len_bits(const struct value_table* vt, unsigned int v) {
     return (vt->enc[s] >> 16 & 15U) + extra;
 }
 
-/* runs encode_emit() on a copy of the encoder and of dst whose free room holds fill */
+/* runs encode_seq() on a copy of the encoder and of dst whose free room holds fill */
 static void probe(const struct run* R, u8* buf, u8 fill, const u8* in, unsigned int ll, unsigned int ml, unsigned int off) {
     struct seqlz_encoder c = R->e;
 
@@ -56,17 +57,17 @@ static void probe(const struct run* R, u8* buf, u8 fill, const u8* in, unsigned 
     c.lit = buf + (R->e.lit - R->d);
     if (c.p > c.lit)
         memset(c.lit, fill, (size_t)(c.p - c.lit));
-    encode_emit(&c, in, ll, ml, off);
+    encode_seq(&c, in, ll, ml, off, false);
 }
 
-static void rec_emit(void* ctx, const u8* in, unsigned int ll, unsigned int ml, unsigned int off) {
-    struct run* R = ctx;
+static void rec_emit(struct run* R, const u8* in, unsigned int ll, unsigned int ml, unsigned int off, bool rec) {
     struct rec* r = &R->r[R->n];
     long before = bits_out(R), lo = R->e.lit - R->d, hi = R->e.p - R->d, i;
     unsigned int raw;
 
+    (void)rec;
     if (R->fail) {
-        encode_emit(&R->e, in, ll, ml, off);
+        encode_seq(&R->e, in, ll, ml, off, false);
         return;
     }
     memset(r, 0, sizeof(*r));
@@ -98,7 +99,7 @@ static void rec_emit(void* ctx, const u8* in, unsigned int ll, unsigned int ml, 
             else if (i < r->wr_lo)
                 r->wr_lo = i;
         }
-    encode_emit(&R->e, in, ll, ml, off);
+    encode_seq(&R->e, in, ll, ml, off, false);
     if (R->e.p == R->e.lit) {
         R->fail = R->n + 1;
         r->lit = R->e.lit - R->d;
@@ -134,13 +135,20 @@ static void rec_emit(void* ctx, const u8* in, unsigned int ll, unsigned int ml, 
     R->n++;
 }
 
-/* compress_block() up to encoder_finish(), with rec_emit() around encode_emit() */
+/* the matcher, with rec_emit() for encode_seq() */
+#define seqlz_encoder run
+#define encode_seq rec_emit
+#include "seqlz_match.h"
+#undef encode_seq
+#undef seqlz_encoder
+
+/* compress_block() up to encoder_finish(), with rec_emit() around encode_seq() */
 static void run(struct run* R, struct seqlz_state* st, const u8* page, u8* dst, unsigned int cap) {
     memset(R, 0, sizeof(*R));
     R->d = dst;
     R->cap = cap;
     encoder_init(&R->e, dst, cap, page + SEQLZ_BLOCK_SIZE);
-    seqlz_match_block(st->table, page, false, rec_emit, R);
+    seqlz_match_block(st->table, page, false, R);
 }
 
 static void print_recs(const struct run* R) {
@@ -183,14 +191,14 @@ int main(void) {
     unsigned int cs[3];
 
     slab_page(page);
-    ref_len = seqlz_compress(&st, page, ref, CAP_MAX, 1);
+    ref_len = seqlz_compress_block(&st, page, ref, CAP_MAX, 1);
     if (!ref_len)
         return 1;
     ref_bs = ref + SEQLZ_HEADER + get_unaligned_le16(ref);
     ref_bs_len = (unsigned int)(ref + ref_len - ref_bs);
     /* the smallest dst the page fits into */
     for (small = SEQLZ_HEADER + ENC_ROOM; small < CAP_MAX; small++)
-        if (seqlz_compress(&st, page, dst, small, 1))
+        if (seqlz_compress_block(&st, page, dst, small, 1))
             break;
     cs[0] = CAP_MAX;
     cs[1] = small;
@@ -208,10 +216,10 @@ int main(void) {
         n_lit = (unsigned int)(R.e.lit - (dst + SEQLZ_HEADER));
         len = encoder_finish(&R.e, dst, cap);
         if (k < 2 && (len != ref_len || memcmp(dst, ref, len))) {
-            fprintf(stderr, "ends.c: dst of %u: the page is not what seqlz_compress() writes\n", cap);
+            fprintf(stderr, "ends.c: dst of %u: the page is not what seqlz_compress_block() writes\n", cap);
             return 1;
         }
-        if (k == 2 && (len != 0 || !R.fail || seqlz_compress(&st, page, probe_a, cap, 1))) {
+        if (k == 2 && (len != 0 || !R.fail || seqlz_compress_block(&st, page, probe_a, cap, 1))) {
             fprintf(stderr, "ends.c: dst of %u bytes should fail\n", cap);
             return 1;
         }

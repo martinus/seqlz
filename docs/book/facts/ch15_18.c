@@ -137,10 +137,6 @@ static void fact_statement(const char* key, const char* start) {
 }
 
 static void kernel_port(void) {
-    load("tools/kernel-port/seqlz.h");
-    fact_num("ch15.kport.seqlz_h", lines_of_file());
-    load("tools/kernel-port/api_compress.c");
-    fact_num("ch15.kport.api_compress", lines_of_file());
     load("tools/gen-tables/gen_seqlz_tables.c");
     fact_num("ch15.kport.gen_main", lines_of_file());
 

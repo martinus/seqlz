@@ -215,7 +215,7 @@ def render_code_list():
             group = g
         intro, *_ = annotate.parse_notes(NOTES[f])
         first = re.split(r"(?<=\.)\s", re.sub(r"\[([^]]*)\]\([^)]*\)", r"\1", intro), maxsplit=1)[0]
-        out.append(f'<li><a href="{notes_href(f)}"><code>{html.escape(pathlib.Path(f).name)}</code></a> '
+        out.append(f'<li><a href="{notes_href(f)}"><code>{html.escape(f.removeprefix("src/"))}</code></a> '
                    f'{md(first)[3:-4]}</li>')
     return "".join(out) + "</ul>"
 
@@ -277,7 +277,7 @@ def instance(base, data):
     return fid, DATA_OF.setdefault((base, data), fid)
 
 
-SRC_C = ("codes", "compress", "compress_literals", "decompress", "decompress_literals", "default_tables", "lit_sets")
+SRC_C = ("codes", "compress", "compress_literals", "decompress", "decompress_literals", "harness", "lengths")
 
 
 TABLES = {}
@@ -315,11 +315,11 @@ def run_c(main, include_dirs=(), link=SRC_C, flags=(), extra=()):
 # ---- programs, facts and asserts: what the text says that the code computes, computed at build time
 
 def counted_decoder(path):
-    """src/seqlz_decompress.c with two counters, n_fast and n_slow, and seqlz_decode() renamed to
-    seqlz_decode_counted(): what the sed command of chapter 16 makes"""
+    """src/seqlz_decompress.c with two counters, n_fast and n_slow, and seqlz_decompress() renamed to
+    seqlz_decompress_counted(): what the sed command of chapter 16 makes"""
     t = (REPO / "src" / "seqlz_decompress.c").read_text()
-    for pat, sub in [(r'^#include "seqlz.h"$',
-                      '#include "seqlz.h"\nunsigned int n_fast, n_slow;\n#define seqlz_decode seqlz_decode_counted'),
+    for pat, sub in [(r'^#include "seqlz_internal.h"$',
+                      '#include "seqlz_internal.h"\nunsigned int n_fast, n_slow;\n#define seqlz_decompress seqlz_decompress_counted'),
                      (r"^\t\t\ttok = next_token_fast\(", "\t\t\tn_fast++;\n\\g<0>"),
                      (r"^\t\t/\* the slow path: length values, and every check \*/$", "\\g<0>\n\t\tn_slow++;")]:
         t, n = re.subn(pat, sub, t, flags=re.M)
@@ -505,7 +505,7 @@ def run_trace(kind):
 STEPPERS = {
     "decode": {
         "src": "src/seqlz_decompress.c", "copy": "dec_inst.c", "trace": "trace.c",
-        "link": ("codes", "compress", "compress_literals", "decompress_literals", "default_tables", "lit_sets"),
+        "link": ("codes", "compress", "compress_literals", "decompress_literals", "lengths"),
         "pages": [("ab", "ab \u00d7 2048, {{ab.len}} bytes"), ("slab", "chapter {{chapter:ch-trace}}\u2019s page, {{ch16.coded.len}} bytes")],
         "label": "decode_block() step by step", "fn": "decode_block()", "js": "stepper.js",
         "what": "decoding two pages", "seq": "a sequence",
@@ -986,7 +986,7 @@ def build():
             pos = chapters.index(f'id="{lid}"')
             refs.setdefault(path, []).append((a, b, f"#{lid}", chapnos[bisect.bisect(chapnos, (pos,)) - 1][1],
                                               heads[bisect.bisect(heads, (pos,)) - 1][1]))
-    names = {pathlib.Path(f).name for f in NOTES}
+    names = {annotate.link_name(f) for f in NOTES}
     order = [f for *_, f in CODE]
     group_of = {f: t for _, t, f in CODE}
     code_html, file_sections = [], {}
@@ -1026,7 +1026,7 @@ def build():
                         sub = "".join(f'<li><a href="#{sid}">{html.escape(t)}</a></li>' for sid, t in file_sections[f])
                         toc_html.append(f'<li class="tocchap tocfile" data-for="{fid}"><a href="#{fid}"><span class="tocno">'
                                         f'{html.escape(g["group"]) if k == 0 else ""}</span><span class="toct">'
-                                        f'<code>{html.escape(pathlib.Path(f).name).replace("_", "_<wbr>")}</code></span></a>'
+                                        f'<code>{html.escape(f.removeprefix("src/")).replace("_", "_<wbr>")}</code></span></a>'
                                         f'<ol class="tocsub">{sub}</ol></li>')
                 continue
             cid, label, title, subs = item
@@ -1038,7 +1038,7 @@ def build():
     code_first = ""
     if CODE:
         firsts = [(t, f) for k, (g, t, f) in enumerate(CODE) if k == 0 or CODE[k - 1][0] != g]
-        files = ", ".join(f'{html.escape(t)} in <a href="{notes_href(f)}"><code>{html.escape(pathlib.Path(f).name)}</code></a>'
+        files = ", ".join(f'{html.escape(t)} in <a href="{notes_href(f)}"><code>{html.escape(f.removeprefix("src/"))}</code></a>'
                           for t, f in firsts)
         code_first = (f'<p class="codefirst"><span class="cfhead">Code first</span> Part II is the code of '
                       f'<code>src/</code> file by file, with a short note next to each block: {files}, and the files '
@@ -1065,7 +1065,7 @@ def build():
     for d, book in sites:
         (d / "annotated").mkdir(parents=True, exist_ok=True)
         for src in order:
-            (d / "annotated" / f"{pathlib.Path(src).name}.html").write_text(redirect(annotate.file_id(src), book))
+            (d / "annotated" / f"{annotate.link_name(src)}.html").write_text(redirect(annotate.file_id(src), book))
     if SITE:
         (SITE / "index.html").write_text(page)
         print(f"wrote the site in {SITE}")
@@ -1110,10 +1110,10 @@ MERMAID_SCRIPT = """<script>
 
 def check_coverage():
     missing_any = False
-    for f in sorted((REPO / "src").iterdir()):
-        rel = f"src/{f.name}"
+    for f in sorted([*(REPO / "src").glob("*.[ch]"), *(REPO / "src" / "linux").glob("*.[ch]")]):
+        rel = str(f.relative_to(REPO))
         # a file with notes is covered by them, annotate.py checks that they have every line
-        if f.suffix == ".inc" or f.name.startswith(".") or rel in NOTES:
+        if rel in NOTES:
             continue
         lines = src_lines(rel)
         cov = COVERED.get(rel, set())

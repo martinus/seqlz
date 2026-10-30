@@ -1,5 +1,5 @@
 {
-  "src": "ee3c44de9fc227d7373424dde56683515901d214",
+  "src": "16fddb0f146cebfcc5a590772ae0743f2ef8f228",
   "parts": [
     {
       "chapters": [
@@ -20,14 +20,15 @@
       "id": "part-2", "label": "Part II", "title": "The code, line by line",
       "intro": "The code of <code>src/</code>, file by file, with a short note next to each block, and under a note the details when you want them: why, a worked example, what it was measured at. The map comes first, then the files in the order of the contents.",
       "code": [
-        {"group": "zram", "title": "zram's glue", "files": ["src/zram_seqlz.c", "src/seqlz.h"]},
-        {"group": "write", "title": "writing a page", "files": ["src/seqlz_compress.c", "src/seqlz_match.h", "src/seqlz_compress_literals.c"]},
+        {"group": "zram", "title": "zram's glue", "files": ["src/zram_seqlz.c", "src/linux/seqlz.h", "src/seqlz.h"]},
+        {"group": "write", "title": "writing a page", "files": ["src/seqlz_compress.c", "src/seqlz_match.h", "src/seqlz_encoder.h", "src/seqlz_compress_literals.c"]},
         {"group": "read", "title": "reading a page", "files": ["src/seqlz_decompress.c", "src/seqlz_decompress_literals.c"]},
-        {"group": "below", "title": "what both use", "files": ["src/seqlz_format.h", "src/seqlz_internal.h", "src/seqlz_tables.h", "src/seqlz_codes.c", "src/seqlz_compat.h", "src/seqlz_default_tables.c", "src/seqlz_default_tables_4k.inc", "src/seqlz_lit_sets.c", "src/seqlz_lit_sets_4k.inc", "src/seqlz_default_tables_16k.inc", "src/seqlz_lit_sets_16k.inc"]}
+        {"group": "below", "title": "what both use", "files": ["src/seqlz_format.h", "src/seqlz_internal.h", "src/seqlz_tables.h", "src/seqlz_codes.c", "src/seqlz_lengths.c", "src/seqlz_lengths.h", "src/seqlz_lengths_16k.h", "src/seqlz_harness.c"]}
       ],
       "chapters": [
         {"file": "part2-map.md", "numbered": false, "label": "Map"},
-        {"code": true}
+        {"code": true},
+        {"file": "part2-linux.md", "numbered": false, "label": "Outside the kernel"}
       ]
     },
     {

@@ -2,17 +2,18 @@
 /*
  * accum.c: the encoder's accumulator for the first sequences of chapter 16's page. The page is
  * compressed as compress_block() does; for the first SEQS sequences a copy of the encoder does the
- * puts and flushes of encode_emit() one at a time with the helpers of seqlz_compress.c, and prints
+ * puts and flushes of encode_seq() one at a time with the helpers of seqlz_encoder.h, and prints
  * each: the value put and its parts, acc and cnt before and after, the word a flush stores and
- * where. Fails if the copy does not end where encode_emit() ends: the same acc, cnt, p and bytes.
+ * where. Fails if the copy does not end where encode_seq() ends: the same acc, cnt, p and bytes.
+ * The matcher of seqlz_match.h calls drv_emit() here, as seqlz_harness.c has it call its recorder.
  */
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
 #include "pages.h"
-#include "seqlz_compress.c"
 #include "seqlz_compress_literals.c"
+#include "seqlz_encoder.h"
 
 #define SEQS 4
 #define CAP (2 * SEQLZ_BLOCK_SIZE)
@@ -94,7 +95,7 @@ static void len_value(struct drv* D, const struct value_table* t, const char* wh
     put(D, what, val, pt[0].bits + extra, pt, extra ? 2 : 1);
 }
 
-/* encode_emit()'s puts and flushes for a sequence with a match, one at a time, on the copy */
+/* encode_seq()'s puts and flushes for a sequence with a match, one at a time, on the copy */
 static void traced(struct drv* D, unsigned int ll, unsigned int ml, unsigned int off) {
     struct seqlz_encoder* e = &D->e;
     unsigned int tlen, raw_bits, cls, tok, esc, offv, np = 0;
@@ -138,11 +139,11 @@ static void traced(struct drv* D, unsigned int ll, unsigned int ml, unsigned int
     e->last = off;
 }
 
-static void drv_emit(void* ctx, const u8* in, unsigned int ll, unsigned int ml, unsigned int off) {
-    struct drv* D = ctx;
+static void drv_emit(struct drv* D, const u8* in, unsigned int ll, unsigned int ml, unsigned int off, bool rec) {
     long k;
 
-    encode_emit(&real, in, ll, ml, off);
+    (void)rec;
+    encode_seq(&real, in, ll, ml, off, false);
     if (D->n < SEQS) {
         if (!ml)
             exit(1);
@@ -150,12 +151,19 @@ static void drv_emit(void* ctx, const u8* in, unsigned int ll, unsigned int ml, 
         k = real_dst + CAP - real.p;
         if (D->e.acc != real.acc || D->e.cnt != real.cnt || D->e.last != real.last || shadow + CAP - D->e.p != k ||
             memcmp(real.p, D->e.p, (size_t)k)) {
-            fprintf(stderr, "accum.c: sequence %u: the copy is not where encode_emit() is\n", D->n);
+            fprintf(stderr, "accum.c: sequence %u: the copy is not where encode_seq() is\n", D->n);
             exit(1);
         }
     }
     D->n++;
 }
+
+/* the matcher, with drv_emit() for encode_seq() */
+#define seqlz_encoder drv
+#define encode_seq drv_emit
+#include "seqlz_match.h"
+#undef encode_seq
+#undef seqlz_encoder
 
 int main(void) {
     static u8 page[SEQLZ_BLOCK_SIZE], ref[CAP];
@@ -167,11 +175,11 @@ int main(void) {
     encoder_init(&real, real_dst, CAP, page + SEQLZ_BLOCK_SIZE);
     encoder_init(&D.e, shadow, CAP, page + SEQLZ_BLOCK_SIZE);
     printf("{\"ops\":[");
-    seqlz_match_block(st.table, page, false, drv_emit, &D);
+    seqlz_match_block(st.table, page, false, &D);
     len = encoder_finish(&real, real_dst, CAP);
-    ref_len = seqlz_compress(&st, page, ref, CAP, 1);
+    ref_len = seqlz_compress_block(&st, page, ref, CAP, 1);
     if (!len || len != ref_len || memcmp(real_dst, ref, len)) {
-        fprintf(stderr, "accum.c: the page is not what seqlz_compress() writes\n");
+        fprintf(stderr, "accum.c: the page is not what seqlz_compress_block() writes\n");
         return 1;
     }
     printf("]}\n");

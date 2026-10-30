@@ -116,7 +116,7 @@ int main(void) {
         counter_page(cp);
         encoder_init(&ce, cd, sizeof(cd), cp + SEQLZ_BLOCK_SIZE);
         ce.rec = true;
-        seqlz_match_block(cs.table, cp, true, encode_emit_rec, &ce);
+        seqlz_match_block(cs.table, cp, true, &ce);
         if (get_unaligned_le16(cd + SEQLZ_HEADER) != 0 || get_unaligned_le16(cd + SEQLZ_HEADER + 2) < at + 8)
             fail("the page of counters' first sequence does not hold the word");
         /* the first sequence's words start at dist, 8 bytes apart */
@@ -168,7 +168,7 @@ int main(void) {
     pointer_page(page);
     encoder_init(&e, dst, sizeof(dst), page + SEQLZ_BLOCK_SIZE);
     e.rec = true;
-    seqlz_match_block(st.table, page, true, encode_emit_rec, &e);
+    seqlz_match_block(st.table, page, true, &e);
     if (e.p == e.lit || !e.rec)
         fail("the page of pointers does not fit with its records");
     with_rec = (unsigned int)(e.lit - (dst + SEQLZ_HEADER));
@@ -287,14 +287,14 @@ int main(void) {
     fact_num("delta.ptr.l3.dt", d2[SEQLZ_LIT_HEADER(0)]);
     fact_hex("delta.ptr.l3.head", d2, SEQLZ_LIT_HEADER(SEQLZ_SIZE_BITS_MIN + (d2[2] >> SEQLZ_LIT_WIDTH_AT & 7U)) + 1);
     fact_num("delta.ptr.l3.n", get_unaligned_le16(d2) & (SEQLZ_LIT_CODED - 1U));
-    if (seqlz_decode(d2, len, out, scratch) || memcmp(out, page, SEQLZ_BLOCK_SIZE))
+    if (seqlz_decompress(d2, len, out, scratch) || memcmp(out, page, SEQLZ_BLOCK_SIZE))
         fail("the page of pointers does not decode to itself");
     {
         /* level 3 without deltas: compress_own() with the records off, then seqlz_code_own() with delta 0 */
         unsigned int raw, n0;
 
         encoder_init(&e, d2, sizeof(d2), page + SEQLZ_BLOCK_SIZE);
-        seqlz_match_block(st.table, page, true, encode_emit, &e);
+        seqlz_match_block(st.table, page, true, &e);
         raw = encoder_finish(&e, d2, sizeof(d2));
         n0 = seqlz_code_own(d2, raw, &st, 0);
         fact_num("delta.ptr.l3plain.len", n0);

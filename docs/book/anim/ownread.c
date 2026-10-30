@@ -43,10 +43,10 @@ static unsigned int one_page(const char* id, void (*make)(u8*), int comma) {
     u64 bits = 0;
 
     make(page);
-    n = seqlz_compress(&st, page, dst, sizeof dst, SEQLZ_LEVEL_OWN);
+    n = seqlz_compress_block(&st, page, dst, sizeof dst, SEQLZ_LEVEL_OWN);
     if (!n || !(get_unaligned_le16(dst) & SEQLZ_LIT_CODED) || (dst[2] & SEQLZ_LIT_CODE_MASK) != SEQLZ_LIT_OWN)
         fail(id, "no table of its own at level 3");
-    if (seqlz_decode(dst, n, out, scratch) || memcmp(out, page, SEQLZ_BLOCK_SIZE))
+    if (seqlz_decompress(dst, n, out, scratch) || memcmp(out, page, SEQLZ_BLOCK_SIZE))
         fail(id, "does not decode");
     w = SEQLZ_SIZE_BITS_MIN + (dst[2] >> SEQLZ_LIT_WIDTH_AT & 7U);
     p = dst + SEQLZ_LIT_HEADER(w) + (dst[2] >> SEQLZ_LIT_DELTA_AT);

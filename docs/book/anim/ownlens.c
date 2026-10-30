@@ -32,10 +32,10 @@ static unsigned int one_page(const char* id, void (*make)(u8*), int comma) {
     u64 inv;
 
     make(page);
-    if ((seqlz_compress(&st, page, level3, sizeof level3, SEQLZ_LEVEL_OWN) == 0) ||
+    if ((seqlz_compress_block(&st, page, level3, sizeof level3, SEQLZ_LEVEL_OWN) == 0) ||
         (level3[2] & SEQLZ_LIT_CODE_MASK) != SEQLZ_LIT_OWN)
         fail(id, "no table of its own at level 3");
-    /* seqlz_compress() at level 3 up to own_code(), as seqlz_code_own() and code_literals() do it */
+    /* seqlz_compress_block() at level 3 up to own_code(), as seqlz_code_own() and code_literals() do it */
     len = compress_own(&st, page, dst, sizeof dst, &delta);
     if (!len || delta)
         fail(id, "the literals are deltas, which this figure does not show");

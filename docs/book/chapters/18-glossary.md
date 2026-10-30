@@ -46,7 +46,7 @@ sense given here.
   {{ch18.bits.token}}, {{ch18.bits.lit}} and {{ch18.bits.len}} bits. [Chapter 2](#ch-compression--huffman)
 - **k-means**: the trainer's clustering for the literal tables: each page goes to the table that codes it
   in the fewest bits, each table is rebuilt from its pages, until nothing moves.
-  [`seqlz_lit_sets.c`](#f-seqlz_lit_sets-c-b1)
+  [`seqlz_lengths.c`](#f-seqlz_lengths-c-b13)
 - **Kraft sum**: the sum of $2^{-l}$ over a table's code lengths, at most 1 for a prefix code, exactly 1
   for a complete one. [Chapter 2](#ch-compression--complete)
 - **length value**: the rest of `ll` or `ml` when it is too large for the token, a symbol of the `ll` or
@@ -56,7 +56,7 @@ sense given here.
 - **lazy step**: a look at the next position before a match is taken, for a longer one there; level 3
   does it for matches below 20 bytes. [Level 3](#ch-matcher--lazy)
 - **literal table**: one of the 8 fixed tables for coded literals, or a page's own table; a page uses
-  one. Not related to the 8 streams. [`seqlz_lit_sets.c`](#f-seqlz_lit_sets-c)
+  one. Not related to the 8 streams. [`seqlz_lengths.h`](#f-seqlz_lengths-h)
 - **`ll`, `ml`**: literal length and match length of a sequence, `ml` 4 or more.
   [Chapter 4](#ch-format)
 - **LZ77**: the family of compressors that write data as literals and matches; `lz4`, `lzo`, `zstd` and
@@ -112,7 +112,7 @@ sense given here.
 - **`EXPORT_SYMBOL_GPL`**: makes a function callable from modules with a GPL-compatible licence.
   [The export](#ch-zram-glue--api)
 - **`FORTIFY_SOURCE`**: a kernel option that checks the sizes of `memcpy()` and its relatives, and can
-  make each a call; seqlz's short copies use `__builtin_memcpy()`. [Why](#f-seqlz_internal-h-b12)
+  make each a call; seqlz's short copies use `__builtin_memcpy()`. [Why](#f-seqlz_internal-h-b20)
 - **fuzz target**: a function's entry point for a fuzzer, libFuzzer or AFL++, which feeds it millions of
   mutated inputs. [seqlz's fuzzers](#ch-zram-glue--fuzzing)
 - **host program**: a program that the kernel's build compiles for the build machine and runs, e.g. to
@@ -191,7 +191,7 @@ sense given here.
 - **seqlz**: the codec, one format with three levels of the compressor and one decoder; also the
   project, its binaries `seqlz-*` and its options `SEQLZ_*`. [Preface](#preface)
 - **`seqlz-1`, `seqlz-2`, `seqlz-3`**: seqlz at levels 1 to 3: raw literals; coded literals where they
-  pay; and also a lazy step, a table of the page's own and literals as deltas. [`seqlz_compress()`](#ch-encoder--entry),
+  pay; and also a lazy step, a table of the page's own and literals as deltas. [`seqlz_compress_block()`](#ch-encoder--entry),
   [`seqlz_compress_literals.c`](#f-seqlz_compress_literals-c)
 - **`seqlz-opt`**: an optimal parser for the same format, for zram's recompression, removed.
   [Chapter 6](#ch-decisions--not-kept)
