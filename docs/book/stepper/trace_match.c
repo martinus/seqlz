@@ -10,7 +10,6 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include <linux/string.h>
 #include <linux/unaligned.h>
 
 #include "seqlz_internal.h"
