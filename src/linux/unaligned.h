@@ -2,6 +2,7 @@
 #ifndef SEQLZ_COMPAT_LINUX_UNALIGNED_H
 #define SEQLZ_COMPAT_LINUX_UNALIGNED_H
 
+#include <linux/compiler_types.h>
 #include <linux/string.h>
 #include <linux/types.h>
 

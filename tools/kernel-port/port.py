@@ -28,9 +28,9 @@ src/ stays the one source of the codec. This writes from it:
   arch/x86/include/asm/processor.h      x86-prefetcht0.patch, prefetch() as prefetcht0 on x86-64, which
                                         clang drops otherwise; not if the tree has it already
 On the way: blocks of 4 KiB whatever PAGE_SIZE is, SEQLZ_BLOCK_BITS 12 and SEQLZ_BLOCK_SIZE of the
-interface, and no references to this repository in the comments (its documents, tools and build) and no reasons that
-only hold for the Mi 9T's 4.14, Fedora's config or our test machines, which say the reason in general
-terms instead; a comment that changed is wrapped again to 80 columns. Fails if a reference is left,
+interface, and no references to this repository in the comments (its documents, tools and build) and no
+reasons that only hold for the Mi 9T's 4.14, Fedora's config or our test machines, which say the reason
+in general terms instead; a comment that changed is wrapped again to 80 columns. Fails if a reference is left,
 naming it; the one URL it keeps is PROJECT_URL.
   Documentation/staging/seqlz.rst       docs/format.md as reStructuredText, see format_rst.py, and the
                                         interface's kernel-doc, in the
@@ -72,6 +72,8 @@ CPU_MODEL = re.compile(r"read_cpuid|\bMIDR_|boot_cpu_data|x86_model")
 FORBIDDEN = re.compile(r"docs/|explored|seqlz-bench|seqlz-score|seqlz-train|\bbench_|SEQLZ_PAGE_BITS|tools/|bench/|"
                        r"CMake|\.inc\b|src/|#\d{2,3}\b|"
                        r"seqlz-fast|seqlz-[0-9]\b|zramphone|\bdump\b|\bcorpus\b|"
+                       # src/'s old name of seqlz_decompress(), which the kernel never had
+                       r"\bseqlz_decode\(|"
                        # the reasons of an old kernel, a distribution or our test machines, which mainline
                        # does not have
                        r"4\.14|Mi 9T|Fedora|kernel VM|\bthe phone|\bthe PC\b")
@@ -130,6 +132,9 @@ HEADING = re.compile(r" ?\(\"[^\"]+\"(?:,? [^)]*)?\)")
 # whatever PAGE_SIZE is, SEQLZ_BLOCK_SIZE of the interface
 BLOCK_BITS_SRC = re.compile(r"/\*\n \* A block is what seqlz compresses at a time.*?\*/\n#ifndef SEQLZ_PAGE_BITS\n"
                             r"#define SEQLZ_PAGE_BITS 12\n#endif\n#define SEQLZ_BLOCK_BITS SEQLZ_PAGE_BITS\n", re.S)
+# the same in the interface, src/linux/seqlz.h, with the comment above it
+BLOCK_SIZE_SRC = re.compile(r"/\*\n \* the bytes of a block[^/]*\*/\n#ifndef SEQLZ_PAGE_BITS\n#define SEQLZ_PAGE_BITS 12\n"
+                            r"#endif\n#define SEQLZ_BLOCK_SIZE \(1U << SEQLZ_PAGE_BITS\)\n")
 BLOCK_BITS_KERNEL = """/*
  * A block is what seqlz compresses at a time: SEQLZ_BLOCK_SIZE bytes of the
  * interface, a memory page for zram with 4 KiB pages, whatever the kernel's
@@ -313,10 +318,8 @@ def put_doc(text, name, doc):
 def port_interface():
     """include/linux/seqlz.h: src/linux/seqlz.h for blocks of 4 KiB only, whatever PAGE_SIZE is"""
     t = (SRC / "linux" / "seqlz.h").read_text()
-    t = must(t, "/*\n * the bytes of a block, whatever PAGE_SIZE is; outside the kernel also 16 KiB,\n"
-                " * with SEQLZ_PAGE_BITS 14\n */\n#ifndef SEQLZ_PAGE_BITS\n#define SEQLZ_PAGE_BITS 12\n#endif\n"
-                "#define SEQLZ_BLOCK_SIZE (1U << SEQLZ_PAGE_BITS)\n",
-             "/* the bytes of a block, whatever PAGE_SIZE is */\n#define SEQLZ_BLOCK_SIZE 4096U\n")
+    t, k = BLOCK_SIZE_SRC.subn("/* the bytes of a block, whatever PAGE_SIZE is */\n#define SEQLZ_BLOCK_SIZE 4096U\n", t)
+    assert k == 1, "the block size of src/linux/seqlz.h"
     return must(t, "#define SEQLZ_MEM_COMPRESS (SEQLZ_PAGE_BITS == 12 ? 8192 : 16384)\n",
                 "#define SEQLZ_MEM_COMPRESS 8192\n")
 
@@ -368,9 +371,9 @@ def port_compress():
              "/* ---- encoder ---- */\n\n" + header_body("seqlz_encoder.h") + "\n\n"
              "/* ---- the matcher ---- */\n\n" + header_body("seqlz_match.h") + "\n\n"
              "static unsigned int compress_block(")
-    # the interface's seqlz_compress() below calls it, with the work memory and a level
+    # static: the interface's seqlz_compress() below is its one caller, checks the level, and has the
+    # kernel-doc, in include/linux/seqlz.h
     t = make_static(t, "seqlz_compress_block")
-    # the interface's kernel-doc is in include/linux/seqlz.h, and seqlz_compress() checked the level
     t = put_doc(t, "seqlz_compress_block", "/* one block, for the interface below, which checked the level */\n")
     t = must(t, "\tif (level < 1 || level > SEQLZ_LEVELS)\n\t\treturn 0;\n", "")
     return fix_comments(t)
@@ -424,8 +427,10 @@ obj-$(CONFIG_SEQLZ_KUNIT_TEST) += tests/seqlz_kunit.o
 def port_lengths_script():
     """scripts/gen-seqlz-lengths.py without what only the repository's userspace build uses"""
     t = (HERE / "gen-seqlz-lengths.py").read_text()
-    t = cut(t, r"    # --extern: the tables without static, .*?        args.pop\(0\)\n")
-    t = must(t, "gen-seqlz-lengths.py [--extern] <counts file>", "gen-seqlz-lengths.py <counts file>")
+    t = must(t, "#\n# --extern writes the tables without static, for the repository's src/.\n", "")
+    t = must(t, " [--extern]", "", 2)
+    t = must(t, '    if args[:1] == ["--extern"]:\n        storage = ""\n        args.pop(0)\n', "")
+    t = must(t, '    storage = "static "\n', "")
     return must(t, "(tables, storage) +", '(tables, "static ") +', 3)
 
 

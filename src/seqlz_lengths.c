@@ -3,7 +3,8 @@
  * The code lengths compiled in, of the tokens and length values and of the
  * literal tables. They are part of the format: a block decodes only with the
  * tables it was compressed with (docs/format.md). For blocks of 4 KiB they are
- * in seqlz_lengths.h, the kernel's, for 16 KiB blocks in seqlz_lengths_16k.h.
+ * in seqlz_lengths.h, the kernel's but without static, for 16 KiB blocks in
+ * seqlz_lengths_16k.h.
  * tools/kernel-port/gen-seqlz-lengths.py makes them from the counts in
  * bench/seqlz_counts_4k.txt and _16k.txt, those of 4 KiB counted with
  *   seqlz-train --corpus train-mix-1012 --counts
@@ -16,9 +17,10 @@
  * Huffman code of its pages' literals. Of 32 runs from other starting tables,
  * the one with the fewest bits is kept. The most used table comes first.
  *
- * The kernel includes its seqlz_lengths.h only in gen_seqlz_tables, the
- * program that builds the tables; the tests and tools here use the lengths
- * too, so they are defined once, here, see seqlz.h.
+ * The kernel includes its seqlz_lengths.h, with static tables, in
+ * gen_seqlz_tables, the program that builds the tables, and in its KUnit test;
+ * here the tests and tools use them through seqlz.h, so they are defined once,
+ * in this file.
  */
 #include "seqlz.h"
 

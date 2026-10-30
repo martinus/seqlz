@@ -6,16 +6,17 @@
 #pragma GCC system_header
 
 /* the UAPI header of the same name */
-#if defined(__has_include_next)
 #if __has_include_next(<linux/swab.h>)
 #include_next <linux/swab.h>
-#endif
 #endif
 
 #include <linux/types.h>
 
-/* the 8 bytes of x in the other order */
-static __always_inline u64 swab64(u64 x)
+/*
+ * the 8 bytes of x in the other order; not __always_inline, which libc's
+ * headers, which include this, should not get
+ */
+static inline u64 swab64(u64 x)
 {
 	return __builtin_bswap64(x);
 }
