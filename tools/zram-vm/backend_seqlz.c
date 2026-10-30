@@ -150,7 +150,7 @@ static int sz_compress(struct zcomp_params *params, struct zcomp_ctx *ctx, struc
 	if (req->src_len != SEQLZ_BLOCK_SIZE)
 		return -EINVAL;
 	len = seqlz_compress_block(&((struct sz_ctx *)ctx->context)->st, req->src, req->dst,
-			     req->dst_len, level);
+				   req->dst_len, level);
 	if (!len)
 		return -EINVAL;
 	req->dst_len = len;
@@ -165,7 +165,7 @@ static int sz_decompress(struct zcomp_params *params, struct zcomp_ctx *ctx, str
 		for (unsigned int q = 64; q < req->src_len; q += 64)
 			prefetch((const char *)req->src + q);
 	if (req->dst_len < SEQLZ_BLOCK_SIZE || seqlz_decompress(req->src, req->src_len, req->dst,
-							      ((struct sz_ctx *)ctx->context)->scratch))
+								  ((struct sz_ctx *)ctx->context)->scratch))
 		return -EINVAL;
 	return 0;
 }

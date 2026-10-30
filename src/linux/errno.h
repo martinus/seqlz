@@ -6,10 +6,8 @@
 #pragma GCC system_header
 
 /* the UAPI header, which libc's errno.h includes */
-#if defined(__has_include_next)
 #if __has_include_next(<linux/errno.h>)
 #include_next <linux/errno.h>
-#endif
 #endif
 
 /* without libc's headers, as the benchmarks build the codec with the kernel's flags */
