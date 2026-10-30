@@ -11,6 +11,9 @@
  * recorder of the sequences for seqlz_find() in seqlz_harness.c.
  */
 
+#include <linux/string.h>
+#include <linux/unaligned.h>
+
 #include "seqlz_internal.h"
 
 /*
