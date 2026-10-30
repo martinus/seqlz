@@ -14,23 +14,26 @@ which is why most lines here have a measurement behind them.
 
 A reading order that follows the call:
 
-1. [`seqlz_match_block()`](#b116), the matcher, and [its state](#b145).
-2. [One position](#b174): two candidates, one branch. The step-through there runs the real function
+1. [`seqlz_match_block()`](#b119), the matcher, and [its state](#b148).
+2. [One position](#b177): two candidates, one branch. The step-through there runs the real function
    on two pages.
-3. [A hit](#b200): [`seqlz_match_len()`](#b27) counts the match, at level 3
-   [`seqlz_lazy()`](#b78) may take a longer one, then [`encode_seq()` and insert](#b218).
-4. [`seqlz_hash5()`](#b16), the hash of the table.
+3. [A hit](#b203): [`seqlz_match_len()`](#b30) counts the match, at level 3
+   [`seqlz_lazy()`](#b81) may take a longer one, then [`encode_seq()` and insert](#b221).
+4. [`seqlz_hash5()`](#b19), the hash of the table.
 
 ## The hash
 
-@@ 1-15
+@@ 1-18
 @anchor ch-matcher--file
 A header of inline functions with two includers: `seqlz_compress.c`, where it calls the encoder, and
-`seqlz_harness.c`, where it records the sequences for `seqlz_find()`. The kernel copy, made by
+`seqlz_harness.c`, where it records the sequences for `seqlz_find()`. It includes the kernel headers
+of what it calls, `<linux/string.h>` for `memset()` and `<linux/unaligned.h>` for the loads, so that it
+builds wherever an encoder is declared before it. The kernel copy, made by
 [`port.py`](book:#ch-zram-glue--what-portpy-changes-in-the-code), pastes the matcher right into
-`seqlz_compress.c`, after the encoder and before its callers.
+`seqlz_compress.c`, after the encoder and before its callers; `port.py` takes what follows the last
+include and fails if the header includes a kernel header that `seqlz_compress.c` does not.
 
-@@ 16-26
+@@ 19-29
 5 bytes into a slot of 4096 (12 bits). `v << 24` drops 3 of the 8 bytes loaded and puts the 5 at the
 top, the multiply mixes them, and the top 12 bits are the slot: the top bits of a product depend on
 all input bits, the low ones only on the low input bits.
@@ -125,7 +128,7 @@ A hash of 6 bytes went further the same way, fewer cycles for more memory, and w
 
 ## seqlz_match_len()
 
-@@ 27-55
+@@ 30-58
 How many bytes agree. The XOR of two little-endian words is 0 where they agree, and its lowest set bit
 is in the first byte that differs, so `ctz(x) >> 3` is the number of equal bytes, one instruction.
 
@@ -166,7 +169,7 @@ instead of 8 was 1% slower on the Mi 9T's little core
 ([explored-designs.md](https://github.com/martinus/seqlz/blob/main/docs/explored-designs.md#the-matcher-on-an-in-order-core-34-fewer-compress-cycles-on-the-a55-same-output-kept)).
 @end
 
-@@ 56-71
+@@ 59-74
 Then 8 bytes per round, and bytes only within the last 7 of the page. The `>= 16` and `>= 8` keep
 every load inside the page, and `q` is before `p`, so it is inside whenever `p` is. A match may overlap
 its source, e.g. at offset 2 in a page of `ab` repeated: the matcher only reads, and
@@ -174,14 +177,14 @@ its source, e.g. at offset 2 in a page of `ab` repeated: the matcher only reads,
 
 ## Level 3's lazy step
 
-@@ 72-77
+@@ 75-80
 Matches of 20 bytes or more are taken as they are. A lazy step up to that length kept most of what a
 step at every match saves.
 
-@@ 78-115
+@@ 81-118
 Is there a longer match one position later? It tries the same two candidates as the loop, the repeat
 offset and the table's entry, with the 8 bytes and hash the loop already loaded one position ahead.
-Both are in the page before `pos + 1`, for the reasons the loop's are ([the state](#b145)). Only a
+Both are in the page before `pos + 1`, for the reasons the loop's are ([the state](#b148)). Only a
 strictly longer match wins, at the same length the match at `pos` has one literal fewer. The winner
 moves `pos` on by one and stores it in the table, as the loop would have.
 
@@ -191,7 +194,7 @@ the same match one byte shorter. A branch per candidate is fine here, it runs on
 
 ## The matcher
 
-@@ 116-144
+@@ 119-147
 @anchor ch-matcher
 The plan: greedy like `lz4`'s fast mode, two candidates (the repeat offset, which costs 0 offset bits,
 and the last position with the same hash), and every position, with no skipping after a stretch
@@ -231,7 +234,7 @@ x86-64, 20 000 pages of a desktop dump).
 jumps over it. A **lazy** matcher checks whether a match one byte later is longer, a **hash chain**
 keeps every earlier position of a hash and searches them all. `lz4`'s fast mode is greedy the same
 way. Level 3 adds one lazy step for short matches and extends each match backwards, the paragraph of
-the comment that begins "With lazy" ([level 3](#b207)).
+the comment that begins "With lazy" ([level 3](#b210)).
 
 One lazy step at every match, taking the next position's candidate if it is longer by 2 bytes or
 more, took 24 808 instead of 20 400 compress cycles per page, 21% more, and `seqlz-1` stayed at 27.0%
@@ -273,14 +276,14 @@ commit `055e7b5`). The 3% are from boots with only `lzo-rle` next to it; in boot
 the writes gained 0.05 µs.
 @end
 
-@@ 145-173
+@@ 148-176
 Positions, not pointers: the limit is a constant, and the table stores positions in 2 bytes. `back` is
 the repeat offset as a negative index, so the load is one addressing mode.
 
 The table is cleared for every page, so every entry is a position of this page before `pos`, and a
 candidate's bytes load without a check. A slot never written says "position 0", a real candidate. The
 next position's bytes, hash, slot and candidate bytes are loaded one position ahead
-([one position](#b174)).
+([one position](#b177)).
 @more {#ch-matcher--state} A cache of 8 KiB, cleared for every page
 `limit` is {{ch09.limit}}, a constant the compiler puts into the compare, and positions instead of
 pointers took 21 916 to 21 786 cycles per page
@@ -313,7 +316,7 @@ against the 4 bytes at 0. The repeat offset is safe the same way: `last` and `po
 match `last` is at most the match's start, and `pos` only grows.
 @end
 
-@@ 174-199
+@@ 177-202
 The path taken most: no match. Both candidates are read and compared, and `rep_hit | cand_hit`, a
 bitwise OR, decides with one branch. With a branch per candidate it mispredicted almost twice as often
 as `lz4`.
@@ -438,7 +441,7 @@ Fill `page` with your own bytes to see what the matcher makes of them.
 :::
 @end
 
-@@ 200-206
+@@ 203-209
 When both hit, the repeat offset wins, as its offset costs no bits. The match is counted from `pos`,
 4 bytes are known to agree.
 
@@ -453,7 +456,7 @@ table's only when it is longer by more than 2 bytes saved 0.5 bytes per page, fo
 "The longer of the two candidates").
 
 A match can start before the position where it is found, because the positions inside a match are not
-in the table ([the insert](#b218)) and slots are overwritten: when a later place repeats the inside of
+in the table ([the insert](#b221)) and slots are overwritten: when a later place repeats the inside of
 an earlier match, the matcher finds it only from the one position inserted near that match's end.
 [A copy found 2 bytes late](#ch-matcher--late) shows it.
 
@@ -469,7 +472,7 @@ of 34.10 µs on the A55, reads the same
 it a whole byte.
 @end
 
-@@ 207-217
+@@ 210-220
 Level 3 only: the lazy step for short matches, then the step back, as long as the byte before the
 match equals the byte before its source. `pos` and `m` move together, so the offset stays. Here it
 comes after the count, where it costs less. `pos > anchor` keeps it out of the sequence before, whose
@@ -487,7 +490,7 @@ then finds the rest of the copy right behind:
 | 3 | 0 | {{ch09.lazy.l3.0.ll}} | {{ch09.lazy.l3.0.at}} | {{ch09.lazy.l3.0.ml}} | {{ch09.lazy.l3.0.off}} |
 @assert ch09.lazy.l2.seqs == 3 and ch09.lazy.l3.seqs == 2 and ch09.lazy.l2[0].ml < ch09.lazy.l3[0].ml and ch09.lazy.l3[0].at == ch09.lazy.l2[0].at + 1
 
-At level 3 the 5 bytes at 199 are below {{ch09.lazy_len}}, so [`seqlz_lazy()`](#b78) looks at 200,
+At level 3 the 5 bytes at 199 are below {{ch09.lazy_len}}, so [`seqlz_lazy()`](#b81) looks at 200,
 where the table has position 21 for the same 5 bytes, and the match there is {{ch09.lazy.l3.0.ml}}
 bytes long. Byte 199 becomes a literal, and one sequence with one token and one offset does what two
 did. The step back finds `0x5a` before 200 but not before 21, and stops.
@@ -498,7 +501,7 @@ and 2. It cost there because it came between choosing the candidate and counting
 the byte it passed over to be taken back with the new offset. On the page of
 [a copy found 2 bytes late](#ch-matcher--late) it takes the 2 literals before the match.
 
-The animation under the note of [`seqlz_lazy()`](#b78) has a made-up page where both take bytes: the
+The animation under the note of [`seqlz_lazy()`](#b81) has a made-up page where both take bytes: the
 table finds a short match at `pos`, `seqlz_lazy()` a longer one at `pos + 1`, and the step back moves
 that one back past `pos`, into the literals before it. `anim/lazy.c` builds that page and checks each
 match against what `seqlz_find()` returns at levels 2 and 3.
@@ -514,7 +517,7 @@ October 2026
 ([explored-designs.md](https://github.com/martinus/seqlz/blob/main/docs/explored-designs.md#level-3-a-lazy-matcher-and-a-literal-table-of-the-pages-own-zstd-3s-memory-in-less-than-half-its-time-on-the-phone-kept)).
 @end
 
-@@ 218-240
+@@ 221-243
 The new repeat offset, then the sequence goes to the encoder. Of the skipped positions inside the
 match, one goes into the table, 2 bytes before its end, as `lz4`'s fast mode does: data that repeats
 once tends to repeat near the end of the last match. Every position would be a hash, a load and a
@@ -554,7 +557,7 @@ copy:
 the one position inserted, and hits. `seqlz_find()` returns {{ch09.rnd.seq.ll}} literals, 398 and
 399 among them, and a match of {{ch09.rnd.seq.ml}} at offset {{ch09.rnd.seq.off}}, starting at
 {{ch09.rnd.seq.at}}. The copy started 2 bytes earlier, and those 2 bytes are literals: at levels 1 and 2
-the matcher does not step back, [the note on a hit](#b200) says why. At level 3 it does, and
+the matcher does not step back, [the note on a hit](#b203) says why. At level 3 it does, and
 `seqlz_find(&st, page, seq, 3)` returns {{ch09.rnd3.seq.ll}} literals and a match of
 {{ch09.rnd3.seq.ml}} at {{ch09.rnd3.seq.at}}, the whole copy.
 @assert ch09.rnd.seq.at == 400 and ch09.rnd.seq.ml == 12 and ch09.rnd3.seq.at == 398 and ch09.rnd3.seq.ml == 14
