@@ -109,7 +109,7 @@
 /*
  * The most bits a token and its offset take, the escape included. The encoder
  * counts on it to know that zram's two pages are always room enough for a
- * compressed block, see ENC_ROOM in seqlz_compress.c. It limits the escape's
+ * compressed block, see the encoder's ENC_ROOM. It limits the escape's
  * code: the longest offset follows an escaped token, in SEQLZ_BLOCK_BITS bits.
  */
 #define SEQLZ_SEQ_BITS 31U

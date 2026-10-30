@@ -39,7 +39,8 @@ cp -r "$here/compat" "$out/"
 gen=$src/../tools/gen-tables/gen-tables.sh
 [[ -x $gen ]] || { echo "$src has no tools/gen-tables/ next to it, it is older than this build.sh" >&2; exit 1; }
 "$gen" "$out/seqlz_tables.c"
-objs=$(cd "$out" && ls seqlz*.c | sed 's/\.c$/.o/' | tr '\n' ' ')
+# not seqlz_harness.c, which only the tests and tools use
+objs=$(cd "$out" && ls seqlz*.c | grep -vx seqlz_harness.c | sed 's/\.c$/.o/' | tr '\n' ' ')
 # the glue of the same tree: the codec's interface changes between versions
 glue=$src/../tools/zram-phone/glue.c
 [[ -f $glue ]] || glue=$here/glue.c

@@ -57,8 +57,9 @@ else
     # seqlz as zram backends, seqlz-1 to seqlz-3, one per level, with lz4's -O3
     z="$work/src/drivers/block/zram"
     levels="1 2 3"
-    # the codec's files, whether a src/ has it in one seqlz.c or split
-    codec_objs() { (cd "$1" && ls seqlz*.c | sed 's/\.c$/.o/' | tr '\n' ' '); }
+    # the codec's files, whether a src/ has it in one seqlz.c or split; not seqlz_harness.c, which only the
+    # tests and tools use
+    codec_objs() { (cd "$1" && ls seqlz*.c | grep -vx seqlz_harness.c | sed 's/\.c$/.o/' | tr '\n' ' '); }
     cp "$here/backend_seqlz.c" "$here/backend_seqlz.h" "$here/../../src/"seqlz*.c "$here/../../src/"*.h "$z/"
     # the codec's interface, <linux/seqlz.h>; the other headers of src/linux/ are the kernel's own here
     mkdir -p "$z/linux"

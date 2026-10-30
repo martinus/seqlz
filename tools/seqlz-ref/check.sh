@@ -43,8 +43,7 @@ EOF
 
 "$repo/tools/gen-tables/gen-tables.sh" "$out/seqlz_tables.c" -DSEQLZ_PAGE_BITS=12
 ${CC:-cc} -O2 -DSEQLZ_PAGE_BITS=12 -I"$repo/src" -o "$out/compress" "$repo/tools/seqlz-compress/compress.c" \
-    "$repo/src/seqlz_codes.c" "$repo/src/seqlz_compress.c" "$repo/src/seqlz_compress_literals.c" "$repo/src/seqlz_decompress.c" "$repo/src/seqlz_decompress_literals.c" \
-    "$repo/src/seqlz_harness.c" "$repo/src/seqlz_lengths.c" "$out/seqlz_tables.c"
+    "$repo"/src/seqlz_*.c "$out/seqlz_tables.c"
 cp "$repo"/tools/seqlz-worst/pages/*.page "$out/"
 python3 - "$out" "$repo/docs/format.md" <<'EOF'
 import random

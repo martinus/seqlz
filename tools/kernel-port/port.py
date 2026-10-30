@@ -354,10 +354,14 @@ def port_c(name):
     return (SRC / f"seqlz_{name}.c").read_text()
 
 
-def header_body(name):
-    """src/<name> without its head and its include guard: what follows its last include"""
+def header_body(name, into):
+    """src/<name> without its head and its include guard, what follows its last include, for the file into;
+    fails if the header includes a kernel header that into does not"""
     h = (SRC / name).read_text()
-    return h[h.index('#include "seqlz_internal.h"\n') + len('#include "seqlz_internal.h"\n'):h.rindex("#endif")].strip("\n")
+    missing = set(re.findall(r"^#include <.*>$", h, re.M)) - set(re.findall(r"^#include <.*>$", into, re.M))
+    assert not missing, (name, missing)
+    last = list(re.finditer(r"^#include .*\n", h, re.M))[-1]
+    return h[last.end():h.rindex("#endif")].strip("\n")
 
 
 def port_compress():
@@ -368,8 +372,8 @@ def port_compress():
     t = must(t, '#include "seqlz.h"\n#include "seqlz_encoder.h"\n#include "seqlz_match.h"\n',
              '#include "seqlz_internal.h"\n')
     t = must(t, "static unsigned int compress_block(",
-             "/* ---- encoder ---- */\n\n" + header_body("seqlz_encoder.h") + "\n\n"
-             "/* ---- the matcher ---- */\n\n" + header_body("seqlz_match.h") + "\n\n"
+             "/* ---- encoder ---- */\n\n" + header_body("seqlz_encoder.h", t) + "\n\n"
+             "/* ---- the matcher ---- */\n\n" + header_body("seqlz_match.h", t) + "\n\n"
              "static unsigned int compress_block(")
     # static: the interface's seqlz_compress() below is its one caller, checks the level, and has the
     # kernel-doc, in include/linux/seqlz.h

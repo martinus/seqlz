@@ -4,7 +4,6 @@
  * sequences the matcher finds, and seqlz_encode(), a block written from given
  * sequences. The kernel has neither.
  */
-#include <linux/build_bug.h>
 #include <linux/minmax.h>
 
 #include "seqlz.h"
@@ -45,10 +44,7 @@ unsigned int seqlz_find(struct seqlz_state *st, const void *src,
 
 	if (level < 1 || level > SEQLZ_LEVELS)
 		return 0;
-	if (level >= SEQLZ_LEVEL_OWN)
-		seqlz_match_block(st->table, src, true, &f);
-	else
-		seqlz_match_block(st->table, src, false, &f);
+	seqlz_match_block(st->table, src, level >= SEQLZ_LEVEL_OWN, &f);
 	return f.n;
 }
 

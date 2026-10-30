@@ -87,7 +87,7 @@ clang-format --dry-run --Werror $(git ls-files '*.cpp' '*.h' '*.c')   # must be 
 fuzz/smoke.sh 10 $S/build-fuzz -DFETCHCONTENT_SOURCE_DIR_DOCTEST=...  # clang, ASan+UBSan
 fuzz/smoke.sh 10 $S/build-msan -DSEQLZ_SANITIZE=OFF -DSEQLZ_MSAN=ON  # MSan, fuzz targets only
 tools/gen-tables/gen-tables.sh $S/t.c   # the tables, which every build of src/ outside CMake needs too
-gcc -O2 -Isrc -o le test/seqlz_endian.c $S/t.c src/seqlz_{codes,compress,compress_literals,decompress,decompress_literals,harness,lengths}.c
+gcc -O2 -Isrc -o le test/seqlz_endian.c $S/t.c src/seqlz_*.c
 python3 tools/seqlz-ref/seqlz_ref.py <compressed page>...           # spec decoder, checks table hashes
 tools/seqlz-ref/check.sh && tools/check-links.py                    # before pushing docs or tables
 K=/home/martinus/gra/linux/finehill   # src/ or tools/kernel-port/ changed:
