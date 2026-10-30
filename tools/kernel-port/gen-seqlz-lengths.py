@@ -6,7 +6,9 @@
 # seqlz_lengths.h, from which gen_seqlz_tables builds the codes and decode
 # tables when the kernel is built.
 #
-#   gen-seqlz-lengths.py <counts file>
+#   gen-seqlz-lengths.py [--extern] <counts file>
+#
+# --extern writes the tables without static, for the repository's src/.
 #
 # The counts file has comment lines starting with '#', then "token", "ll" and
 # "ml", each followed by the number of symbols and how often each occurred, 8
@@ -203,8 +205,6 @@ def head():
 
 def main():
     args = sys.argv[1:]
-    # --extern: the tables without static, for the repository's userspace
-    # build, which defines them once for its tests and tools
     storage = "static "
     if args[:1] == ["--extern"]:
         storage = ""

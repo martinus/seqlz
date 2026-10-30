@@ -53,25 +53,25 @@ def lengths_file(size):
     return REPO / "src" / ("seqlz_lengths.h" if size == "4k" else f"seqlz_lengths_{size}.h")
 
 
-def lit_lengths(inc):
+def lit_lengths(text):
     """the 8 literal tables' code lengths of a seqlz_lengths.h"""
-    end = inc.index("seqlz_own_lengths[SEQLZ_OWN_SYMBOLS] =")
-    v = numbers(inc[inc.index("seqlz_lit_sets[SEQLZ_LIT_SETS][256] =") : end].split("=", 1)[1])
+    end = text.index("seqlz_own_lengths[SEQLZ_OWN_SYMBOLS] =")
+    v = numbers(text[text.index("seqlz_lit_sets[SEQLZ_LIT_SETS][256] =") : end].split("=", 1)[1])
     return [v[256 * k : 256 * (k + 1)] for k in range(8)]
 
 
-def own_lengths(inc):
+def own_lengths(text):
     """the code lengths of OWN, the code of a page's own literal table, of a seqlz_lengths.h"""
-    return numbers(inc[inc.index("seqlz_own_lengths[SEQLZ_OWN_SYMBOLS] =") :].split("=", 1)[1])
+    return numbers(text[text.index("seqlz_own_lengths[SEQLZ_OWN_SYMBOLS] =") :].split("=", 1)[1])
 
 
-def ordered(counts, old_inc):
+def ordered(counts, old_text):
     """counts with the lit lines in the order that fits the committed literal tables best"""
     with tempfile.NamedTemporaryFile("w", suffix=".txt") as f:
         f.write(counts)
         f.flush()
         new = lit_lengths(gen("--extern", f.name))
-    old = lit_lengths(old_inc)
+    old = lit_lengths(old_text)
     cost = [[sum(abs(a - b) for a, b in zip(old[i], new[j])) for j in range(8)] for i in range(8)]
     perm = min(itertools.permutations(range(8)), key=lambda p: sum(cost[i][p[i]] for i in range(8)))
     lines = counts.split("\n")

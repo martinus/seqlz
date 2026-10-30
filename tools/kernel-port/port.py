@@ -441,8 +441,10 @@ obj-$(CONFIG_SEQLZ_KUNIT_TEST) += tests/seqlz_kunit.o
 def port_lengths_script():
     """scripts/gen-seqlz-lengths.py without what only the repository's userspace build uses"""
     t = (HERE / "gen-seqlz-lengths.py").read_text()
-    t = cut(t, r"    # --extern: the tables without static, .*?        args.pop\(0\)\n")
-    t = must(t, "gen-seqlz-lengths.py [--extern] <counts file>", "gen-seqlz-lengths.py <counts file>")
+    t = must(t, "#\n# --extern writes the tables without static, for the repository's src/.\n", "")
+    t = must(t, " [--extern]", "", 2)
+    t = must(t, '    if args[:1] == ["--extern"]:\n        storage = ""\n        args.pop(0)\n', "")
+    t = must(t, '    storage = "static "\n', "")
     return must(t, "(tables, storage) +", '(tables, "static ") +', 3)
 
 

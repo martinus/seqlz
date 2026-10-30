@@ -84,9 +84,10 @@ else
         bdir=$dir/tools/zram-vm
         [[ -f $bdir/backend_seqlz.c ]] || bdir=$here
         cp "$bdir/backend_seqlz.c" "$bdir/backend_seqlz.h" "$d/"
-        cp "$dir/src/"seqlz*.c "$dir/src/"*.h "$d/"
         # an older src/ has its tables in .inc files
-        if compgen -G "$dir/src/*_4k.inc" >/dev/null; then cp "$dir/src/"*_4k.inc "$d/"; fi
+        shopt -s nullglob
+        cp "$dir/src/"seqlz*.c "$dir/src/"*.h "$dir/src/"*_4k.inc "$d/"
+        shopt -u nullglob
         # its interface, <linux/seqlz.h>, where its src/ has one
         if [[ -f $dir/src/linux/seqlz.h ]]; then
             mkdir -p "$d/linux"

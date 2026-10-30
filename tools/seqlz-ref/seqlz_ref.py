@@ -29,7 +29,7 @@ def spec_hashes():
 def load_tables(block_bits):
     """canonical codes of TOK, LL, ML, the 8 literal tables and OWN, after checking the lengths' SHA-256"""
     size = f"{4 if block_bits == 12 else 16}k"
-    src = (REPO / "src" / ("seqlz_lengths.h" if block_bits == 12 else "seqlz_lengths_16k.h")).read_text()
+    src = (REPO / "src" / ("seqlz_lengths.h" if size == "4k" else f"seqlz_lengths_{size}.h")).read_text()
 
     def field(name):
         return numbers(re.search(r"\." + name + r"\s*=\s*\{([^}]*)\}", src).group(1))
