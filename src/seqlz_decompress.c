@@ -1,7 +1,5 @@
 // SPDX-License-Identifier: MIT OR GPL-2.0-only
-/*
- * The decompressor: seqlz_decode().
- */
+/* The decompressor: seqlz_decompress(). */
 #include "seqlz.h"
 
 /*
@@ -302,8 +300,8 @@ static __always_inline void undelta_fast(unsigned int delta, u8 *d,
 
 /*
  * The fast path's match of len bytes, at most 34, off bytes before d: with room
- * for 40 bytes at d, see seqlz_decode(). Without loops for all but long matches
- * with an offset below 8.
+ * for 40 bytes at d, see seqlz_decompress(). Without loops for all but long
+ * matches with an offset below 8.
  */
 static __always_inline void copy_match_fast(u8 *d, unsigned int off,
 					    unsigned int len)
@@ -381,8 +379,8 @@ static __always_inline u32 next_token_fast(struct seqlz_bit_reader *br,
 }
 
 /*
- * The room the fast path of seqlz_decode() needs. In the block: it writes at
- * most 54 bytes, 14 literals and 40 bytes of match, rounded up to 64. In the
+ * The room the fast path of seqlz_decompress() needs. In the block: it writes
+ * at most 54 bytes, 14 literals and 40 bytes of match, rounded up to 64. In the
  * literals: one copy of 16 bytes. In the input: the 8 bytes of a refill.
  */
 #define FAST_BLOCK_ROOM 64U
@@ -403,10 +401,11 @@ static_assert((FAST_LL_MAX + 40U <= FAST_BLOCK_ROOM &&
 	      "the fast path's literals and match fit FAST_BLOCK_ROOM");
 
 /*
- * seqlz_decode() for a block whose literals are deltas, see SEQLZ_LIT_DELTA_AT,
- * or are not. deltas is a constant at both calls, so the loop over the
- * sequences is compiled twice, and a block without deltas runs none of their
- * code. A check of it for every sequence made those blocks slower to read.
+ * seqlz_decompress() for a block whose literals are deltas, see
+ * SEQLZ_LIT_DELTA_AT, or are not. deltas is a constant at both calls, so the
+ * loop over the sequences is compiled twice, and a block without deltas runs
+ * none of their code. A check of it for every sequence made those blocks slower
+ * to read.
  */
 static __always_inline int decode_block(const void *src, unsigned int src_len,
 					void *dst, void *scratch, bool deltas)
@@ -598,8 +597,8 @@ last_literals:
 	return 0;
 }
 
-int seqlz_decode(const void *src, unsigned int src_len, void *dst,
-		 void *scratch)
+int seqlz_decompress(const void *src, unsigned int src_len, void *dst,
+		     void *wrkmem)
 {
 	const u8 *s = src;
 
@@ -607,6 +606,6 @@ int seqlz_decode(const void *src, unsigned int src_len, void *dst,
 	if (src_len > SEQLZ_HEADER &&
 	    (get_unaligned_le16(s) & SEQLZ_LIT_CODED) &&
 	    s[2] >> SEQLZ_LIT_DELTA_AT)
-		return decode_block(src, src_len, dst, scratch, true);
-	return decode_block(src, src_len, dst, scratch, false);
+		return decode_block(src, src_len, dst, wrkmem, true);
+	return decode_block(src, src_len, dst, wrkmem, false);
 }

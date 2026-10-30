@@ -96,7 +96,7 @@ int LLVMFuzzerTestOneInput(const uint8_t* data, size_t size) {
         abort();
     memset(out, 0xa5, SEQLZ_BLOCK_SIZE);
     unwritten(out, SEQLZ_BLOCK_SIZE);
-    if (seqlz_decode(dst, len, out, scratch) != 0 || memcmp(out, page, SEQLZ_BLOCK_SIZE) != 0)
+    if (seqlz_decompress(dst, len, out, scratch) != 0 || memcmp(out, page, SEQLZ_BLOCK_SIZE) != 0)
         abort();
     return 0;
 }

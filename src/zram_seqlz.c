@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: MIT OR GPL-2.0-only
 /*
  * seqlz as a zram backend calls it, for the benchmarks: "seqlz-1" to "seqlz-3",
- * one per level of seqlz_compress(). The tables are fixed, part of the format
- * (docs/format.md), so zram's dictionary is ignored, as lzo ignores it.
+ * one per level of seqlz_compress_block(). The tables are fixed, part of the
+ * format (docs/format.md), so zram's dictionary is ignored, as lzo ignores it.
  */
 #include "seqlz.h"
 #include "zram_codec.h"
@@ -45,7 +45,7 @@ static int compress(struct bench_params *p, struct bench_stream *s,
 
 	if (src_len != SEQLZ_BLOCK_SIZE)
 		return -1;
-	len = seqlz_compress(s->context, src, dst, *dst_len, level);
+	len = seqlz_compress_block(s->context, src, dst, *dst_len, level);
 	if (!len)
 		return -1;
 	*dst_len = len;
@@ -70,7 +70,7 @@ static int decompress_1(struct bench_params *p, struct bench_stream *s,
 	(void)s;
 	bench_prefetch_page(src, src_len, dst, SEQLZ_BLOCK_SIZE);
 	if (*dst_len < SEQLZ_BLOCK_SIZE ||
-	    seqlz_decode(src, src_len, dst, NULL))
+	    seqlz_decompress(src, src_len, dst, NULL))
 		return -1;
 	*dst_len = SEQLZ_BLOCK_SIZE;
 	return 0;
@@ -117,7 +117,7 @@ static int decompress(struct bench_params *p, struct bench_stream *s,
 {
 	bench_prefetch_page(src, src_len, dst, SEQLZ_BLOCK_SIZE);
 	if (*dst_len < SEQLZ_BLOCK_SIZE ||
-	    seqlz_decode(src, src_len, dst, s->context))
+	    seqlz_decompress(src, src_len, dst, s->context))
 		return -1;
 	*dst_len = SEQLZ_BLOCK_SIZE;
 	return 0;

@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT OR GPL-2.0-only
 /*
- * compress <page>...: each 4 KiB page as seqlz_compress() writes it at each level, to <page>.1,
+ * compress <page>...: each 4 KiB page as seqlz_compress_block() writes it at each level, to <page>.1,
  * <page>.2 and <page>.3, each decoded again and compared before it is written.
  */
 #include <stdio.h>
@@ -24,10 +24,10 @@ int main(int argc, char** argv) {
         }
         fclose(f);
         for (level = 1; level <= SEQLZ_LEVELS; level++) {
-            unsigned int n = seqlz_compress(&st, page, dst, sizeof dst, level);
+            unsigned int n = seqlz_compress_block(&st, page, dst, sizeof dst, level);
             char name[4096];
 
-            if (!n || seqlz_decode(dst, n, out, scratch) || memcmp(out, page, SEQLZ_BLOCK_SIZE)) {
+            if (!n || seqlz_decompress(dst, n, out, scratch) || memcmp(out, page, SEQLZ_BLOCK_SIZE)) {
                 fprintf(stderr, "%s: the roundtrip failed\n", argv[i]);
                 return 1;
             }

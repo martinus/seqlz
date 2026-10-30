@@ -171,7 +171,7 @@ sequence, it looks up the next 11 bits in the token table, whose entry has `ll`,
 the offset out of the bits after the token, takes the offset without a branch, and copies the literals
 and the match. Every length and offset is checked against the page before it is used, so a damaged page
 is rejected, and fuzz tests hold the decoder against a second one written from [format.md](format.md)
-alone ([seqlz_decode()](https://martin.ankerl.com/seqlz/#ch-decode),
+alone ([seqlz_decompress()](https://martin.ankerl.com/seqlz/#ch-decode),
 [one page through every function](https://martin.ankerl.com/seqlz/#ch-trace)).
 
 **Why it is nearly as fast as `lz4`.** The decoder runs more instructions per page than `lz4`'s, but

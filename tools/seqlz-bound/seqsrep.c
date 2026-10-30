@@ -32,7 +32,7 @@ int main(int argc, char** argv) {
 
         for (k = 1; k < SEQLZ_BLOCK_SIZE && page[k] == page[0]; k++)
             ;
-        if (k == SEQLZ_BLOCK_SIZE || seqlz_compress(&st, page, dst, sizeof dst, level) >= 3625)
+        if (k == SEQLZ_BLOCK_SIZE || seqlz_compress_block(&st, page, dst, sizeof dst, level) >= 3625)
             continue;
         n = seqlz_find(&st, page, seq, level);
         for (i = 0; i + 1 < n; i++) {

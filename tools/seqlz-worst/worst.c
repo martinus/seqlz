@@ -3,7 +3,7 @@
  * Pages made to be slow for seqlz, for its worst-case time (docs/plan.md, Phase 4).
  *
  * Counts instructions and branch misses in user space with perf_event_open: they do not change with the
- * load on the machine, as time does. --level <n> before the command is the level of seqlz_compress() and
+ * load on the machine, as time does. --level <n> before the command is the level of seqlz_compress_block() and
  * seqlz_encode(), 1 to 3, default 2, zram's.
  *
  *   seqlz-worst pages <base>
@@ -415,14 +415,14 @@ struct job {
 static int do_compress(void* arg) {
     struct job* j = arg;
 
-    j->len = seqlz_compress(j->st, j->page, j->c, 2 * SEQLZ_BLOCK_SIZE, level);
+    j->len = seqlz_compress_block(j->st, j->page, j->c, 2 * SEQLZ_BLOCK_SIZE, level);
     return j->len ? 0 : -1;
 }
 
 static int do_decode(void* arg) {
     struct job* j = arg;
 
-    return seqlz_decode(j->c, j->len, j->out, j->scratch);
+    return seqlz_decompress(j->c, j->len, j->out, j->scratch);
 }
 
 static int do_nothing(void* arg) {

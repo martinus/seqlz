@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT OR GPL-2.0-only
 /*
- * Any page through seqlz_compress() and seqlz_decode(), at every level: the page must come back, the
+ * Any page through seqlz_compress_block() and seqlz_decompress(), at every level: the page must come back, the
  * compressed page must fit the two pages zram gives the compressor, and it must be the same bytes as
  * seqlz_encode() writes for seqlz_find()'s sequences at that level, as seqlz.h says. Into a dst of one
  * page, and of a size the input picks, the page must come back too, or not fit.
@@ -31,7 +31,7 @@ static int decodes_to(const unsigned char* page, unsigned int len, void* scr) {
     memset(out, 0xa5, SEQLZ_BLOCK_SIZE);
     unwritten(out, SEQLZ_BLOCK_SIZE);
     unwritten(scratch, SEQLZ_SCRATCH);
-    return seqlz_decode(dst, len, out, scr) == 0 && memcmp(out, page, SEQLZ_BLOCK_SIZE) == 0;
+    return seqlz_decompress(dst, len, out, scr) == 0 && memcmp(out, page, SEQLZ_BLOCK_SIZE) == 0;
 }
 
 /* the page at level, against seqlz_encode() for the sequences of seqlz_find() at that level */
@@ -49,7 +49,7 @@ static void roundtrip(const unsigned char* page, unsigned int level) {
         abort();
     unwritten(&state, sizeof(state));
     unwritten(dst, DST_CAP);
-    len = seqlz_compress(&state, page, dst, DST_CAP, level);
+    len = seqlz_compress_block(&state, page, dst, DST_CAP, level);
     if (len == 0 || len > DST_CAP || !decodes_to(page, len, scratch))
         abort();
     /* level 1's raw literals need no scratch */
@@ -68,7 +68,7 @@ static void small_dst(const unsigned char* page, unsigned int cap, unsigned int 
     if (!d)
         abort();
     unwritten(&state, sizeof(state));
-    len = seqlz_compress(&state, page, d, cap, level);
+    len = seqlz_compress_block(&state, page, d, cap, level);
     if (len > cap || (len && (memcpy(dst, d, len), !decodes_to(page, len, scratch))))
         abort();
     free(d);

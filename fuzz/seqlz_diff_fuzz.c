@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT OR GPL-2.0-only
 /*
- * seqlz_decode() against tools/seqlz-ref/seqlz_ref.c, the decoder written from docs/format.md alone, on any input: both
+ * seqlz_decompress() against tools/seqlz-ref/seqlz_ref.c, the decoder written from docs/format.md alone, on any input: both
  * must call the same inputs valid, and decode a valid one to the same page. A difference is a bug in one
  * of them or a place where docs/format.md is not clear. Each buffer gets an allocation of exactly its size,
  * as in seqlz_decode_fuzz.c.
@@ -50,7 +50,7 @@ int LLVMFuzzerTestOneInput(const uint8_t* data, size_t size) {
     unwritten(slow, SEQLZ_BLOCK_SIZE);
     unwritten(scratch, SEQLZ_SCRATCH);
 
-    r_fast = seqlz_decode(src, (unsigned int)size, fast, scratch);
+    r_fast = seqlz_decompress(src, (unsigned int)size, fast, scratch);
     r_ref = seqlz_ref_decode(&ref, src, size, slow);
     if ((r_fast == 0) != (r_ref == 0) || (r_fast == 0 && memcmp(fast, slow, SEQLZ_BLOCK_SIZE) != 0))
         abort();

@@ -16,7 +16,7 @@
  *                             a valid page of: the decoder's instructions. A mutation changes a
  *                             sequence instead of breaking the Huffman coded stream
  *
- * COST_LEVEL=<n> in the environment is the level of seqlz_compress() and seqlz_encode(), 1 to 3, default
+ * COST_LEVEL=<n> in the environment is the level of seqlz_compress_block() and seqlz_encode(), 1 to 3, default
  * 2. For <codec>_cost_fuzz it is zram's algorithm_params level, default the codec's own; the seqlz
  * codecs seqlz_1 to seqlz_3 have their level in the name and do not take one.
  *
@@ -197,7 +197,7 @@ int LLVMFuzzerTestOneInput(const uint8_t* data, size_t size) {
     if (size != SEQLZ_BLOCK_SIZE)
         return 0;
     i0 = instructions();
-    len = seqlz_compress(&st, data, c, sizeof c, level);
+    len = seqlz_compress_block(&st, data, c, sizeof c, level);
     i1 = instructions();
     if (!len)
         abort();
@@ -205,7 +205,7 @@ int LLVMFuzzerTestOneInput(const uint8_t* data, size_t size) {
     /* zram stores larger pages as they are and never decodes them */
     if (len < 3625U) {
         i0 = instructions();
-        if (seqlz_decode(c, len, out, scratch))
+        if (seqlz_decompress(c, len, out, scratch))
             abort();
         i1 = instructions();
         if (memcmp(out, data, SEQLZ_BLOCK_SIZE))
@@ -282,7 +282,7 @@ int LLVMFuzzerTestOneInput(const uint8_t* data, size_t size) {
             abort();
     }
     i0 = instructions();
-    if (seqlz_decode(c, len, out, scratch))
+    if (seqlz_decompress(c, len, out, scratch))
         abort();
     i1 = instructions();
     if (memcmp(out, page, SEQLZ_BLOCK_SIZE))
@@ -293,7 +293,7 @@ int LLVMFuzzerTestOneInput(const uint8_t* data, size_t size) {
         return 0;
     memcpy(c, data, size);
     i0 = instructions();
-    if (seqlz_decode(c, (unsigned int)size, out, scratch) == 0) {
+    if (seqlz_decompress(c, (unsigned int)size, out, scratch) == 0) {
         i1 = instructions();
         mark(i1 - i0, 0, 2048);
     }

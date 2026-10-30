@@ -29,7 +29,7 @@ int main(int argc, char** argv) {
         return 1;
     }
     while (fread(page, 1, SEQLZ_BLOCK_SIZE, in) == SEQLZ_BLOCK_SIZE) {
-        unsigned int n = seqlz_compress(&st, page, dst, sizeof dst, 3);
+        unsigned int n = seqlz_compress_block(&st, page, dst, sizeof dst, 3);
 
         pages++;
         if (n > 3 && n < SEQLZ_BLOCK_SIZE && (dst[1] & 0x80) && (dst[2] & 15) == 8) {

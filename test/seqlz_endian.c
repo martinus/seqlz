@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT OR GPL-2.0-only
 /*
- * seqlz_endian: generated pages through seqlz_compress() and seqlz_decode(), at every level, and a hash
+ * seqlz_endian: generated pages through seqlz_compress_block() and seqlz_decompress(), at every level, and a hash
  * of all the compressed bytes. The format is little endian, so the hash must be the same on every CPU:
  * CI runs this on x86-64 and, under qemu, on big-endian s390x, and compares the two lines. Plain C
  * without the test framework, so that it builds in seconds under qemu.
@@ -94,9 +94,9 @@ int main(void) {
     for (k = 0; k < 600; k++) {
         make_page(page, k);
         for (level = 1; level <= SEQLZ_LEVELS; level++) {
-            unsigned int n = seqlz_compress(&st, page, dst, sizeof dst, level);
+            unsigned int n = seqlz_compress_block(&st, page, dst, sizeof dst, level);
 
-            if (!n || seqlz_decode(dst, n, out, scratch) || memcmp(out, page, SEQLZ_BLOCK_SIZE))
+            if (!n || seqlz_decompress(dst, n, out, scratch) || memcmp(out, page, SEQLZ_BLOCK_SIZE))
                 failed++;
             coded_pages += n > 1 && (dst[1] & 0x80U);
             own_pages += n > 2 && (dst[1] & 0x80U) && (dst[2] & SEQLZ_LIT_CODE_MASK) == SEQLZ_LIT_OWN;
