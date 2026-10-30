@@ -201,28 +201,17 @@ def head():
             " * Do not edit manually.\n */\n")
 
 
-def main_inc(what, tables):
-    """the initializers of src/seqlz_default_tables_*.inc or
-    src/seqlz_lit_sets_*.inc, for the repository's userspace build"""
-    text = head().replace("/* SPDX-License-Identifier: GPL-2.0-only OR MIT */",
-                          "// SPDX-License-Identifier: GPL-2.0-only OR MIT")
-    if what == "--lengths":
-        print(text + lengths_initializer(tables, ""), end="")
-    else:
-        print(text + lit_sets_initializer(tables, "") + "\n" +
-              own_initializer(tables, ""), end="")
-
-
 def main():
     args = sys.argv[1:]
-    what = None
-    if args and args[0] in ("--lengths", "--lit-sets"):
-        what = args.pop(0)
+    # --extern: the tables without static, for the repository's userspace
+    # build, which defines them once for its tests and tools
+    storage = "static "
+    if args[:1] == ["--extern"]:
+        storage = ""
+        args.pop(0)
     if len(args) != 1:
-        sys.exit("usage: gen-seqlz-lengths.py <counts file>")
+        sys.exit("usage: gen-seqlz-lengths.py [--extern] <counts file>")
     tables = read_counts(args[0])
-    if what:
-        return main_inc(what, tables)
     print(head() +
           "#ifndef _LIB_SEQLZ_SEQLZ_LENGTHS_H\n"
           "#define _LIB_SEQLZ_SEQLZ_LENGTHS_H\n\n"
@@ -234,9 +223,9 @@ def main():
           " * and decode tables from them.\n"
           " */\n"
           "#include \"seqlz_format.h\"\n\n" +
-          lengths_initializer(tables, "static ") + "\n" +
-          lit_sets_initializer(tables, "static ") + "\n" +
-          own_initializer(tables, "static ") + "\n#endif\n", end="")
+          lengths_initializer(tables, storage) + "\n" +
+          lit_sets_initializer(tables, storage) + "\n" +
+          own_initializer(tables, storage) + "\n#endif\n", end="")
 
 
 if __name__ == "__main__":

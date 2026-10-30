@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT OR GPL-2.0-only
 /*
  * gen_seqlz_tables: seqlz's codes and decode tables, built from the code
- * lengths of src/seqlz_default_tables.c and src/seqlz_lit_sets.c and printed
+ * lengths of src/seqlz_lengths.c and printed
  * as C, the seqlz_tables.c that every build of seqlz compiles. gen-tables.sh
  * builds it for the build host and runs it. The kernel's copy is
  * lib/seqlz/gen_seqlz_tables.c: src/seqlz_codes.c, and this from the line

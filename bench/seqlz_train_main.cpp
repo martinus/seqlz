@@ -3,7 +3,7 @@
 // Trains the static Huffman tables of seqlz (src/seqlz.h) on a corpus: the matches of seqlz's own
 // matcher on every page, split into seqlz's symbols, counted, and turned into code lengths of at most
 // SEQLZ_MAX_BITS bits. Writes a C initializer of the code lengths, by the page size of the build, with
-// --lit-sets the literal tables. src/seqlz_default_tables_4k.inc and the others are made by
+// --lit-sets the literal tables. src/seqlz_lengths.h and _16k.h are made by
 // tools/kernel-port/gen-seqlz-lengths.py from the counts that --counts writes, the same tables.
 // --counts also writes the counts the tables are built from, --from-counts builds them from such a file
 // instead of a corpus: bench/seqlz_counts_4k.txt and _16k.txt are the ones of the tables in src/.
@@ -260,7 +260,7 @@ void usage() {
                  "\n"
                  "Counts seqlz's symbols over the matches of its own matcher on every page. Prints the code\n"
                  "lengths as a C initializer.\n"
-                 "--lit-sets prints the literal tables of src/seqlz_lit_sets_4k.inc or _16k.inc instead, from\n"
+                 "--lit-sets prints the literal tables of src/seqlz_lengths.h or _16k.h instead, from\n"
                  "the pages with more than 64 literals: k-means from --seeds starts (32), seeds --first-seed (1)\n"
                  "on, each at most --rounds rounds (60).\n"
                  "--counts also writes the counts both kinds of tables are built from to <file>, e.g.\n"

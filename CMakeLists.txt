@@ -77,12 +77,12 @@ target_link_libraries(seqlz-swap-bursts PRIVATE seqlz_warnings)
 
 # seqlz's codes and decode tables, generated from the code lengths by a program for the build host
 set(SEQLZ_TABLES ${CMAKE_BINARY_DIR}/seqlz_tables.c)
-file(GLOB SEQLZ_HEADERS CONFIGURE_DEPENDS src/*.h src/*.inc)
+file(GLOB SEQLZ_HEADERS CONFIGURE_DEPENDS src/*.h src/linux/*.h)
 add_custom_command(OUTPUT ${SEQLZ_TABLES}
     COMMAND ${CMAKE_SOURCE_DIR}/tools/gen-tables/gen-tables.sh ${SEQLZ_TABLES}
         -DSEQLZ_PAGE_BITS=${SEQLZ_PAGE_BITS}
     DEPENDS tools/gen-tables/gen-tables.sh tools/gen-tables/gen_seqlz_tables.c src/seqlz_codes.c
-        src/seqlz_default_tables.c src/seqlz_lit_sets.c ${SEQLZ_HEADERS}
+        src/seqlz_lengths.c ${SEQLZ_HEADERS}
     COMMENT "seqlz's tables"
     VERBATIM)
 # it includes seqlz_tables.h, and is not in src/ next to it
@@ -91,7 +91,7 @@ set_source_files_properties(${SEQLZ_TABLES} PROPERTIES INCLUDE_DIRECTORIES ${CMA
 # seqlz without kernel code, for the tests and tools. seqlz's sources, for every target that builds it:
 # this library, the kernel codecs, the fuzzers
 set(SEQLZ_SOURCES src/seqlz_codes.c src/seqlz_compress.c src/seqlz_compress_literals.c src/seqlz_decompress.c
-    src/seqlz_decompress_literals.c src/seqlz_default_tables.c src/seqlz_lit_sets.c ${SEQLZ_TABLES})
+    src/seqlz_decompress_literals.c src/seqlz_lengths.c ${SEQLZ_TABLES})
 add_library(seqlz STATIC ${SEQLZ_SOURCES})
 target_include_directories(seqlz PUBLIC src)
 target_link_libraries(seqlz PRIVATE seqlz_warnings)

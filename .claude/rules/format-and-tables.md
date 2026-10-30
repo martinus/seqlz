@@ -1,8 +1,7 @@
 ---
 paths:
   - "docs/format.md"
-  - "src/seqlz_default_tables*"
-  - "src/seqlz_lit_sets*"
+  - "src/seqlz_lengths*"
   - "src/seqlz_codes.c"
   - "bench/seqlz_counts_*.txt"
   - "bench/seqlz_train*.cpp"
@@ -21,11 +20,12 @@ paths:
 - `tools/seqlz-ref/seqlz_ref.py` parses `docs/format.md` rows ``| `TOK_4k` | `<sha256>` |``: keep
   them exact. Retrained tables need new hashes there (else `check.sh` fails) and new
   `bench/seqlz_counts_*.txt` (`seqlz-train --counts`, else test `seqlz_train` fails).
-- `.inc` tables: not format-checked, never clang-format or hand-edit. Written by
-  `tools/kernel-port/gen-seqlz-lengths.py` from `bench/seqlz_counts_*.txt` (command in each file's
-  head); `tools/seqlz-ref/check.sh` fails if they differ from its output.
+- `src/seqlz_lengths.h` and `_16k.h`: the kernel's `seqlz_lengths.h`, without `static`; not
+  format-checked (`src/.clang-format-ignore`), never clang-format or hand-edit. Written by
+  `tools/kernel-port/gen-seqlz-lengths.py --extern` from `bench/seqlz_counts_*.txt` (command in each
+  file's head); `tools/seqlz-ref/check.sh` fails if they differ from its output.
 - Retrain: `tools/retrain-tables.py --page-bits 12|14 --train <Release build> --corpus <base>
-  --name <name>` (counts, lit lines in committed order, `.inc`, SHA-256 rows of format.md). 4 KiB:
+  --name <name>` (counts, lit lines in committed order, `seqlz_lengths*.h`, SHA-256 rows of format.md). 4 KiB:
   `~/seqlz-corpus/phone-dump/train-mix`, name `train-mix-1012`, 11 min; 16 KiB:
   `~/seqlz-corpus/emu-a17-16k-a-train`, 20 s. Then by hand: format.md example (`ab` 2048 times
   through `tools/seqlz-compress/compress.c`), its bytes in `test/seqlz_ref_test.cpp`, the book.

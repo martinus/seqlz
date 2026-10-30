@@ -192,10 +192,10 @@ is a list of code lengths, one byte per symbol, symbol 0 first:
 <!-- not in the kernel's copy -->
 | table | symbols | longest code | 4 KiB pages | 16 KiB pages |
 | --- | --- | --- | --- | --- |
-| tokens and escape, `TOK` | 3073 | 11 bits | `src/seqlz_default_tables_4k.inc`, `.token` | `src/seqlz_default_tables_16k.inc`, `.token` |
+| tokens and escape, `TOK` | 3073 | 11 bits | `src/seqlz_lengths.h`, `seqlz_default_lengths.token` | `src/seqlz_lengths_16k.h`, the same |
 | literal length values, `LL` | `LEN_SYMBOLS` | 8 bits | the same, `.ll` | the same, `.ll` |
 | match length values, `ML` | `LEN_SYMBOLS` | 8 bits | the same, `.ml` | the same, `.ml` |
-| literal tables 0 to 7 | 256 each | 10 bits | `src/seqlz_lit_sets_4k.inc`, `seqlz_lit_sets[0]` to `[7]` | `src/seqlz_lit_sets_16k.inc`, the same |
+| literal tables 0 to 7 | 256 each | 10 bits | the same, `seqlz_lit_sets[0]` to `[7]` | the same |
 | a block's own literal table, `OWN` | 19 | 8 bits | the same, `seqlz_own_lengths` | the same, `seqlz_own_lengths` |
 <!-- end -->
 

@@ -59,8 +59,7 @@ else
     levels="1 2 3"
     # the codec's files, whether a src/ has it in one seqlz.c or split
     codec_objs() { (cd "$1" && ls seqlz*.c | sed 's/\.c$/.o/' | tr '\n' ' '); }
-    cp "$here/backend_seqlz.c" "$here/backend_seqlz.h" "$here/../../src/"seqlz*.c "$here/../../src/"*.h \
-        "$here/../../src/"*_4k.inc "$z/"
+    cp "$here/backend_seqlz.c" "$here/backend_seqlz.h" "$here/../../src/"seqlz*.c "$here/../../src/"*.h "$z/"
     # the codec's interface, <linux/seqlz.h>; the other headers of src/linux/ are the kernel's own here
     mkdir -p "$z/linux"
     cp "$here/../../src/linux/seqlz.h" "$z/linux/"
@@ -85,7 +84,9 @@ else
         bdir=$dir/tools/zram-vm
         [[ -f $bdir/backend_seqlz.c ]] || bdir=$here
         cp "$bdir/backend_seqlz.c" "$bdir/backend_seqlz.h" "$d/"
-        cp "$dir/src/"seqlz*.c "$dir/src/"*.h "$dir/src/"*_4k.inc "$d/"
+        cp "$dir/src/"seqlz*.c "$dir/src/"*.h "$d/"
+        # an older src/ has its tables in .inc files
+        if compgen -G "$dir/src/*_4k.inc" >/dev/null; then cp "$dir/src/"*_4k.inc "$d/"; fi
         # its interface, <linux/seqlz.h>, where its src/ has one
         if [[ -f $dir/src/linux/seqlz.h ]]; then
             mkdir -p "$d/linux"

@@ -66,7 +66,7 @@ Then [`tools/kernel-port/backend_seqlz.c`](../tools/kernel-port/backend_seqlz.c)
 
 [`src/seqlz.h`](../src/seqlz.h) is the interface for the tests and tools,
 [`src/zram_seqlz.c`](../src/zram_seqlz.c) and the other headers of [`src/linux/`](../src/linux) are the
-harness's glue, the `*.inc` files are generated tables.
+harness's glue, `seqlz_lengths.h` and `seqlz_lengths_16k.h` are generated tables.
 
 ## How to read it
 

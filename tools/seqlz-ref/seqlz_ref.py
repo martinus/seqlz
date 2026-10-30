@@ -28,17 +28,16 @@ def spec_hashes():
 
 def load_tables(block_bits):
     """canonical codes of TOK, LL, ML, the 8 literal tables and OWN, after checking the lengths' SHA-256"""
-    codec, size = REPO / "src", f"{4 if block_bits == 12 else 16}k"
-    src = (codec / f"seqlz_default_tables_{size}.inc").read_text()
+    size = f"{4 if block_bits == 12 else 16}k"
+    src = (REPO / "src" / ("seqlz_lengths.h" if block_bits == 12 else "seqlz_lengths_16k.h")).read_text()
 
     def field(name):
         return numbers(re.search(r"\." + name + r"\s*=\s*\{([^}]*)\}", src).group(1))
 
     tables = {"TOK": field("token"), "LL": field("ll"), "ML": field("ml")}
-    lit_src = (codec / f"seqlz_lit_sets_{size}.inc").read_text()
-    own_at = lit_src.index("seqlz_own_lengths[SEQLZ_OWN_SYMBOLS] =")
-    lit = numbers(lit_src[lit_src.index("seqlz_lit_sets[SEQLZ_LIT_SETS][256] =") : own_at].split("=", 1)[1])
-    own = numbers(lit_src[own_at:].split("=", 1)[1])
+    own_at = src.index("seqlz_own_lengths[SEQLZ_OWN_SYMBOLS] =")
+    lit = numbers(src[src.index("seqlz_lit_sets[SEQLZ_LIT_SETS][256] =") : own_at].split("=", 1)[1])
+    own = numbers(src[own_at:].split("=", 1)[1])
     assert len(tables["TOK"]) == 3073 and len(tables["LL"]) == len(tables["ML"]) == 12 + block_bits
     assert len(lit) == 8 * 256 and len(own) == 19
     hashes = spec_hashes()
