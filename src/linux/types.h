@@ -6,13 +6,9 @@
 #pragma GCC system_header
 
 /* the UAPI header, for libc's headers that include it */
-#if defined(__has_include_next)
 #if __has_include_next(<linux/types.h>)
 #include_next <linux/types.h>
 #endif
-#endif
-
-#include <linux/compiler_types.h>
 
 /*
  * Nothing here defines bool, true, false or NULL itself, so that the codec's

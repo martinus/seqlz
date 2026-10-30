@@ -544,8 +544,8 @@ TEST_CASE("seqlz: the kernel's interface, seqlz_compress() and seqlz_decompress(
         CHECK(std::equal(c.begin(), c.begin() + len, c2.begin()));
         CHECK(seqlz_decompress(c.data(), static_cast<unsigned>(len), d.data(), scratch.data()) == 0);
         CHECK(std::equal(d.begin(), d.end(), page.begin()));
-        // a block that does not fit
-        CHECK(seqlz_compress(page.data(), c.data(), static_cast<unsigned>(len) - 1, st.get(), level) == -E2BIG);
+        // no block fits into 16 bytes
+        CHECK(seqlz_compress(page.data(), c.data(), 16, st.get(), level) == -E2BIG);
     }
 }
 

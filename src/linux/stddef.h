@@ -6,10 +6,8 @@
 #pragma GCC system_header
 
 /* the UAPI header, for libc's headers that include it */
-#if defined(__has_include_next)
 #if __has_include_next(<linux/stddef.h>)
 #include_next <linux/stddef.h>
-#endif
 #endif
 
 #include <stddef.h>

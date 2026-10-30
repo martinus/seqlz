@@ -4,7 +4,8 @@
 
 /*
  * The attributes the kernel's compiler_types.h defines, which kbuild includes
- * in every file
+ * in every file. Here the stand-ins that need them include it, prefetch.h among
+ * them, which seqlz_internal.h includes; none that libc's headers include too.
  */
 
 /* glibc's sys/cdefs.h has its own */

@@ -86,16 +86,22 @@ foreach(h lz4.h lzo.h zstd.h zstd_lib.h zstd_errors.h xxhash.h)
     configure_file("${SEQLZ_KERNEL_TREE}/include/linux/${h}" "${seqlz_kernel_include}/linux/${h}" COPYONLY)
 endforeach()
 
-function(seqlz_kernel_codec target libdir extra_flags)
+# a library of ARGN built as the kernel builds, with extra_flags, without libc's headers
+function(seqlz_kernel_library target extra_flags)
     add_library(${target} STATIC ${ARGN})
-    target_compile_options(${target} PRIVATE ${SEQLZ_KERNEL_CFLAGS} ${extra_flags} -nostdinc
-                           -include "${CMAKE_SOURCE_DIR}/bench/kernel_codecs/compat/kconfig.h")
-    target_include_directories(${target} PRIVATE
-        "${CMAKE_SOURCE_DIR}/bench/kernel_codecs/compat" "${seqlz_kernel_include}"
-        "${SEQLZ_KERNEL_TREE}/${libdir}" "${CMAKE_SOURCE_DIR}/bench/kernel_codecs")
+    target_compile_options(${target} PRIVATE ${SEQLZ_KERNEL_CFLAGS} ${extra_flags} -nostdinc)
     # as an option: CMake drops the compiler's own directory from target_include_directories() as implicit
     target_compile_options(${target} PRIVATE "SHELL:-isystem ${seqlz_cc_include}")
     target_link_libraries(${target} PUBLIC seqlz_kernel_runtime)
+endfunction()
+
+# a codec of the kernel tree's libdir, with the kernel headers of bench/kernel_codecs/compat/
+function(seqlz_kernel_codec target libdir extra_flags)
+    seqlz_kernel_library(${target} "${extra_flags}" ${ARGN})
+    target_compile_options(${target} PRIVATE -include "${CMAKE_SOURCE_DIR}/bench/kernel_codecs/compat/kconfig.h")
+    target_include_directories(${target} PRIVATE
+        "${CMAKE_SOURCE_DIR}/bench/kernel_codecs/compat" "${seqlz_kernel_include}"
+        "${SEQLZ_KERNEL_TREE}/${libdir}" "${CMAKE_SOURCE_DIR}/bench/kernel_codecs")
 endfunction()
 
 # Built normally, with libc: the UBSAN handlers, and the allocator that stands in for kzalloc/vzalloc
@@ -125,10 +131,8 @@ seqlz_kernel_codec(seqlz_kernel_zstd lib/zstd ""
 
 # seqlz with lz4's flags, -O3 included. Its kernel headers are the ones of src/linux/, not the ones of
 # bench/kernel_codecs/compat/ for lz4, lzo and zstd, which define some of the same names
-add_library(seqlz_kernel_seqlz STATIC ${SEQLZ_SOURCES} src/zram_seqlz.c)
-target_compile_options(seqlz_kernel_seqlz PRIVATE ${SEQLZ_KERNEL_CFLAGS} -O3 -nostdinc "SHELL:-isystem ${seqlz_cc_include}")
+seqlz_kernel_library(seqlz_kernel_seqlz -O3 ${SEQLZ_SOURCES} src/zram_seqlz.c)
 target_include_directories(seqlz_kernel_seqlz PRIVATE "${CMAKE_SOURCE_DIR}/src" "${CMAKE_SOURCE_DIR}/bench/kernel_codecs")
-target_link_libraries(seqlz_kernel_seqlz PUBLIC seqlz_kernel_runtime)
 
 foreach(codec lz4 lz4hc lzo lzo_rle zstd seqlz_1 seqlz_2 seqlz_3)
     string(REPLACE "_" "-" name ${codec})

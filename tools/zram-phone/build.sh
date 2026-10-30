@@ -30,6 +30,9 @@ if [[ -f $src/linux/seqlz.h ]]; then
     cp "$src/linux/seqlz.h" "$out/linux/"
 fi
 cp -r "$here/compat" "$out/"
+# included before each of the codec's files: the kernel headers they include, then the cache line
+{ grep -h '^#include <\(linux\|asm\)/' "$out"/seqlz*.[ch] | sort -u; echo '#include "seqlz_4_14_cache.h"'; } \
+    >"$out/compat/seqlz_4_14_codec.h"
 gen=$src/../tools/gen-tables/gen-tables.sh
 [[ -x $gen ]] || { echo "$src has no tools/gen-tables/ next to it, it is older than this build.sh" >&2; exit 1; }
 "$gen" "$out/seqlz_tables.c"
@@ -42,7 +45,7 @@ grep -q "\"seqlz-$name-\" #level \"-generic\"" "$out/glue.c" || { echo "glue.c: 
 printf 'obj-m += seqlz_%s.o\nseqlz_%s-y := glue.o %s\n' "$name" "$name" "$objs" >"$out/Kbuild"
 printf 'ccflags-y += -I$(src) -I$(src)/compat -include $(src)/compat/seqlz_4_14.h\n' >>"$out/Kbuild"
 for o in $objs; do
-    printf 'CFLAGS_%s += %s\n' "$o" "${OPT:--O3}" >>"$out/Kbuild"
+    printf 'CFLAGS_%s += %s -include $(src)/compat/seqlz_4_14_codec.h\n' "$o" "${OPT:--O3}" >>"$out/Kbuild"
 done
 [[ ${ALIGN:-64} == 0 ]] || printf 'ccflags-y += -falign-functions=%s\n' "${ALIGN:-64}" >>"$out/Kbuild"
 export PATH=$T/llvm/prebuilt/linux-x86_64/bin:$T/aarch64-linux-android-4.9/prebuilt/linux-x86_64/bin:$PATH

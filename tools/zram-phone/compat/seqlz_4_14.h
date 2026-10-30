@@ -8,7 +8,6 @@
 #define SEQLZ_4_14_H
 
 #include <linux/build_bug.h>
-#include <linux/cache.h>
 #include <linux/export.h>
 #include <linux/stddef.h>
 
@@ -21,16 +20,6 @@
 /* sizeof_field() came with 5.5 */
 #ifndef sizeof_field
 #define sizeof_field(TYPE, MEMBER) sizeof((((TYPE *)0)->MEMBER))
-#endif
-
-/*
- * Older arm64 kernels, the Mi 9T's 4.14 among them, have cache lines of 128
- * bytes in L1_CACHE_BYTES. Its cores have 64, as mainline says, and with 128
- * prefetch_lines() would skip every second line.
- */
-#if defined(__aarch64__) && L1_CACHE_BYTES == 128
-#undef L1_CACHE_BYTES
-#define L1_CACHE_BYTES 64
 #endif
 
 /*

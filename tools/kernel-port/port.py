@@ -28,9 +28,9 @@ src/ stays the one source of the codec. This writes from it:
   arch/x86/include/asm/processor.h      x86-prefetcht0.patch, prefetch() as prefetcht0 on x86-64, which
                                         clang drops otherwise; not if the tree has it already
 On the way: blocks of 4 KiB whatever PAGE_SIZE is, SEQLZ_BLOCK_BITS 12 and SEQLZ_BLOCK_SIZE of the
-interface, and no references to this repository in the comments (its documents, tools and build) and no reasons that
-only hold for the Mi 9T's 4.14, Fedora's config or our test machines, which say the reason in general
-terms instead; a comment that changed is wrapped again to 80 columns. Fails if a reference is left,
+interface, and no references to this repository in the comments (its documents, tools and build) and no
+reasons that only hold for the Mi 9T's 4.14, Fedora's config or our test machines, which say the reason
+in general terms instead; a comment that changed is wrapped again to 80 columns. Fails if a reference is left,
 naming it; the one URL it keeps is PROJECT_URL.
   Documentation/staging/seqlz.rst       docs/format.md as reStructuredText, see format_rst.py, and the
                                         interface's kernel-doc, in the
@@ -132,6 +132,9 @@ HEADING = re.compile(r" ?\(\"[^\"]+\"(?:,? [^)]*)?\)")
 # whatever PAGE_SIZE is, SEQLZ_BLOCK_SIZE of the interface
 BLOCK_BITS_SRC = re.compile(r"/\*\n \* A block is what seqlz compresses at a time.*?\*/\n#ifndef SEQLZ_PAGE_BITS\n"
                             r"#define SEQLZ_PAGE_BITS 12\n#endif\n#define SEQLZ_BLOCK_BITS SEQLZ_PAGE_BITS\n", re.S)
+# the same in the interface, src/linux/seqlz.h, with the comment above it
+BLOCK_SIZE_SRC = re.compile(r"/\*\n \* the bytes of a block[^/]*\*/\n#ifndef SEQLZ_PAGE_BITS\n#define SEQLZ_PAGE_BITS 12\n"
+                            r"#endif\n#define SEQLZ_BLOCK_SIZE \(1U << SEQLZ_PAGE_BITS\)\n")
 BLOCK_BITS_KERNEL = """/*
  * A block is what seqlz compresses at a time: SEQLZ_BLOCK_SIZE bytes of the
  * interface, a memory page for zram with 4 KiB pages, whatever the kernel's
@@ -316,10 +319,8 @@ def put_doc(text, name, doc):
 def port_interface():
     """include/linux/seqlz.h: src/linux/seqlz.h for blocks of 4 KiB only, whatever PAGE_SIZE is"""
     t = (SRC / "linux" / "seqlz.h").read_text()
-    t = must(t, "/*\n * the bytes of a block, whatever PAGE_SIZE is; outside the kernel also 16 KiB,\n"
-                " * with SEQLZ_PAGE_BITS 14\n */\n#ifndef SEQLZ_PAGE_BITS\n#define SEQLZ_PAGE_BITS 12\n#endif\n"
-                "#define SEQLZ_BLOCK_SIZE (1U << SEQLZ_PAGE_BITS)\n",
-             "/* the bytes of a block, whatever PAGE_SIZE is */\n#define SEQLZ_BLOCK_SIZE 4096U\n")
+    t, k = BLOCK_SIZE_SRC.subn("/* the bytes of a block, whatever PAGE_SIZE is */\n#define SEQLZ_BLOCK_SIZE 4096U\n", t)
+    assert k == 1, "the block size of src/linux/seqlz.h"
     return must(t, "#define SEQLZ_MEM_COMPRESS (SEQLZ_PAGE_BITS == 12 ? 8192 : 16384)\n",
                 "#define SEQLZ_MEM_COMPRESS 8192\n")
 
