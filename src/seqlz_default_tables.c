@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MIT OR GPL-2.0-only
+// SPDX-License-Identifier: GPL-2.0-only OR MIT
 /*
  * The code lengths compiled in. They are part of the format: a block decodes
  * only with the tables it was compressed with (docs/format.md). For blocks of

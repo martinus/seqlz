@@ -1,8 +1,8 @@
-/* SPDX-License-Identifier: MIT OR GPL-2.0-only */
-#ifndef SEQLZ_FORMAT_H
-#define SEQLZ_FORMAT_H
+/* SPDX-License-Identifier: GPL-2.0-only OR MIT */
+#ifndef _LIB_SEQLZ_SEQLZ_FORMAT_H
+#define _LIB_SEQLZ_SEQLZ_FORMAT_H
 
-#include "seqlz_compat.h"
+#include <linux/types.h>
 
 /*
  * seqlz compresses one block at a time, a memory page for zram. Like lz4, a
@@ -68,7 +68,6 @@
 #define SEQLZ_PAGE_BITS 12
 #endif
 #define SEQLZ_BLOCK_BITS SEQLZ_PAGE_BITS
-#define SEQLZ_BLOCK_SIZE (1U << SEQLZ_BLOCK_BITS)
 /*
  * The longest code of a length value: its decode table has 256 entries, 1 KiB.
  * A table twice as large made cold reads slower.

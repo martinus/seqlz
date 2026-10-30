@@ -1,8 +1,14 @@
-// SPDX-License-Identifier: MIT OR GPL-2.0-only
+// SPDX-License-Identifier: GPL-2.0-only OR MIT
 /*
  * The compressor: the matcher, which finds a block's sequences, and the
  * encoder, which writes them as it finds them.
  */
+#include <linux/build_bug.h>
+#include <linux/errno.h>
+#include <linux/export.h>
+#include <linux/string.h>
+#include <linux/unaligned.h>
+
 #include "seqlz.h"
 #include "seqlz_match.h"
 
@@ -488,3 +494,24 @@ unsigned int seqlz_compress_block(struct seqlz_state *st, const void *src,
 		return len;
 	return seqlz_code_literals(dst, len, st->literals);
 }
+
+/* the interface's work memory is the matcher's state */
+static_assert(sizeof(struct seqlz_state) == SEQLZ_MEM_COMPRESS);
+/* its levels are those of seqlz_compress_block() */
+static_assert(SEQLZ_LEVEL_MIN == 1 && SEQLZ_LEVEL_CODED == 2 &&
+	      SEQLZ_LEVEL_OWN == SEQLZ_LEVEL_MAX);
+/* the room the interface's kernel-doc names, see ENC_ROOM */
+static_assert(ENC_ROOM == 32);
+
+int seqlz_compress(const void *src, void *dst, unsigned int dst_len,
+		   void *wrkmem, int level)
+{
+	unsigned int len;
+
+	if (level < SEQLZ_LEVEL_MIN || level > SEQLZ_LEVEL_MAX)
+		return -EINVAL;
+	len = seqlz_compress_block(wrkmem, src, dst, dst_len,
+				   (unsigned int)level);
+	return len ? (int)len : -E2BIG;
+}
+EXPORT_SYMBOL_GPL(seqlz_compress);

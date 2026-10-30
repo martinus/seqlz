@@ -18,7 +18,9 @@ follows these rules; open gaps in existing code: issues #151 to #157 (review of 
   own kernel patch, carried in `tools/kernel-port/` and applied by `port.py` (`x86-prefetcht0.patch`).
   That file is `git format-patch -1 --stdout` of branch `x86-prefetcht0-tip` (`gra cd moonnova`, on
   tip/master): change code or changelog there with `git commit --amend`, then write the file again.
-  `src/seqlz_compat.h` = kernel headers outside the kernel; may do what such a patch does.
+  `src/linux/*.h` (not `seqlz.h`, the interface) = kernel headers outside the kernel; may do what such
+  a patch does. `src/` includes exactly the kernel headers the kernel copy includes; Linux 4.14's gaps
+  are in `tools/zram-phone/compat/`.
 - Nothing in `lib/` depends on the CPU model; `port.py` fails on `read_cpuid` or `MIDR_` there (#152:
   one decode loop for all cores).
 - `static` unless zram calls it. Grep-able names (not `count`, `refill`). Every number named or

@@ -1,4 +1,4 @@
-/* SPDX-License-Identifier: MIT OR GPL-2.0-only */
+/* SPDX-License-Identifier: GPL-2.0-only OR MIT */
 #ifndef SEQLZ_MATCH_H
 #define SEQLZ_MATCH_H
 

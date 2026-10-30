@@ -1,8 +1,13 @@
-// SPDX-License-Identifier: MIT OR GPL-2.0-only
+// SPDX-License-Identifier: GPL-2.0-only OR MIT
 /*
  * The decompressor's literals: the 8 streams of coded literals, with one of
  * the fixed literal tables or with the block's own table, which it reads first.
  */
+#include <linux/build_bug.h>
+#include <linux/compiler.h>
+#include <linux/minmax.h>
+#include <linux/unaligned.h>
+
 #include "seqlz_internal.h"
 
 /*

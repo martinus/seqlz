@@ -77,7 +77,7 @@ target_link_libraries(seqlz-swap-bursts PRIVATE seqlz_warnings)
 
 # seqlz's codes and decode tables, generated from the code lengths by a program for the build host
 set(SEQLZ_TABLES ${CMAKE_BINARY_DIR}/seqlz_tables.c)
-file(GLOB SEQLZ_HEADERS CONFIGURE_DEPENDS src/*.h src/*.inc)
+file(GLOB SEQLZ_HEADERS CONFIGURE_DEPENDS src/*.h src/*.inc src/linux/*.h)
 add_custom_command(OUTPUT ${SEQLZ_TABLES}
     COMMAND ${CMAKE_SOURCE_DIR}/tools/gen-tables/gen-tables.sh ${SEQLZ_TABLES}
         -DSEQLZ_PAGE_BITS=${SEQLZ_PAGE_BITS}

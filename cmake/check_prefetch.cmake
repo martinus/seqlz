@@ -2,7 +2,7 @@
 #
 # Fails if seqlz_decompress.c, built with the kernel's flags, has no prefetch instruction. The kernel builds x86-64
 # without SSE, and clang then drops __builtin_prefetch without a warning, see prefetch() in
-# src/seqlz_compat.h. Run by ctest: cmake -DOBJDUMP=... -DOBJECTS=a.o|b.o -P check_prefetch.cmake
+# src/linux/prefetch.h. Run by ctest: cmake -DOBJDUMP=... -DOBJECTS=a.o|b.o -P check_prefetch.cmake
 string(REPLACE "|" ";" objects "${OBJECTS}")
 list(FILTER objects INCLUDE REGEX "/seqlz_decompress\\.c\\.o(bj)?$")
 if(NOT objects)

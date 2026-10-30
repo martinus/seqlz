@@ -509,7 +509,7 @@ TEST_CASE("seqlz: only levels 1 to 3 compress") {
     auto c = std::vector<unsigned char>(2 * page_size);
     auto seq = std::vector<seqlz_sequence>(SEQLZ_MAX_SEQUENCES);
     auto const one = seqlz_sequence{static_cast<unsigned short>(page_size), 0, 0};
-    for (unsigned level : {0U, SEQLZ_LEVELS + 1}) {
+    for (unsigned level : {0U, SEQLZ_LEVELS + 1U}) {
         CAPTURE(level);
         CHECK(seqlz_compress_block(st.get(), page.data(), c.data(), 2 * page_size, level) == 0);
         CHECK(seqlz_find(st.get(), page.data(), seq.data(), level) == 0);
@@ -520,6 +520,32 @@ TEST_CASE("seqlz: only levels 1 to 3 compress") {
     CHECK(seqlz_encode(st.get(), &one, 1, page.data(), page_size, page.data(), c.data(), 2 * page_size, 3) > 0);
     for (unsigned level = 1; level <= SEQLZ_LEVELS; ++level) {
         CHECK(seqlz_compress_block(st.get(), page.data(), c.data(), 2 * page_size, level) > 0);
+    }
+}
+
+TEST_CASE("seqlz: the kernel's interface, seqlz_compress() and seqlz_decompress()") {
+    auto st = std::make_unique<seqlz_state>();
+    auto const page = late_match_page();
+    auto c = std::vector<unsigned char>(SEQLZ_COMPRESS_BOUND);
+    auto d = std::vector<unsigned char>(page_size);
+    auto scratch = std::vector<unsigned char>(SEQLZ_MEM_DECOMPRESS);
+    for (int level : {SEQLZ_LEVEL_MIN - 1, SEQLZ_LEVEL_MAX + 1}) {
+        CAPTURE(level);
+        CHECK(seqlz_compress(page.data(), c.data(), SEQLZ_COMPRESS_BOUND, st.get(), level) == -EINVAL);
+    }
+    for (int level = SEQLZ_LEVEL_MIN; level <= SEQLZ_LEVEL_MAX; ++level) {
+        CAPTURE(level);
+        auto const len = seqlz_compress(page.data(), c.data(), SEQLZ_COMPRESS_BOUND, st.get(), level);
+        REQUIRE(len > 0);
+        // the same bytes as seqlz_compress_block()
+        auto c2 = std::vector<unsigned char>(SEQLZ_COMPRESS_BOUND);
+        REQUIRE(seqlz_compress_block(st.get(), page.data(), c2.data(), SEQLZ_COMPRESS_BOUND, static_cast<unsigned>(level)) ==
+                static_cast<unsigned>(len));
+        CHECK(std::equal(c.begin(), c.begin() + len, c2.begin()));
+        CHECK(seqlz_decompress(c.data(), static_cast<unsigned>(len), d.data(), scratch.data()) == 0);
+        CHECK(std::equal(d.begin(), d.end(), page.begin()));
+        // no block fits into 16 bytes
+        CHECK(seqlz_compress(page.data(), c.data(), 16, st.get(), level) == -E2BIG);
     }
 }
 

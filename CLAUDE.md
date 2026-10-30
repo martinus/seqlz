@@ -51,8 +51,8 @@ src/            codec, freestanding C11, kernel rules: seqlz_compress.c + seqlz_
                 headers seqlz_format.h (format), seqlz_tables.h (tables' layout), seqlz_internal.h
                 (what the codec's files share), seqlz.h (userspace API: harness, tests, tools),
                 seqlz_default_tables*.{c,inc} + seqlz_lit_sets*.{c,inc} (trained tables = format),
-                zram_seqlz.c (zram call shape, harness), seqlz_compat.h (kernel names: u8,
-                get_unaligned_le64(), ... outside the kernel)
+                zram_seqlz.c (zram call shape, harness); linux/seqlz.h = the kernel's interface,
+                linux/*.h the rest = kernel headers outside the kernel (u8, get_unaligned_le64(), ...)
 bench/          C++20 harness, zsmalloc cost model, table training (seqlz_train*.cpp; counts in
                 seqlz_counts_*.txt); kernel_codecs/ = zram lz4/lzo/zstd glue built from a kernel tree
 test/           doctest, binary seqlz_test; seqlz_endian.c = CI same-bytes check

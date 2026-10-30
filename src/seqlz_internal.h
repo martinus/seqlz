@@ -1,11 +1,19 @@
-/* SPDX-License-Identifier: MIT OR GPL-2.0-only */
-#ifndef SEQLZ_INTERNAL_H
-#define SEQLZ_INTERNAL_H
+/* SPDX-License-Identifier: GPL-2.0-only OR MIT */
+#ifndef _LIB_SEQLZ_SEQLZ_INTERNAL_H
+#define _LIB_SEQLZ_SEQLZ_INTERNAL_H
 
 /*
  * What the files of the compressor and of the decompressor share, besides the
  * tables of seqlz_tables.h.
  */
+
+#include <linux/build_bug.h>
+#include <linux/cache.h>
+#include <linux/minmax.h>
+#include <linux/prefetch.h>
+#include <linux/seqlz.h>
+#include <linux/stddef.h>
+#include <linux/types.h>
 
 #include "seqlz_tables.h"
 
@@ -65,7 +73,7 @@ static_assert((8U << SEQLZ_CLASS5_BITS) <= SEQLZ_BLOCK_SIZE,
  * its own where that saves enough, and codes the literals as deltas where that
  * looks like it saves bits, see SEQLZ_LIT_DELTA_AT.
  */
-#define SEQLZ_LEVELS 3U
+#define SEQLZ_LEVELS SEQLZ_LEVEL_MAX
 #define SEQLZ_LEVEL_CODED 2U
 #define SEQLZ_LEVEL_OWN 3U
 
