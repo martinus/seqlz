@@ -57,13 +57,13 @@ static_assert((8U << SEQLZ_CLASS5_BITS) <= SEQLZ_BLOCK_SIZE,
  */
 #define SEQLZ_HASH_BITS (SEQLZ_BLOCK_BITS == 12 ? 12U : 13U)
 /*
- * The levels of seqlz_compress(), 1 to SEQLZ_LEVELS, from the fastest to the
- * one with the smallest blocks. Level 1 keeps the literals raw. From
- * SEQLZ_LEVEL_CODED on they are Huffman coded where that saves enough, with
- * one of the fixed tables. SEQLZ_LEVEL_OWN looks one position ahead before it
- * takes a short match, extends matches backwards, gives a block a literal
- * table of its own where that saves enough, and codes the literals as deltas
- * where that looks like it saves bits, see SEQLZ_LIT_DELTA_AT.
+ * The levels of seqlz_compress_block(), 1 to SEQLZ_LEVELS, from the fastest to
+ * the one with the smallest blocks. Level 1 keeps the literals raw. From
+ * SEQLZ_LEVEL_CODED on they are Huffman coded where that saves enough, with one
+ * of the fixed tables. SEQLZ_LEVEL_OWN looks one position ahead before it takes
+ * a short match, extends matches backwards, gives a block a literal table of
+ * its own where that saves enough, and codes the literals as deltas where that
+ * looks like it saves bits, see SEQLZ_LIT_DELTA_AT.
  */
 #define SEQLZ_LEVELS 3U
 #define SEQLZ_LEVEL_CODED 2U

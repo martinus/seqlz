@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT OR GPL-2.0-only
 /* seqlz (src/seqlz.h) as zram backends, for the VM test of run.sh: seqlz-1 to seqlz-3, one per level of
- * seqlz_compress(), the tables compiled in, a hash table per CPU. */
+ * seqlz_compress_block(), the tables compiled in, a hash table per CPU. */
 #include <linux/kernel.h>
 
 /* zram-prefetch.patch */
@@ -50,14 +50,14 @@ static void sz_warm(struct zcomp_params *params, struct zcomp_ctx *ctx, int what
 			sum += ((volatile unsigned char *)c->scratch)[k];
 		(void)sum;
 	} else if (what == 2 && warm_len) {
-		seqlz_decode(warm_src, warm_len, warm_dst, c->scratch);
+		seqlz_decompress(warm_src, warm_len, warm_dst, c->scratch);
 	} else if (what == 5 && size <= sizeof(warm_prev)) {
 		if (warm_prev_len)
-			seqlz_decode(warm_prev, warm_prev_len, warm_dst, c->scratch);
+			seqlz_decompress(warm_prev, warm_prev_len, warm_dst, c->scratch);
 		memcpy(warm_prev, src, size);
 		warm_prev_len = size;
 	} else if (what == 7) {
-		seqlz_decode(src, size, warm_dst, c->scratch);
+		seqlz_decompress(src, size, warm_dst, c->scratch);
 	}
 }
 
@@ -89,7 +89,7 @@ static int sz_setup_once(void)
 			warm_dst[k] = (x >> 16) % 5 == 0 ? ' ' :
 				      "etaoinshrdlucmfwypvbgkqjxz"[((x >> 16) % 89) % 26 % (1 + (x >> 28))];
 		}
-		warm_len = seqlz_compress(st, warm_dst, warm_src, sizeof(warm_src), 2);
+		warm_len = seqlz_compress_block(st, warm_dst, warm_src, sizeof(warm_src), 2);
 		kfree(st);
 	}
 	zram_warm_fn = sz_warm;
@@ -149,8 +149,8 @@ static int sz_compress(struct zcomp_params *params, struct zcomp_ctx *ctx, struc
 
 	if (req->src_len != SEQLZ_BLOCK_SIZE)
 		return -EINVAL;
-	len = seqlz_compress(&((struct sz_ctx *)ctx->context)->st, req->src, req->dst,
-			     req->dst_len, level);
+	len = seqlz_compress_block(&((struct sz_ctx *)ctx->context)->st, req->src, req->dst,
+				   req->dst_len, level);
 	if (!len)
 		return -EINVAL;
 	req->dst_len = len;
@@ -164,8 +164,8 @@ static int sz_decompress(struct zcomp_params *params, struct zcomp_ctx *ctx, str
 	if (READ_ONCE(zram_prefetch) & 8)
 		for (unsigned int q = 64; q < req->src_len; q += 64)
 			prefetch((const char *)req->src + q);
-	if (req->dst_len < SEQLZ_BLOCK_SIZE || seqlz_decode(req->src, req->src_len, req->dst,
-							      ((struct sz_ctx *)ctx->context)->scratch))
+	if (req->dst_len < SEQLZ_BLOCK_SIZE || seqlz_decompress(req->src, req->src_len, req->dst,
+								  ((struct sz_ctx *)ctx->context)->scratch))
 		return -EINVAL;
 	return 0;
 }

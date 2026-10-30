@@ -95,7 +95,7 @@ std::vector<unsigned char> make_page(std::mt19937_64& rng, int kind) {
 std::vector<unsigned char> compress(std::vector<unsigned char> const& page, unsigned level) {
     auto st = std::make_unique<seqlz_state>();
     auto c = std::vector<unsigned char>(2 * SEQLZ_BLOCK_SIZE);
-    auto const len = seqlz_compress(st.get(), page.data(), c.data(), static_cast<unsigned>(c.size()), level);
+    auto const len = seqlz_compress_block(st.get(), page.data(), c.data(), static_cast<unsigned>(c.size()), level);
     REQUIRE(len > 0);
     c.resize(len);
     return c;
@@ -110,7 +110,7 @@ std::vector<unsigned char> check_same(seqlz_ref const* r, std::vector<unsigned c
     // exactly sized copies, so that ASan sees a read past the end
     auto const in = std::make_unique<unsigned char[]>(c.size() + (c.empty() ? 1 : 0));
     std::copy(c.begin(), c.end(), in.get());
-    auto const r_fast = seqlz_decode(in.get(), static_cast<unsigned>(c.size()), fast.data(), scratch.data());
+    auto const r_fast = seqlz_decompress(in.get(), static_cast<unsigned>(c.size()), fast.data(), scratch.data());
     auto const r_ref = seqlz_ref_decode(r, in.get(), c.size(), slow.data());
     REQUIRE((r_ref == 0 || r_ref == -1));
     REQUIRE((r_fast == 0) == (r_ref == 0));

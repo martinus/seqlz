@@ -59,8 +59,8 @@ unsigned int seqlz_find(struct seqlz_state *st, const void *src,
  * sequence has at most two flushes: the first moves the bitstream down by at
  * most 7 bytes, as it has at most 60 bits (see below), and the second writes 8
  * bytes below that. 16 + 15 bytes fit into ENC_ROOM. A block that does not fit
- * stops the writes there, and seqlz_compress() returns 0. It can happen up to
- * ENC_ROOM bytes before dst is full.
+ * stops the writes there, and seqlz_compress_block() returns 0. It can happen
+ * up to ENC_ROOM bytes before dst is full.
  *
  * With the two pages zram gives, it never happens without records: a sequence
  * with a match covers at least 4 bytes of the block, and its token and offset
@@ -394,7 +394,7 @@ unsigned int seqlz_encode(struct seqlz_state *st,
 	if (level < 1 || level > SEQLZ_LEVELS ||
 	    (level >= SEQLZ_LEVEL_OWN && !st))
 		return 0;
-	/* as seqlz_compress() */
+	/* as seqlz_compress_block() */
 	dst_cap = min(dst_cap, SEQLZ_COMPRESS_BOUND);
 	len = encode_raw(seq, n, literals, n_literals,
 			 level >= SEQLZ_LEVEL_OWN ? block : NULL,
@@ -413,9 +413,9 @@ static unsigned int compress_block(struct seqlz_state *st, const u8 *src,
 
 	/*
 	 * No block fits into less, and below SEQLZ_HEADER bytes p - lit in
-	 * encode_seq() would start below 0. Checked here and in
-	 * compress_own(), not once in seqlz_compress(): there it made the
-	 * matcher's code slower.
+	 * encode_seq() would start below 0. Checked here and in compress_own(),
+	 * not once in seqlz_compress_block(): there it made the matcher's code
+	 * slower.
 	 */
 	if (dst_cap < SEQLZ_HEADER + ENC_ROOM)
 		return 0;
@@ -465,8 +465,9 @@ static noinline unsigned int compress_own(struct seqlz_state *st, const u8 *src,
 	return encoder_finish(&e, dst, dst_cap);
 }
 
-unsigned int seqlz_compress(struct seqlz_state *st, const void *src, void *dst,
-			    unsigned int dst_cap, unsigned int level)
+unsigned int seqlz_compress_block(struct seqlz_state *st, const void *src,
+				  void *dst, unsigned int dst_cap,
+				  unsigned int level)
 {
 	unsigned int len, delta;
 

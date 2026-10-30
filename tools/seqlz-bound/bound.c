@@ -41,7 +41,7 @@ int main(int argc, char** argv) {
     if (!f)
         return 1;
     while (fread(page, 1, SEQLZ_BLOCK_SIZE, f) == SEQLZ_BLOCK_SIZE) {
-        unsigned int len = seqlz_compress(&st, page, dst, sizeof dst, 2), n = seqlz_find(&st, page, seq, 2);
+        unsigned int len = seqlz_compress_block(&st, page, dst, sizeof dst, 2), n = seqlz_find(&st, page, seq, 2);
         unsigned int coded = dst[1] >> 7, set = dst[2] & 7U, last = 1, extra, k, in = 0, nlit = 0;
         double bits = 0, sbits[8] = {0};
 

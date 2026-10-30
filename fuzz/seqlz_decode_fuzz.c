@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT OR GPL-2.0-only
 /*
- * seqlz_decode() on any input, with and without the scratch for coded literals. It must never read
+ * seqlz_decompress() on any input, with and without the scratch for coded literals. It must never read
  * outside the input, never write outside the page and the scratch, and return. The input, the page and
  * the scratch each get an allocation of exactly their size, so that ASan sees a byte too far, also when
  * AFL++ hands in a larger buffer.
@@ -49,8 +49,8 @@ int LLVMFuzzerTestOneInput(const uint8_t* data, size_t size) {
     unwritten(without, SEQLZ_BLOCK_SIZE);
     unwritten(scratch, SEQLZ_SCRATCH);
 
-    r_with = seqlz_decode(src, (unsigned int)size, with, scratch);
-    r_without = seqlz_decode(src, (unsigned int)size, without, NULL);
+    r_with = seqlz_decompress(src, (unsigned int)size, with, scratch);
+    r_without = seqlz_decompress(src, (unsigned int)size, without, NULL);
     if (r_with != 0 && r_with != -EINVAL)
         abort();
     if (r_without == 0 && (r_with != 0 || memcmp(with, without, SEQLZ_BLOCK_SIZE) != 0))

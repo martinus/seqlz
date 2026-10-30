@@ -10,7 +10,7 @@
 #include "seqlz_internal.h"
 
 /*
- * Room at dst with which seqlz_compress() never fails, as the kernel's
+ * Room at dst with which seqlz_compress_block() never fails, as the kernel's
  * interface has it; it uses no more
  */
 #define SEQLZ_COMPRESS_BOUND (2 * SEQLZ_BLOCK_SIZE)
@@ -47,20 +47,20 @@ extern const u8 seqlz_lit_sets[SEQLZ_LIT_SETS][256];
 extern const u8 seqlz_own_lengths[SEQLZ_OWN_SYMBOLS];
 
 /**
- * seqlz_decode() - Decompress one block
+ * seqlz_decompress() - Decompress one block
  * @src: the compressed block
  * @src_len: its length
  * @dst: SEQLZ_BLOCK_SIZE bytes for the block
- * @scratch: SEQLZ_SCRATCH bytes for coded literals, or NULL
+ * @wrkmem: SEQLZ_SCRATCH bytes for coded literals, or NULL
  *
  * Safe for any input: it never reads outside @src and @src_len, and never
- * writes outside @dst and @scratch. Without @scratch, blocks with coded
+ * writes outside @dst and @wrkmem. Without @wrkmem, blocks with coded
  * literals are not valid.
  *
  * Return: 0, or -EINVAL if @src is not a valid block for the tables.
  */
-int seqlz_decode(const void *src, unsigned int src_len, void *dst,
-		 void *scratch);
+int seqlz_decompress(const void *src, unsigned int src_len, void *dst,
+		     void *wrkmem);
 
 /* every sequence but the last covers at least 4 bytes of the block */
 #define SEQLZ_MAX_SEQUENCES (SEQLZ_BLOCK_SIZE / 4U + 1U)
@@ -70,7 +70,7 @@ int seqlz_decode(const void *src, unsigned int src_len, void *dst,
  * @st: the matcher's state
  * @src: the block, SEQLZ_BLOCK_SIZE bytes
  * @seq: room for SEQLZ_MAX_SEQUENCES sequences
- * @level: the level of seqlz_compress() whose matcher to use
+ * @level: the level of seqlz_compress_block() whose matcher to use
  *
  * For tests and tools. The last sequence has no match; the literals are the
  * bytes of the block no match covers.
@@ -92,10 +92,10 @@ unsigned int seqlz_find(struct seqlz_state *st, const void *src,
  *        or NULL: then the literals are not coded as deltas
  * @dst: where the compressed block goes
  * @dst_cap: the bytes at @dst
- * @level: what to do with the literals, as seqlz_compress() at that level
+ * @level: what to do with the literals, as seqlz_compress_block() at that level
  *
  * For tests and tools, which make their own sequences; zram uses
- * seqlz_compress().
+ * seqlz_compress_block().
  *
  * The sequences describe a block if each but the last has a match of at least
  * 4 bytes, with an offset from 1 to the bytes of the block before the match,
@@ -112,7 +112,7 @@ unsigned int seqlz_encode(struct seqlz_state *st,
 			  unsigned int level);
 
 /**
- * seqlz_compress() - Compress one block
+ * seqlz_compress_block() - Compress one block
  * @st: the matcher's state, one per CPU
  * @src: the block, SEQLZ_BLOCK_SIZE bytes
  * @dst: where the compressed block goes
@@ -133,7 +133,8 @@ unsigned int seqlz_encode(struct seqlz_state *st,
  * Return: the length of the compressed block, or 0 if it does not fit into
  * @dst_cap bytes, or @level is not one.
  */
-unsigned int seqlz_compress(struct seqlz_state *st, const void *src, void *dst,
-			    unsigned int dst_cap, unsigned int level);
+unsigned int seqlz_compress_block(struct seqlz_state *st, const void *src,
+				  void *dst, unsigned int dst_cap,
+				  unsigned int level);
 
 #endif

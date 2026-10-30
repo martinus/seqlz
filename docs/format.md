@@ -15,7 +15,7 @@ level 3 also with a table of the block's own, and stores them as deltas to earli
 first where that pays. A decoder for one decodes all of them.
 
 `tools/seqlz-ref/seqlz_ref.py` and `tools/seqlz-ref/seqlz_ref.c` are decoders written from this
-file, slow on purpose, and checked against `seqlz_decode()`, see
+file, slow on purpose, and checked against `seqlz_decompress()`, see
 [How this file was checked](#how-this-file-was-checked).
 
 The text between the comments "not in the kernel's copy" and "end" is left out of the kernel's copy of
@@ -287,7 +287,7 @@ A valid block ends where its bits end: after the last bit it needs, fewer than 8
 all in its last byte, and they are 0. *Why:* zram stores no checksum, so this is what tells a damaged
 block from a valid one, at one compare per block, and the compressor writes nothing else. A decoder may
 read zeros past the end instead of checking at every read, and check at the end that it did not use
-them; `seqlz_decode()` does that, and the result is the same as checking at every read.
+them; `seqlz_decompress()` does that, and the result is the same as checking at every read.
 
 ### Length values
 
@@ -512,7 +512,7 @@ than 1 to 3, are invalid now and free for a format that has to tell itself apart
 <!-- not in the kernel's copy -->
 ## How this file was checked
 
-`tools/seqlz-ref/seqlz_ref.py` decodes bit by bit, from this file alone, and agreed with `seqlz_decode()` on
+`tools/seqlz-ref/seqlz_ref.py` decodes bit by bit, from this file alone, and agreed with `seqlz_decompress()` on
 every input it was given, valid and damaged blocks of both block sizes; the numbers are in
 [explored-designs.md](explored-designs.md#the-format-written-down-one-set-of-tables-and-stream-sizes-that-hold).
 

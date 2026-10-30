@@ -74,6 +74,8 @@ CPU_MODEL = re.compile(r"read_cpuid|\bMIDR_|boot_cpu_data|x86_model")
 FORBIDDEN = re.compile(r"docs/|explored|seqlz-bench|seqlz-score|seqlz-train|\bbench_|SEQLZ_PAGE_BITS|tools/|bench/|"
                        r"CMake|\.inc\b|src/|#\d{2,3}\b|"
                        r"seqlz-fast|seqlz-[0-9]\b|zramphone|\bdump\b|\bcorpus\b|"
+                       # src/'s old name of seqlz_decompress(), which the kernel never had
+                       r"\bseqlz_decode\(|"
                        # the reasons of an old kernel, a distribution or our test machines, which mainline
                        # does not have
                        r"4\.14|Mi 9T|Fedora|kernel VM|\bthe phone|\bthe PC\b")
@@ -81,10 +83,6 @@ FORBIDDEN = re.compile(r"docs/|explored|seqlz-bench|seqlz-score|seqlz-train|\bbe
 # whole sentences or phrases of comments, as they read after the comment's lines are joined
 REWRITES = [
     ("docs/format.md is the specification.", f"{SPEC} specifies the format."),
-    # the interface has the name seqlz_compress() now, the function of src/ is seqlz_compress_block()
-    ("seqlz_compress()", "seqlz_compress_block()"),
-    # and seqlz_decode() of src/ is the interface's seqlz_decompress()
-    ("seqlz_decode()", "seqlz_decompress()"),
     # the library works on blocks of 4 KiB whatever PAGE_SIZE is, see BLOCK_BITS_KERNEL
     ("seqlz compresses one block at a time, a memory page for zram.",
      "seqlz compresses one block of SEQLZ_BLOCK_SIZE bytes at a time, for zram, whatever the kernel's PAGE_SIZE "
@@ -423,11 +421,9 @@ def port_compress():
     # the matcher's callbacks: the kernel's copy calls encode_seq() itself
     t = cut(t, r"/\* encode_seq\(\) as the matcher calls it, without and with records \*/\n.*?"
                r"encode_seq\(ctx, in, ll, ml, off, true\);\n\}\n\n")
-    # seqlz_compress() is the interface's name now, with the work memory and a level
-    # the interface has the name seqlz_compress() now; the comments get the new name from REWRITES
-    t = must(t, "unsigned int seqlz_compress(struct", "unsigned int seqlz_compress_block(struct")
+    # static: the interface's seqlz_compress() below is its one caller, checks the level, and has the
+    # kernel-doc, in include/linux/seqlz.h
     t = make_static(t, "seqlz_compress_block")
-    # the interface's kernel-doc is in include/linux/seqlz.h, and seqlz_compress() checked the level
     t = put_doc(t, "seqlz_compress_block", "/* one block, for the interface below, which checked the level */\n")
     t = must(t, "\tif (level < 1 || level > SEQLZ_LEVELS)\n\t\treturn 0;\n", "")
     t = t.rstrip("\n") + "\n\n" + (HERE / "api_compress.c").read_text()
@@ -436,13 +432,6 @@ def port_compress():
 
 def port_decompress():
     t = port_c("decompress")
-    # seqlz_decode() of src/ is the interface's seqlz_decompress(), whose kernel-doc is in
-    # include/linux/seqlz.h, with its parameter's name there; the comments get the new name from REWRITES
-    t = must(t, "int seqlz_decode(const void *src, unsigned int src_len, void *dst,\n\t\t void *scratch)\n",
-             "int seqlz_decompress(const void *src, unsigned int src_len, void *dst,\n\t\t     void *wrkmem)\n")
-    for deltas in ("true", "false"):
-        t = must(t, f"decode_block(src, src_len, dst, scratch, {deltas});\n",
-                 f"decode_block(src, src_len, dst, wrkmem, {deltas});\n")
     t = t.rstrip("\n") + "\n" + (HERE / "api_decompress.c").read_text()
     return fix_comments(t)
 

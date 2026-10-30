@@ -39,7 +39,7 @@ int seqlz_ref_init(struct seqlz_ref* r, const struct seqlz_ref_tables* t, unsign
 
 /*
  * Decodes the compressed block src of len bytes into out, 1 << block_bits bytes, as docs/format.md says, bit
- * by bit and without anything from src/: a second decoder to check seqlz_decode() against. Returns
+ * by bit and without anything from src/: a second decoder to check seqlz_decompress() against. Returns
  * 0 for a valid block, -1 for an invalid one; out is undefined then.
  */
 int seqlz_ref_decode(const struct seqlz_ref* r, const unsigned char* src, size_t len, unsigned char* out);
