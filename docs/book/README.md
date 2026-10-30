@@ -44,8 +44,8 @@ python3 docs/book/lint.py            # dashes, banned words, measurements withou
 - The book describes the code of one commit, `"src"` in `book.json`, not the checkout's. `build.py`
   builds in that commit's tree, extracted to a temporary directory, with this `docs/book/` over it, so
   a change of `src/` needs no change of the book. The page says which commit it describes.
-- `build.py --check` fails if a non-blank line of a file of `src/` without notes at that commit (the
-  generated `.inc` tables aside) is in no listing, if an id is on the page twice, or if a link goes to
+- `build.py --check` fails if a non-blank line of a file of `src/` or `src/linux/` without notes at that
+  commit is in no listing, if an id is on the page twice, or if a link goes to
   an id that does not exist. A file with notes is covered by them, so a chapter shows only the lines
   it explains. `--out <dir>` writes the page there instead.
 - To bring the book up to newer code: `remap.py [<commit>]` (default `HEAD`) prints how the listings
@@ -60,7 +60,8 @@ python3 docs/book/lint.py            # dashes, banned words, measurements withou
   II's `"code"` in `book.json` is the reading order of the files, in groups, and `{"code": true}` in its
   chapters is where they go; `@code` in a chapter lists them, and the build fails when that list and
   `annotated/*.md` differ. `remap.py` moves the blocks with their lines. The files had pages of their
-  own until October 2026: `annotated/<file>.html` is now a redirect to the same place in the book.
+  own until October 2026: `annotated/<file>.html` is now a redirect to the same place in the book; a file
+  that is gone, `MOVED` in `build.py`, to where its notes went.
 - A chapter folded into the notes keeps its ids as `@more {#id}` and `@anchor <id>`, so links to it
   still work. Links that say "chapter 13", or only "13", get the number of the chapter they go to, and
   `{{chapter:<id>}}` is a chapter's number anywhere else, so taking a chapter out renumbers the rest.

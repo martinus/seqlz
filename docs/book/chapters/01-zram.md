@@ -313,7 +313,7 @@ reads past its input or writes past the page corrupts the kernel's memory.
 
 So the project's second hard limit, **C6**: the decompressor is safe for any input and bounded in
 time. Whatever bytes it gets, it reads only its input and its tables, writes only the output page and
-its scratch, and returns after a fixed amount of work at most, with an error for an invalid page. zram
+its work memory, `wrkmem`, and returns after a fixed amount of work at most, with an error for an invalid page. zram
 then fails the read; one page is lost, the kernel is not.
 
 The reason C6 is a hard limit is history. The last new codec proposed for zram, zBeWalgo in 2018,
@@ -352,7 +352,7 @@ be slow decodes in 1.33 times the p99 time of real pages; for `lz4` the same is 
   source for all machines. A gap in the kernel is fixed in the kernel, with a patch of its own;
   [the x86-64 `prefetch()`](#ch-compat--prefetch) is the one seqlz needs.
 
-[`src/seqlz_compat.h`](#ch-compat) supplies the kernel's names outside the kernel, so that the
+[`src/linux/`](#ch-linux) supplies the kernel's headers outside the kernel, so that the
 benchmarks, the tests and the fuzzers build the same code.
 
 ## The score: bytes against time {#ch-zram--score}

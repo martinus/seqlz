@@ -11,7 +11,7 @@ like one: a small header, an array of records with a pointer, a few small intege
 stretch of English text, and zeros to the end. It compresses to {{ch16.coded.len}} bytes,
 {{ch16.coded.pct}}% of the page, and with raw literals to {{ch16.raw.len}}. Four figures of the book show
 it sequence by sequence: the matcher finding it ([`seqlz_match.h`](#stepper-match)), the encoder writing it
-([`seqlz_compress.c`](#f-seqlz_compress-c-b43)), the cache line of each token's lookup ([chapter 3](#anim-lines)) and the
+([`seqlz_compress.c`](#f-seqlz_encoder-h-b16)), the cache line of each token's lookup ([chapter 3](#anim-lines)) and the
 decoder reading it ([`seqlz_decompress.c`](#stepper-decode)). A row of links under each one's sentence jumps the
 others to the same sequence.
 
@@ -68,12 +68,12 @@ the escape has the {{tok.len.3072}}-bit code `{{tok.code.3072}}`, and only {{ch1
 for this page, which gives `0x00` {{lit.3.len.0}} bits.
 @assert ch16.lt.set == 3 and lit[3].len[0] < lit[0].len[0]
 
-## seqlz_compress(), and the matcher's first sequence {#ch-trace--matcher}
+## seqlz_compress_block(), and the matcher's first sequence {#ch-trace--matcher}
 
-The backend calls `seqlz_compress(st, page, dst, 8192, 2)`: the per-CPU state of {{size.state}}
-bytes, an output buffer of 2 pages, and level 2, the default. `compress_block()` checks that `dst_cap` is at
+zram's backend calls `seqlz_compress(page, dst, 8192, wrkmem, 2)`, which checks the level and calls
+`seqlz_compress_block(wrkmem, page, dst, 8192, 2)`: the per-CPU state of {{size.state}} bytes, an output buffer of 2 pages, and level 2, the default. `compress_block()` checks that `dst_cap` is at
 least {{ch16.enc_min}} bytes, sets up the encoder with the bitstream growing down from `dst + 8192` and
-the literals up from `dst + 2` ([both ends](#ch-encoder--layout)), and runs [`seqlz_match_block()`](#ch-matcher) with `encode_emit()` as its callback. The matcher clears its
+the literals up from `dst + 2` ([both ends](#ch-encoder--layout)), and runs [`seqlz_match_block()`](#ch-matcher), which calls `encode_seq()` for each sequence. The matcher clears its
 {{ch16.hash_entries}} entries of hash table and starts at position 1.
 
 Up to position 13 nothing matches: neither the repeat offset 1 nor the hash table's candidate, at first
@@ -83,9 +83,9 @@ zeros, and the zeros reach byte {{ch16.e0.zeros_to}}. The first sequence is {{ch
 `30 00 00 00`, `20 00`) and a match of {{ch16.s.0.ml}} bytes at offset {{ch16.s.0.off}}.
 @assert ch16.s[0].ll == 14 and ch16.s[0].off == 1 and ch16.byte12 == 32
 
-## encode_emit(): the first sequence in bits {#ch-trace--emit}
+## encode_seq(): the first sequence in bits {#ch-trace--emit}
 
-`encode_emit()` ([`encode_seq()`](#ch-encoder--emit)) copies the 14 literals with one 16-byte copy. `off`
+[`encode_seq()`](#ch-encoder--emit) copies the 14 literals with one 16-byte copy. `off`
 is the repeat offset, so class 0, without offset bits. The token, `14 + 16 * min(46, 31) + 512 * 0`, is
 {{ch16.s.0.tok}}, which has no code, so it goes as the escape and 12 bits, `{{ch16.e0.word}}`,
 {{ch16.e0.word_bits}} bits in one `enc_put()`. `ml - 4 = {{ch16.e0.ml4}}` is at least 31, so a length
@@ -284,7 +284,7 @@ one, {{ch16.zs.lower}}.
 
 ## Level 3: {{ch16.l3.len}} bytes, without a table of its own {#ch-trace--level3}
 
-At level 3, `seqlz-3`, `seqlz_compress()` takes `compress_own()` instead of `compress_block()`: the
+At level 3, `seqlz-3`, `seqlz_compress_block()` takes `compress_own()` instead of `compress_block()`: the
 matcher with its lazy step and the step back ([level 3](#ch-matcher--lazy)), and a record in front of
 each sequence's literals for the deltas ([the records](#ch-encoder--records)). On this page it finds
 {{ch16.l3.seqs}} sequences instead of {{ch16.l2.seqs}}, with {{ch16.l3.lits}} literals instead of
@@ -319,10 +319,10 @@ counters of [the deltas' animation](#anim-undelta) is {{counter.coded.len}} byte
 {{counter.l3.len}} at level 3, with a table of its own and its literals as deltas.
 @assert counter.l3.own == 1 and counter.l3.delta == 1
 
-## seqlz_decode(): the literals first {#ch-trace--decode}
+## seqlz_decompress(): the literals first {#ch-trace--decode}
 
-The backend calls `seqlz_decode(src, {{ch16.coded.len}}, dst, scratch)` with the per-CPU scratch of
-{{const.SCRATCH}} bytes ([`decode_block()`](#ch-decode)). Bit 7 of byte 2 is 0, so it runs the copy of
+zram's backend calls `seqlz_decompress(src, {{ch16.coded.len}}, dst, wrkmem)` with the per-CPU scratch of
+{{const.SCRATCH}} bytes as `wrkmem` ([`decode_block()`](#ch-decode)). Bit 7 of byte 2 is 0, so it runs the copy of
 `decode_block()` without deltas. That prefetches the token and length tables, finds the
 top bit of `{{ch16.coded.u16}}` set and `n_lit = {{ch16.lits}}`, and [`seqlz_decode_literals()`](#ch-literals-dec)
 reads table {{ch16.lt.set}} and width {{ch16.lt.width}} from byte 2,
@@ -367,7 +367,7 @@ where a refill without a check could read past it.
 
 **The end.** After sequence 178 the page is full and all literals are used: `d - lit` is `end_gap`, and
 the loop leaves without a token. The bit reader has read every byte, and the {{ch16.pad}} bits left are
-the zero padding of the last byte ([chapter 4](#ch-format--validity)). `seqlz_decode()` returns 0, and
+the zero padding of the last byte ([chapter 4](#ch-format--validity)). `seqlz_decompress()` returns 0, and
 `dst` holds the page we started with. Without the scratch the same bytes are `-EINVAL`, which is why
 `seqlz-2` has a decompression context and `seqlz-1` does not
 ([the scratch](#ch-zram-glue--fast-lit)).
@@ -390,14 +390,16 @@ every CPU, so the output is too:
 #include <stdlib.h>
 #include <string.h>
 
+#include <linux/errno.h>
+#include <linux/unaligned.h>
 #include "seqlz.h"
 
 #define N_REC 48 /* records of 32 bytes from byte 64 on */
 
 /* from dec_counted.c, seqlz_decompress.c with two counters */
 extern unsigned int n_fast, n_slow;
-int seqlz_decode_counted(const void *src, unsigned int src_len, void *dst,
-			 void *scratch);
+int seqlz_decompress_counted(const void *src, unsigned int src_len, void *dst,
+			     void *wrkmem);
 
 /* n bytes of v, little endian */
 static void le(u8 *p, unsigned long long v, unsigned int n)
@@ -557,10 +559,10 @@ int main(void)
 	printf(", escapes %u, length values %u\n", escapes, values);
 
 	/* seqlz-1: raw literals */
-	len0 = seqlz_compress(&st, page, dst, sizeof dst, 1);
+	len0 = seqlz_compress_block(&st, page, dst, sizeof dst, 1);
 	printf("raw literals: %u bytes = 2 + %u + %u\n", len0, n_lit,
 	       len0 - 2 - n_lit);
-	if (seqlz_decode(dst, len0, out, NULL) ||
+	if (seqlz_decompress(dst, len0, out, NULL) ||
 	    memcmp(out, page, SEQLZ_BLOCK_SIZE))
 		return 2;
 
@@ -586,7 +588,7 @@ int main(void)
 	printf("fewest bits: table %u\n", set);
 
 	/* seqlz-2: coded literals where that saves enough */
-	len1 = seqlz_compress(&st, page, dst, sizeof dst, 2);
+	len1 = seqlz_compress_block(&st, page, dst, sizeof dst, 2);
 	printf("coded literals: %u bytes, u16 0x%04x\n", len1,
 	       get_unaligned_le16(dst));
 	if (get_unaligned_le16(dst) & SEQLZ_LIT_CODED) {
@@ -620,10 +622,10 @@ int main(void)
 	printf("\n");
 
 	/* back again: not without the scratch, the same page with it */
-	if (seqlz_decode(dst, len1, out, NULL) != -EINVAL)
+	if (seqlz_decompress(dst, len1, out, NULL) != -EINVAL)
 		return 3;
 	memset(out, 0, sizeof out);
-	if (seqlz_decode_counted(dst, len1, out, scratch) ||
+	if (seqlz_decompress_counted(dst, len1, out, scratch) ||
 	    memcmp(out, page, SEQLZ_BLOCK_SIZE))
 		return 4;
 	printf("round trip ok, %u sequences on the fast path, %u on the slow path\n",
@@ -633,18 +635,19 @@ int main(void)
 ```
 @program ch16-trace with=dec_counted
 
-`dec_counted.c` is `src/seqlz_decompress.c` with two counters and `seqlz_decode()` renamed, so that
+`dec_counted.c` is `src/seqlz_decompress.c` with two counters and `seqlz_decompress()` renamed, so that
 it can be linked next to the original. `sed` makes it. From the root of the repository, with GNU sed
 and gcc, `trace.c` in the current directory:
 
 ```text
 R=/path/to/seqlz
-sed -e 's/^#include "seqlz.h"$/&\nunsigned int n_fast, n_slow;\n#define seqlz_decode seqlz_decode_counted/' \
+sed -e 's/^#include "seqlz_internal.h"$/&\nunsigned int n_fast, n_slow;\n#define seqlz_decompress seqlz_decompress_counted/' \
     -e 's/^\t\t\ttok = next_token_fast(/\t\t\tn_fast++;\n&/' \
     -e 's|^\t\t/\* the slow path: length values, and every check \*/$|&\n\t\tn_slow++;|' \
     $R/src/seqlz_decompress.c > dec_counted.c
+$R/tools/gen-tables/gen-tables.sh seqlz_tables.c
 gcc -O2 -Wall -Wextra -I$R/src -o trace trace.c dec_counted.c \
-    $R/src/seqlz_{codes,compress,compress_literals,decompress,decompress_literals,default_tables,lit_sets}.c
+    $R/src/seqlz_*.c seqlz_tables.c
 ./trace
 ```
 

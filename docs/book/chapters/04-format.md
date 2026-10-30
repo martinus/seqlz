@@ -3,14 +3,14 @@
 A page compressed by seqlz is a string of bytes, and zram stores it together with its length. This
 chapter is about those bytes, as
 [`docs/format.md`](https://github.com/martinus/seqlz/blob/main/docs/format.md) specifies them, and
-it is the map for Part II: when [`seqlz_decode()`](#ch-decode) checks the top bit of the
+it is the map for Part II: when [`seqlz_decompress()`](#ch-decode) checks the top bit of the
 first two bytes, or [`seqlz_decode_literals()`](#ch-literals-dec) reads 8 streams of literals, this is where the
 bytes they read are described as a whole.
 
 The spec is about {{ch04.format_lines}} lines, written so that a decoder can be built from it alone. Two such decoders
 exist, `tools/seqlz-ref/seqlz_ref.py` and `tools/seqlz-ref/seqlz_ref.c`, both slow on purpose. CI
 decodes 22 compressed pages with the Python one, and the unit tests and a fuzzer compare the C one
-with `seqlz_decode()`. The format says which pages are valid and what they decode to, not how a
+with `seqlz_decompress()`. The format says which pages are valid and what they decode to, not how a
 compressor finds them: one page of memory can be written in many ways, as with `lz4` or `zstd`. Where
 this chapter says what `seqlz_compress()` writes, it says so.
 
@@ -230,7 +230,7 @@ Every table is [complete](#ch-compression--complete). For the token table that i
 {{tok.codes_of.7}} of 7, {{tok.codes_of.8}} of 8, {{tok.codes_of.9}} of 9, {{tok.codes_of.10}} of 10
 and {{tok.codes_of.11}} of 11 bits, {{tok.with_code}} codes, and in units of $\frac{1}{2048}$:
 ${{tok.codes_of.4}} \cdot 128 + {{tok.codes_of.5}} \cdot 64 + {{tok.codes_of.6}} \cdot 32 + {{tok.codes_of.7}} \cdot 16 + {{tok.codes_of.8}} \cdot 8 + {{tok.codes_of.9}} \cdot 4 + {{tok.codes_of.10}} \cdot 2 + {{tok.codes_of.11}} = 2048$.
-So `seqlz_decode()` can look up 11 bits in a table of 2048 entries without checking the entry; the
+So `seqlz_decompress()` can look up 11 bits in a table of 2048 entries without checking the entry; the
 table is built by [`seqlz_codes.c`](#ch-codes).
 @assert tok.codes_of[4] * 128 + tok.codes_of[5] * 64 + tok.codes_of[6] * 32 + tok.codes_of[7] * 16 + tok.codes_of[8] * 8 + tok.codes_of[9] * 4 + tok.codes_of[10] * 2 + tok.codes_of[11] == 2048 and tok.with_code == tok.codes_of[4] + tok.codes_of[5] + tok.codes_of[6] + tok.codes_of[7] + tok.codes_of[8] + tok.codes_of[9] + tok.codes_of[10] + tok.codes_of[11]
 
@@ -502,7 +502,7 @@ python3 -c "import hashlib; print(hashlib.sha256(b'ab' * 2048).hexdigest())"
 ```
 
 Flip any bit of the {{ab.len}} bytes and run it again: most flips make the page invalid. The same
-bytes go through the real `seqlz_decode()` one statement at a time in
+bytes go through the real `seqlz_decompress()` one statement at a time in
 [the decoder's step-through](#ch-decode--example).
 :::
 
@@ -802,7 +802,7 @@ bits are the lengths.
 @assert own.text.clen["20"] == own.text.clen["6c"] == own.text.clen["75"] == 3 and own.text.with_code == 13 and own.text.b_bytes == ch04.text.b_bytes
 
 A page is invalid if the sum goes above 1, if a byte value above 255 would get a code, if a bit after
-the last symbol in its byte is not 0, or if $3 + w + e + d$ is beyond `len`. `seqlz_decode()` reads zeros
+the last symbol in its byte is not 0, or if $3 + w + e + d$ is beyond `len`. `seqlz_decompress()` reads zeros
 past the end of the page, and a code of zeros, `{{own.code.8}}`, is a length, so a table that never
 fills the code space still ends there, and the last of those checks rejects it. How the encoder chooses the lengths and which pages get a
 table is in [`code_literals()`](#ch-literals-enc--own); how the decoder builds a decode table from them
@@ -872,7 +872,7 @@ A page is valid for a page size and its tables if all of these hold:
     end, but a page that needs more bits than it has then has fewer than 0 left, and fails this.
 
 A header with more literals than the sequences use breaks rule 10 or 12: the end is never reached,
-and the next token's `ll` or match does not fit. `seqlz_decode()` checks every rule, in its own order
+and the next token's `ll` or match does not fit. `seqlz_decompress()` checks every rule, in its own order
 and often in a cheaper form ([`decode_block()`](#ch-decode)), and the fuzz target `fuzz/seqlz_diff_fuzz.c`
 fails if it and `tools/seqlz-ref/seqlz_ref.c` disagree on whether any input is valid or on what it
 decodes to.
@@ -905,7 +905,7 @@ at the stop: fewer than 8 bits of B left, all 0, else invalid
 ```
 
 The match is copied byte by byte, so it can repeat what it writes itself
-([chapter 2](#ch-compression--overlap)). `seqlz_decode()` does the same work in another shape: it
+([chapter 2](#ch-compression--overlap)). `seqlz_decompress()` does the same work in another shape: it
 decodes all coded literals into a buffer first, so that the loop over the sequences reads them as if
 they were raw, it looks up 11 bits at a time in a table, and it copies 16 bytes at a time where there
 is room ([copying more than needed](#ch-cpu--wild-copy)). The result is the same for every input,
@@ -932,8 +932,7 @@ table codes best; k-means put pages whose literals look alike into one group for
 `own` has how often each symbol of `OWN` occurred in the tables of the {{own.counts.pages|grp}} training
 pages that level 3 gave a table of their own; the lengths 7 to 10 are {{own.counts.share_7_10}}% of them.
 `tools/kernel-port/gen-seqlz-lengths.py` turns the counts into length-limited Huffman code lengths and
-writes `src/seqlz_default_tables_4k.inc` and `src/seqlz_lit_sets_4k.inc`; CI checks that the files in
-`src/` are its output, byte for byte, and `seqlz-train --from-counts` does the same in C++.
+writes `src/seqlz_lengths.h`; CI checks that the files in `src/` are its output, byte for byte, and `seqlz-train --from-counts` does the same in C++.
 The kernel's copy gets the generator, as `scripts/gen-seqlz-lengths.py`, and the 4 KiB counts.
 
 The 4 KiB tables of 13th October 2026 are counted on {{ch02.train_pages|grp}} pages: three sessions

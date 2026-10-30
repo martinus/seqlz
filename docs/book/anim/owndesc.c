@@ -9,6 +9,8 @@
 #include <stdio.h>
 #include <stdlib.h>
 
+#include <linux/unaligned.h>
+
 #include "pages.h"
 
 static unsigned int bit_at(const u8* p, unsigned int i) {
@@ -23,9 +25,9 @@ int main(void) {
     const u8* p;
 
     words_page(page);
-    n = seqlz_compress(&st, page, dst, sizeof dst, SEQLZ_LEVEL_OWN);
+    n = seqlz_compress_block(&st, page, dst, sizeof dst, SEQLZ_LEVEL_OWN);
     if (!n || !(get_unaligned_le16(dst) & SEQLZ_LIT_CODED) || (dst[2] & SEQLZ_LIT_CODE_MASK) != SEQLZ_LIT_OWN ||
-        seqlz_decode(dst, n, out, scratch) || memcmp(out, page, SEQLZ_BLOCK_SIZE)) {
+        seqlz_decompress(dst, n, out, scratch) || memcmp(out, page, SEQLZ_BLOCK_SIZE)) {
         fprintf(stderr, "owndesc.c: the text page has no table of its own at level 3\n");
         return 1;
     }

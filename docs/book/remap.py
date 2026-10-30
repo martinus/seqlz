@@ -35,9 +35,15 @@ new_rev = git("rev-parse", "--verify", f"{args[0] if args else 'HEAD'}^{{commit}
 maps, oldtext, newtext = {}, {}, {}
 
 
-def exists(path):
-    return subprocess.run(["git", "-C", str(ROOT), "cat-file", "-e", f"{new_rev}:{path}"],
+def exists(path, rev=None):
+    return subprocess.run(["git", "-C", str(ROOT), "cat-file", "-e", f"{rev or new_rev}:{path}"],
                           capture_output=True).returncode == 0
+
+
+def both(path):
+    """whether path is in the book's commit and in the new one: a file that is not, moved or split or
+    new, is left to be done by hand"""
+    return exists(path, old_rev) and exists(path)
 
 
 def linemap(path):
@@ -78,7 +84,10 @@ for ch in sorted((ROOT / "docs/book/chapters").glob("*.md")):
         m = re.match(r"^@listing\s+(\S+)\s+(\d+)(?:-(\d+))?\s*$", line)
         if m:
             path, a = m.group(1), int(m.group(2)); b = int(m.group(3) or a)
-            cur = path
+            cur = path if both(path) else None
+            if not cur:
+                print(f"{ch.name}:{idx+1}: @listing {path}: not in both commits, by hand")
+                continue
             mp = linemap(path)
             na, nb = near(mp, a, 1), near(mp, b, -1)
             same = kept(mp, a, b)
@@ -91,7 +100,7 @@ for ch in sorted((ROOT / "docs/book/chapters").glob("*.md")):
         # file:line references in the prose, e.g. src/seqlz_decompress.c:17 or seqlz_decompress.c:544
         def fileref(mm):
             path = mm.group(1) if mm.group(1).startswith("src/") else "src/" + mm.group(1)
-            if not exists(path):
+            if not both(path):
                 return mm.group(0)
             mp = linemap(path)
             new = re.sub(r"\d+", lambda d: str(near(mp, int(d.group(0)), 1) or d.group(0)), mm.group(2))
@@ -115,6 +124,9 @@ for ch in sorted((ROOT / "docs/book/chapters").glob("*.md")):
 # so they still cover the file; links to a block (#b<first line>) and "line N" in a note or panel move
 # with their lines
 for path, nf in notes_files(ROOT / "docs/book").items():
+    if not both(path):
+        print(f"{nf.name}: {path} not in both commits, by hand")
+        continue
     lines = nf.read_text().split("\n")
     mp = linemap(path)
     n_new = len(newtext[path]) - (newtext[path][-1] == "")

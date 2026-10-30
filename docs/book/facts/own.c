@@ -229,7 +229,7 @@ static const u8* text_facts(const struct seqlz_tables* t, unsigned int* d_out) {
     unsigned int n, h, b2, wdt, d, rows, used, k, nb = 0, sum = 0, s[SEQLZ_LIT_STREAMS];
 
     words_page(page);
-    n = seqlz_compress(&st, page, dst, sizeof dst, SEQLZ_LEVEL_OWN);
+    n = seqlz_compress_block(&st, page, dst, sizeof dst, SEQLZ_LEVEL_OWN);
     h = get_unaligned_le16(dst);
     b2 = dst[2];
     if (!n || !(h & SEQLZ_LIT_CODED) || (b2 & SEQLZ_LIT_CODE_MASK) != SEQLZ_LIT_OWN)
@@ -291,7 +291,7 @@ static void encoder_facts(const struct seqlz_tables* t) {
     const u8* lits;
 
     words_page(page);
-    if (!seqlz_compress(&st, page, dst, sizeof dst, 1))
+    if (!seqlz_compress_block(&st, page, dst, sizeof dst, 1))
         fail("the text page does not compress");
     n_lit = get_unaligned_le16(dst);
     lits = dst + SEQLZ_HEADER;

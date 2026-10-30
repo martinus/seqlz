@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT OR GPL-2.0-only
 /*
- * ch13_16.c: the facts of chapters 13 (the literal streams), 14 (seqlz_decode()) and 16 (one page
+ * ch13_16.c: the facts of chapters 13 (the literal streams), 14 (seqlz_decompress()) and 16 (one page
  * through every function). It includes the codec's two .c files to reach their static functions, and
  * two macros of seqlz_decompress.c's sequence loop are redefined to record each sequence of one
  * decode, see ch14_seq() and ch14_slow(): which path it took is what the real loop did.
@@ -382,8 +382,8 @@ static void ch13(void) {
 
     /* the same as the real decoder, also the bytes behind the literals */
     memset(scratch, 0, sizeof scratch);
-    if (seqlz_decode(src, n, out, scratch) || memcmp(scratch, mine, k + 8) || memcmp(out, page, SEQLZ_BLOCK_SIZE))
-        die("ch13: the replica differs from seqlz_decode()");
+    if (seqlz_decompress(src, n, out, scratch) || memcmp(scratch, mine, k + 8) || memcmp(out, page, SEQLZ_BLOCK_SIZE))
+        die("ch13: the replica differs from seqlz_decompress()");
 
     fact_num("ch13.n", n);
     fact_num("ch13.bitstream", n - (unsigned int)(q + total - src));
@@ -458,7 +458,7 @@ static void ch13(void) {
                 fact_num(key("ch13.e.size%u_bits", d), 8 * nsz);
                 fact_num(key("ch13.e.left%u", d), (long long)(8 * nsz) - used);
             }
-            if (seqlz_decode(bad, n, out, scratch) != -EINVAL)
+            if (seqlz_decompress(bad, n, out, scratch) != -EINVAL)
                 die("ch13: a damaged page is accepted");
         }
     }
@@ -635,7 +635,7 @@ static void ch14(void) {
     n = fact_compress(page, src, 1);
     ch14_n = 0;
     ch14_on = 1;
-    s = (unsigned int)seqlz_decode(src, n, out, scratch);
+    s = (unsigned int)seqlz_decompress(src, n, out, scratch);
     ch14_on = 0;
     if (s || memcmp(out, page, SEQLZ_BLOCK_SIZE))
         die("ch14: chapter 16's page");

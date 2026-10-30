@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT OR GPL-2.0-only
 /*
- * ch03_05.c: the facts of chapter 3 (what makes code slow on a CPU) and chapter 5 (seqlz_compat.h):
+ * ch03_05.c: the facts of chapter 3 (what makes code slow on a CPU) and of src/linux/ (once chapter 5):
  * the tables' sizes in entries, bytes and cache lines, which entries and lines the codes of tokens
  * 49 and 4 fill, the bits the decoder's fast path counts on, and what the chapters count in the
  * files of the repository. Includes seqlz_decompress.c for PREFETCH_STEP.
@@ -171,7 +171,7 @@ int main(void) {
     fact_num("ch05.prefetches_128", PREFETCH_STEP / 128);
     fact_num("ch05.ll_cap", SEQLZ_LL_CAP);
     fact_num("ch05.ml_cap", SEQLZ_ML_CAP);
-    /* the helpers marked __always_inline: in the .c files and seqlz_match.h, and in seqlz_compat.h */
+    /* the helpers marked __always_inline: in the .c files, seqlz_match.h and seqlz_encoder.h, and in src/linux/ */
     repo_path(path, sizeof path, "src");
     d = opendir(path);
     if (!d) {
@@ -182,14 +182,31 @@ int main(void) {
         size_t n = strlen(e->d_name);
         char rel[300];
 
-        if (!(n > 2 && !strcmp(e->d_name + n - 2, ".c")) && strcmp(e->d_name, "seqlz_match.h"))
+        if (!(n > 2 && !strcmp(e->d_name + n - 2, ".c")) && strcmp(e->d_name, "seqlz_match.h") &&
+            strcmp(e->d_name, "seqlz_encoder.h"))
             continue;
         snprintf(rel, sizeof rel, "src/%s", e->d_name);
         n_inline += lines_starting(rel, inl);
     }
     closedir(d);
     fact_num("ch05.inline_c", n_inline);
-    fact_num("ch05.inline_compat", lines_starting("src/seqlz_compat.h", inl));
+    n_inline = 0;
+    repo_path(path, sizeof path, "src/linux");
+    d = opendir(path);
+    if (!d) {
+        fprintf(stderr, "facts/ch03_05.c: cannot read %s\n", path);
+        exit(1);
+    }
+    while ((e = readdir(d))) {
+        char rel[300];
+
+        if (e->d_name[0] == '.')
+            continue;
+        snprintf(rel, sizeof rel, "src/linux/%s", e->d_name);
+        n_inline += lines_starting(rel, inl);
+    }
+    closedir(d);
+    fact_num("ch05.inline_compat", n_inline);
     fact_num("ch05.endian_pages", (long long)number_after("test/seqlz_endian.c", "printf(\"pages "));
     facts_end();
     return 0;

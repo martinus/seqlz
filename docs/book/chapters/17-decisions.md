@@ -566,7 +566,8 @@ prefetch that had cost the A76 1.3 to 2.6 µs of cold reads did not show again o
 
 ### Prefetch: the compressed data and every table
 
-The backend prefetches the compressed data, the decoder its tables, {{ch17.tok_lines}} lines of token
+The harness's backend, and a zram patch in the kernel VM, prefetch the compressed data; the decoder
+prefetches its tables, {{ch17.tok_lines}} lines of token
 table, {{ch17.len_lines}} for each length table and {{ch17.lit_lines}} for the page's literal table,
 {{ch17.prefetch_lines}} per loop iteration ([why](#ch-dec-basics--prefetch)). Even the 32 lines of
 the length tables were worth 2.8 µs to the A55
@@ -771,7 +772,7 @@ within the noise
 | the same three choices: 4 back, 8 back, the last offset | other distances, more choices, Paeth and gradient predictors | of 131 transforms, each counted on every page, all 131 with the same pricing saved 7.6 bytes per page against the XOR, the three subtractions 7.4 |
 | one choice per page, in a byte of the header | a XOR per literal lane, with a literal table per lane ("format 3", 8 streams of lanes) | the lanes gave less, 896.5 bytes per page on the same ten samples against 880.7, both as stored after a recompression from `seqlz-1`, for more code; the size came from the XOR, not from the lanes |
 | that byte right after byte 2, before the sizes | after the sizes, as the first form had it | the header reads in order: byte 2 says whether the byte is there, and it comes next; the same bytes per page, and one add in the decoder either way |
-| priced with the fixed tables' sums of `lit_cost`, every 5th literal | every literal | every literal made pages almost no smaller and the encoder slower ([`DELTA_STEP`](#f-seqlz_compress_literals-c-b9)) |
+| priced with the fixed tables' sums of `lit_cost`, every 5th literal | every literal | every literal made pages almost no smaller and the encoder slower ([`DELTA_STEP`](#f-seqlz_compress_literals-c-b17)) |
 | every 5th literal | every 4th | every 4th is the same byte of each 4- or 8-byte field, and made pages 1.0 byte larger |
 | where the deltas stay raw, the literals stay raw | a second try of the literals as they are, with the fixed tables and a table of their own | it saved 0.71 bytes per page, for writes 0.39 µs slower on the A76 and 0.93 µs on the A55 in zram in the Mi 9T's kernel, 24th October 2026 ([`seqlz_code_own()`](#ch-literals-enc--code-own)) |
 | the records and the deltas in copies of the loops for level 3 | a test for every sequence in the loops all levels share | the test made levels 1 and 2 about 6% slower to write on the A76, and slower to read ([the two receivers](#ch-encoder--wrappers), [the two copies of the loop](#ch-decode--deltas)) |

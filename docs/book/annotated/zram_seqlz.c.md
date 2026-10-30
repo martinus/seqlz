@@ -1,7 +1,7 @@
 # src/zram_seqlz.c
 
 seqlz as zram calls a codec, for the project's benchmark harness: three codecs, `seqlz-1` to
-`seqlz-3`, one per level of `seqlz_compress()`, all read by the same decoder. The harness has a copy
+`seqlz-3`, one per level of `seqlz_compress_block()`, all read by the same decoder. The harness has a copy
 of zram's interface, `struct bench_codec`, in `bench/kernel_codecs/zram_codec.h`
 ([the harness's copy](#ch-zram-glue--harness)). The kernel does not get this file; its
 backend, `backend_seqlz.c`, goes into the tree with the copy of the codec that `port.py` writes
@@ -62,19 +62,21 @@ A codec without `create_dctx` gets the compression context in `decompress()`, as
 the split; the harness's `lz4`, `lzo` and `zstd` are copies of the kernel's glue from before it.
 @end
 @more {#ch-zram-glue--port} How `port.py` writes the kernel's copy from `src/`
-A patch for `lib/` needs the kernel's headers instead of `seqlz_compat.h`, `static` on every function
-one file calls, exports, `Kconfig` and `Makefile` entries, the zram backend, documentation, KUnit tests,
-and none of the harness's functions. A second copy by hand would drift, so `port.py <linux tree>`
-writes it, and its docstring opens with the rule: "src/ stays the one source of the codec." A fix goes
-into `src/` or `tools/kernel-port/`, never into the copy.
+A patch for `lib/` needs exports, `Kconfig` and `Makefile` entries, the zram backend, documentation,
+KUnit tests, and none of the harness's functions. A second copy by hand would drift, so
+`port.py <linux tree>` writes it, and its docstring opens with the rule: "src/ stays the one source of
+the codec." A fix goes into `src/` or `tools/kernel-port/`, never into the copy. Since 30th October
+2026 the files of `src/` have the kernel's includes, guards, interface and exports themselves, so for
+the codec the copy is nearly a copy.
 
 | file in the tree | from |
 | --- | --- |
-| `include/linux/seqlz.h` | `tools/kernel-port/seqlz.h`: the interface, two functions |
+| `include/linux/seqlz.h` | `src/linux/seqlz.h`, for blocks of 4 KiB only |
 | `lib/seqlz/seqlz_format.h`, `seqlz_tables.h`, `seqlz_internal.h` | `src/`, without what only the harness uses |
-| `lib/seqlz/seqlz_compress.c`, `seqlz_compress_literals.c`, `seqlz_decompress.c`, `seqlz_decompress_literals.c` | `src/`; `seqlz_compress.c` and `seqlz_decompress.c` each with its part of the interface from `api_*.c`, the matcher of `seqlz_match.h` inside `seqlz_compress.c` |
+| `lib/seqlz/seqlz_compress.c` | `src/seqlz_compress.c`, with `seqlz_encoder.h` and `seqlz_match.h` in place |
+| `lib/seqlz/seqlz_compress_literals.c`, `seqlz_decompress.c`, `seqlz_decompress_literals.c` | `src/` |
 | `lib/seqlz/gen_seqlz_tables.c` | `src/seqlz_codes.c` and `tools/gen-tables/gen_seqlz_tables.c`: a program for the build machine, which writes the tables, `seqlz_tables.c`, when the kernel is built |
-| `lib/seqlz/seqlz_lengths.h` | the code lengths, written in the tree by its `scripts/gen-seqlz-lengths.py` from `lib/seqlz/seqlz_counts.txt` |
+| `lib/seqlz/seqlz_lengths.h` | the code lengths, written in the tree by its `scripts/gen-seqlz-lengths.py` from `lib/seqlz/seqlz_counts.txt`; `src/seqlz_lengths.h` is the same file without `static` |
 | `scripts/gen-seqlz-lengths.py`, `lib/seqlz/seqlz_counts.txt` | `tools/kernel-port/gen-seqlz-lengths.py` and `bench/seqlz_counts_4k.txt` |
 | `lib/seqlz/tests/seqlz_kunit.c` | `tools/kernel-port/seqlz_kunit.c`, with values from `docs/format.md` filled in |
 | `lib/Kconfig`, `lib/Kconfig.debug`, `lib/Makefile`, `lib/seqlz/Makefile` | `CONFIG_SEQLZ`, and `CONFIG_SEQLZ_KUNIT_TEST` with the other KUnit tests of `lib/`; `-O3` as `lib/lz4` |
@@ -84,72 +86,37 @@ into `src/` or `tools/kernel-port/`, never into the copy.
 | `arch/x86/include/asm/processor.h` | `x86-prefetcht0.patch`, unless the tree has it |
 @end
 @more {#ch-zram-glue--what-portpy-changes-in-the-code} What `port.py` changes in the code
-The diff between `src/seqlz_decompress.c` and its copy, on the tree CI uses, `986c24e0fe44`, shortened:
+The whole diff between `src/seqlz_decompress.c` and its copy:
 
 ```text
--// SPDX-License-Identifier: MIT OR GPL-2.0-only
--/*
-- * The decompressor: seqlz_decode().
-- */
--#include "seqlz.h"
-+// SPDX-License-Identifier: GPL-2.0-only OR MIT
-+/* The decompressor: seqlz_decompress(). */
-+#include <linux/build_bug.h>
-+#include <linux/errno.h>
-+#include <linux/export.h>
-+#include <linux/module.h>
-+#include <linux/unaligned.h>
-+
-+#include "seqlz_internal.h"
 - * number of extra bits, which follow the code. Takes up to SEQLZ_MAX_BITS +
 - * SEQLZ_BLOCK_BITS bits, 20 or 22; the caller refills before.
 + * number of extra bits, which follow the code. Takes up to
 + * SEQLZ_MAX_BITS + SEQLZ_BLOCK_BITS bits, 20; the caller refills before.
--int seqlz_decode(const void *src, unsigned int src_len, void *dst,
--		 void *scratch)
-+int seqlz_decompress(const void *src, unsigned int src_len, void *dst,
-+		     void *wrkmem)
--		return decode_block(src, src_len, dst, scratch, true);
--	return decode_block(src, src_len, dst, scratch, false);
-+		return decode_block(src, src_len, dst, wrkmem, true);
-+	return decode_block(src, src_len, dst, wrkmem, false);
- }
-+EXPORT_SYMBOL_GPL(seqlz_decompress);
-+
-+/* the interface's work memory is the buffer of coded literals */
-+static_assert(SEQLZ_MEM_DECOMPRESS == SEQLZ_SCRATCH);
-+static_assert(SEQLZ_BLOCK_SIZE == 1U << SEQLZ_BLOCK_BITS);
-+
-+MODULE_LICENSE("Dual MIT/GPL");
+- * 50, 11 for each token and up to 14 for each offset; after a slow one it
++ * 46, 11 for each token and up to 12 for each offset; after a slow one it
 ```
 
-- **The kernel's headers**, from a list in `port.py`. `seqlz_compat.h` would pull them in anyway
-  ([its kernel half](#ch-compat--kernel)), but a reviewer expects a file's includes in the file.
-- **`#define SEQLZ_BLOCK_BITS 12U`** in place of `SEQLZ_PAGE_BITS`, whatever the kernel's
-  `PAGE_SIZE` is: the library compresses blocks of 4 KiB, `SEQLZ_BLOCK_SIZE` of the interface, and
-  builds with 16 KiB and 64 KiB pages too. The values for 16 KiB blocks are cut, e.g.
-  `SEQLZ_HASH_BITS` becomes `12U`, and so are the numbers for them in the comments, as in the diff
-  above. The format for 16 KiB blocks is not fixed yet, and with them `seqlz-2` asks for twice `lz4`'s
-  work memory per CPU ([format.md](https://github.com/martinus/seqlz/blob/main/docs/format.md#status)).
-  A library in `lib/` that built only with 4 KiB pages would fail the first build bot with 64 KiB pages
-  on arm64.
-- **`seqlz_decompress()`.** `seqlz_decode()` of `src/` becomes the interface's `seqlz_decompress()`
-  itself, its scratch named `wrkmem` as in the prototype, and its kernel-doc is the interface's, in
-  `include/linux/seqlz.h`. Until 23rd October 2026 it was a `static` function behind a
-  `seqlz_decompress()` that only passed its arguments on (commit `3ae2e09`).
-- **`seqlz_compress_block()`.** The interface takes the name `seqlz_compress()`, and the codec's
-  function is renamed and `static`, without its test of the level, which the interface does; a
+- **Blocks of 4 KiB only.** `#define SEQLZ_BLOCK_BITS 12U` in place of `SEQLZ_PAGE_BITS`, and
+  `SEQLZ_BLOCK_SIZE` of the interface `4096U`, whatever the kernel's `PAGE_SIZE` is: the library
+  compresses blocks of 4 KiB and builds with 16 KiB and 64 KiB pages too. The values for 16 KiB blocks
+  are cut, e.g. `SEQLZ_HASH_BITS` becomes `12U` and `SEQLZ_MEM_COMPRESS` `8192`, and so are the numbers
+  for them in the comments, as in the diff above. The format for 16 KiB blocks is not fixed yet, and
+  with them `seqlz-2` asks for twice `lz4`'s work memory per CPU
+  ([format.md](https://github.com/martinus/seqlz/blob/main/docs/format.md#status)). A library in
+  `lib/` that built only with 4 KiB pages would fail the first build bot with 64 KiB pages on arm64.
+- **The encoder and the matcher in place.** What follows the includes of `seqlz_encoder.h` and
+  `seqlz_match.h` goes into `seqlz_compress.c`, right before `compress_block()`, and its includes of
+  them and of `seqlz.h` become one of `seqlz_internal.h`: in the kernel they have one user, and a
+  reviewer reads one file.
+- **`seqlz_compress_block()` `static`**, without its test of the level, which the interface does; a
   one-line comment says that it is for the interface below, which checked the level.
 - **`seqlz_codes.c` as a program for the build machine**, `gen_seqlz_tables.c`
   ([at build time](#ch-codes--kernel)), the one that writes the tables of `src/` too, with
   `seqlz_tables_build()` `static`.
-- **The matcher inside `seqlz_compress.c`**, right before its callers, `compress_block()` and
-  `compress_own()`, with its `emit` callback a direct call of `encode_seq(e, ..., lazy)`: the lazy copy,
-  level 3's, is the one with the records for the deltas, so the wrappers `encode_emit()` and
-  `encode_emit_rec()` are cut ([the two receivers](#ch-encoder--wrappers)). In `src/` the matcher has one
-  more user, `seqlz_find()`.
-- **What only the harness uses is cut**: all of `src/seqlz.h`; `seqlz_find()`, `seqlz_encode()`,
-  `encode_raw()` and `seqlz_code_raw_literals()`. The `raw` parameter of `code_literals()` stays: at level 3 it carries the deltas
+- **What only the harness uses is cut**: all of `src/seqlz.h` and `src/seqlz_harness.c`,
+  `seqlz_code_raw_literals()` and its declaration, and the cast in `seqlz_internal.h` that the C++ of the
+  harness needs. The `raw` parameter of `code_literals()` stays: at level 3 it carries the deltas
   ([`seqlz_code_own()`](#ch-literals-enc--code-own)).
 
 Every textual replacement goes through `must()` or `cut()`, which assert that the text occurs exactly as
@@ -176,38 +143,6 @@ e.g. `"docs/format.md is the specification."` becomes
 `"Documentation/staging/seqlz.rst specifies the format."`; a changed comment is wrapped again to 80
 columns. A rewrite that matched nothing fails the run: its comment is gone, and the rewrite has to go
 with it.
-@end
-@more {#ch-zram-glue--interface} `include/linux/seqlz.h`: the kernel's two functions
-@listing tools/kernel-port/seqlz.h 1-{{ch15.kport.seqlz_h}}
-
-This is the shape of `include/linux/lz4.h`: work memory sizes as constants, functions that take the work
-memory as a `void *`, and no tables. The interface speaks of blocks of `SEQLZ_BLOCK_SIZE` bytes, not of
-`PAGE_SIZE`: one memory page with 4 KiB pages, a quarter of one with 16 KiB pages. Before commit `aaa381e` the kernel copy exported all of
-`src/seqlz.h`, 7 functions and the code lengths. The comments are **kernel-doc**, the kernel's format
-for documenting functions, which `scripts/kernel-doc` parses and checks.
-
-- `Context: Any context` promises that the functions may run where sleeping is not allowed. zram calls
-  them under a mutex and does not need it; it holds because the codec never sleeps or allocates.
-- The `Return:` of `seqlz_compress()` has a subtlety of [the room check](#ch-encoder--room-check): the encoder stops as
-  soon as fewer than {{ch15.enc_room}} bytes (`ENC_ROOM`) plus the next literals are free, so a page can
-  be refused although its size with coded literals would have fit. With zram's 2 pages it never happens.
-- "Safe for any input" is constraint C6 of the plan, the one hard limit
-  ([chapter 1](#ch-zram--safety)).
-@end
-@more {#ch-zram-glue--api} `api_compress.c`: the kernel's `seqlz_compress()`
-@listing tools/kernel-port/api_compress.c 1-{{ch15.kport.api_compress}}
-
-The compressor's 0 becomes `-E2BIG`, "output too small", and a level outside 1 to 3 is `-EINVAL`.
-The `static_assert`s tie the interface's numbers to the codec's: the work memory is the matcher's
-state, and the levels start at 1, which `seqlz_compress_block()` takes for granted.
-`api_decompress.c` is the `seqlz_decompress()` of
-[the diff of `seqlz_decompress.c`](#ch-zram-glue--what-portpy-changes-in-the-code).
-
-::: kernel EXPORT_SYMBOL_GPL
-Modules are linked at load time against a table of exported symbols, and a function is in it only if
-its file says `EXPORT_SYMBOL()` or `EXPORT_SYMBOL_GPL()`. The `_GPL` variant serves only modules whose
-`MODULE_LICENSE()` is GPL-compatible. zram's backend can be in a zram module, so it needs the export.
-:::
 @end
 @more {#ch-zram-glue--init} The kernel's tables, generated when the kernel is built
 `port.py` writes the code lengths, `lib/seqlz/seqlz_lengths.h`, with the tree's own
@@ -286,7 +221,7 @@ the streams of the split differently.
     <text x="263" y="221">wrkmem = ctx->context, params->level</text>
     <text x="565" y="221">wrkmem = ctx->context</text>
     <text x="263" y="279">its static seqlz_compress_block()</text>
-    <text x="565" y="279">seqlz_decode() of src/, renamed</text>
+    <text x="565" y="279">the decoder itself</text>
   </g>
   <g class="acc">
     <g fill="none" stroke="currentColor" marker-end="url(#ch-zram-glue-arrow)">
@@ -400,7 +335,7 @@ static inline void prefetch(const void *x)
 In the measurement of the patch's commit message, `lz4`, which does not prefetch, swapped in the same
 with and without it. 32-bit x86 patches in `prefetchnta`, a non-temporal prefetch, on every CPU with SSE,
 which would change what gcc builds get, so the patch does not use that. `port.py` applies it unless the
-tree has it, and `src/seqlz_compat.h` does the same outside the kernel.
+tree has it, and [`src/linux/prefetch.h`](book:#ch-compat--prefetch) does the same outside the kernel.
 @end
 @more {#ch-zram-glue--check} What `check.sh` checks before a submission
 `tools/kernel-port/check.sh <linux tree> [make args]` takes the tree's `HEAD` with `git archive`, so the
@@ -475,10 +410,10 @@ scratch` checks the context sizes, and that `seqlz-1` decodes with a stream with
 @more {#ch-zram-glue--fuzzing} The fuzzers, and a second decoder from the specification
 `fuzz/` has four targets for libFuzzer, which AFL++ runs too:
 
-- `seqlz_decode_fuzz.c`: any input through `seqlz_decode()`, with and without the scratch, each buffer an
+- `seqlz_decode_fuzz.c`: any input through `seqlz_decompress()`, with and without the scratch, each buffer an
   allocation of exactly its size, so that AddressSanitizer sees one byte too far. A page that decodes
   without the scratch must decode the same with it.
-- `seqlz_roundtrip_fuzz.c`: any page through `seqlz_compress()` and `seqlz_decode()`, at every level. It must come back, fit into 2 pages, and be the bytes `seqlz_encode()` writes for
+- `seqlz_roundtrip_fuzz.c`: any page through `seqlz_compress_block()` and `seqlz_decompress()`, at every level. It must come back, fit into 2 pages, and be the bytes `seqlz_encode()` writes for
   `seqlz_find()`'s sequences at that level.
 - `seqlz_encode_fuzz.c`: any list of sequences through `seqlz_encode()`, also lists that make no page,
   added after an encoder overflow ([#121](https://github.com/martinus/seqlz/issues/121)) that the other
@@ -601,7 +536,7 @@ parameters below `W=3`, so its backend needs no `(void)p`.
 @anchor ch-zram-glue--fast
 `*dst_len` goes in as the size of `dst` and comes out as the compressed length: zram's convention.
 zram gives a compressor 2 pages of output, and a page always fits into 2 pages
-([two pages](book:#ch-encoder--two-pages)), so `seqlz_compress()` returns 0, "did not fit", only for a
+([two pages](book:#ch-encoder--two-pages)), so `seqlz_compress_block()` returns 0, "did not fit", only for a
 smaller buffer, e.g. the one page zswap gives.
 
 The level is a parameter that zram's `compress()` does not have, so each codec gets a wrapper of one
@@ -671,7 +606,7 @@ allocation between the two ([the backend](#ch-zram-glue--backend)).
 Level 3 needs no more work memory than level 2: its own literal table is worked out in the hash
 table's memory, and decoded into the output page and the scratch.
 @more {#ch-zram-glue--level-3} Where level 3 puts its table, its records and its deltas
-`seqlz_compress()` writes the raw literals first and codes them over the raw ones in the same buffer
+`seqlz_compress_block()` writes the raw literals first and codes them over the raw ones in the same buffer
 where that pays, so the same 2 pages of output suffice. Level 3's table of the page's own is worked
 out in the compression context, behind the copy of the literals
 ([the work memory](#ch-literals-enc--the-work-memory)), and decoded into the output page and the

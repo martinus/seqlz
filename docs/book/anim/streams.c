@@ -3,11 +3,13 @@
  * streams.c: the data of the animation "streams" in chapter 13. Compresses chapter 16's page with
  * coded literals and prints, as JSON, its literals in page order with the code length each has in the
  * page's literal table, the stream sizes of the header, and what seqlz_decode_literals() writes after the
- * literals in its last step. Fails if anything disagrees with seqlz_decode().
+ * literals in its last step. Fails if anything disagrees with seqlz_decompress().
  */
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+
+#include <linux/unaligned.h>
 
 #include "pages.h"
 #include "seqlz_internal.h"
@@ -26,8 +28,8 @@ int main(void) {
     unsigned long long h = 0;
 
     slab_page(page);
-    n_raw = seqlz_compress(&st, page, raw, sizeof(raw), 1);
-    n = seqlz_compress(&st, page, comp, sizeof(comp), 2);
+    n_raw = seqlz_compress_block(&st, page, raw, sizeof(raw), 1);
+    n = seqlz_compress_block(&st, page, comp, sizeof(comp), 2);
     if (!n || !n_raw)
         return fail("compress");
     n_lit = get_unaligned_le16(comp);
@@ -44,7 +46,7 @@ int main(void) {
     for (i = 0; i < SEQLZ_LIT_STREAMS; i++)
         sz[i] = (unsigned int)(h >> (i * width)) & ((1U << width) - 1U);
     memset(scratch, 0xaa, sizeof(scratch));
-    if (seqlz_decode(comp, n, out, scratch) || memcmp(out, page, SEQLZ_BLOCK_SIZE))
+    if (seqlz_decompress(comp, n, out, scratch) || memcmp(out, page, SEQLZ_BLOCK_SIZE))
         return fail("the page does not decode to itself");
     /* the decoder's literals are the encoder's raw literals */
     if (memcmp(scratch, raw + SEQLZ_HEADER, n_lit))

@@ -86,7 +86,7 @@ on the bits the lookup before consumed, the code asks for the lines ahead of tim
 <!-- undated: the animation is a model with round numbers, not a measurement -->
 @anim misses A model, not a measurement: 8 lookups whose addresses do not depend on each other and whose lines are in no cache, about 100 ns per miss as above, and 20 ns of work on each entry. The out-of-order core's window holds the work of 3 lookups. One step is 20 ns.
 
-`seqlz_decode()` asks for the lines of its tables before it reads the first byte of the page,
+`seqlz_decompress()` asks for the lines of its tables before it reads the first byte of the page,
 {{ch03.prefetch_lines}} lines per round of a small loop, `prefetch_lines()`
 ([why 8 lines a round](#ch-dec-basics--prefetch), and [the line of `end - 1`](#ch-dec-basics--end-line) for why
 a table that does not start at a cache line misses its last line: the literal tables always do).
@@ -105,7 +105,8 @@ reads from 5600 to 3891 ns in the kernel VM
 ([explored-designs.md](https://github.com/martinus/seqlz/blob/main/docs/explored-designs.md#zram-prefetch-the-compressed-data-before-decompression)).
 :::
 
-Two traps around prefetches are handled in `src/seqlz_compat.h` ([`prefetch()`](#ch-compat--prefetch), [`L1_CACHE_BYTES`](#ch-compat--cache-line)):
+Two traps around prefetches are handled outside the codec, in a patch for the kernel, in `src/linux/prefetch.h` for userspace, and in
+the phone module's `compat/` for 4.14 ([`prefetch()`](#ch-compat--prefetch), [`L1_CACHE_BYTES`](#ch-compat--cache-line)):
 clang drops `__builtin_prefetch()` without a word when x86-64 is built without SSE, as the kernel is,
 and the Mi 9T's 4.14 kernel says that arm64 cache lines are 128 bytes, while its cores have 64.
 
@@ -497,7 +498,7 @@ moves on by the real length; the next sequence writes over the rest:
 </figure>
 
 Such a **wild copy** writes past the last byte the sequence needs and reads past the last literal. So
-`seqlz_decode()` takes the fast path only where there is room in the page, in the literals and in the
+`seqlz_decompress()` takes the fast path only where there is room in the page, in the literals and in the
 input, one compare per buffer against limits computed once per page
 ([the three rooms](#ch-decode--rooms)); near the end of the page the slow path copies less at a time. The
 encoder keeps such room too ([the room check](#ch-encoder--room-check)).
@@ -556,7 +557,7 @@ With the mask the check is gone, and the mask itself costs nothing: x86-64's shi
 written `<< (n & 63U)` even where `n` is never 64, and why `enc[]` in `struct value_table` has
 {{ch03.enc_len_symbols}} entries for {{const.LEN_SYMBOLS}} or {{k16.const.LEN_SYMBOLS}} symbols: a
 power of 2, so that `s & (ENC_LEN_SYMBOLS - 1U)` proves every index in range
-([the masks](#ch-internal--masks), [`put_len_value()`](#f-seqlz_compress-c-b150)). Masked shifts and indices took the compressor
+([the masks](#ch-internal--masks), [`put_len_value()`](#f-seqlz_encoder-h-b122)). Masked shifts and indices took the compressor
 from 25 225 to 25 064 cycles per page, with 4.7% fewer instructions
 ([explored-designs.md](https://github.com/martinus/seqlz/blob/main/docs/explored-designs.md#the-compressor-second-round-fewer-instructions)).
 The decoder had 65 such checks in an early version, `lz4`'s 18, but not in its hot path: without them,

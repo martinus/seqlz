@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT OR GPL-2.0-only
 /*
  * undelta.c: the data of the animation "undelta" in chapter 13. The page of counters of pages.h, which
- * level 3 stores with SEQLZ_DELTA_4, decoded by the real seqlz_decode(), with a hook on its stores of
+ * level 3 stores with SEQLZ_DELTA_4, decoded by the real seqlz_decompress(), with a hook on its stores of
  * 4 bytes: in seqlz_decompress.c only add4() makes them. Prints, as JSON, the first two sequences and
  * the first W bytes of the page step by step: the deltas as the copy left them, after each add4(), the
  * byte loop and the matches. Fails if the decoder took another path than the text says.
@@ -10,8 +10,10 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include <linux/unaligned.h> /* before the hook below renames its store */
+
 #include "pages.h"
-#include "seqlz_compress.c"
+#include "seqlz.h"
 
 /* every add4() of the decoder: where it stored, the page before the store and the 4 bytes stored */
 #define W 56U
@@ -38,14 +40,8 @@ static void hook_le32(u32 v, void* p) {
 struct seq {
     unsigned int pos, ll, ml, off;
 };
-static struct seq seqs[SEQLZ_BLOCK_SIZE];
+static struct seq seqs[SEQLZ_MAX_SEQUENCES];
 static unsigned int n_seqs;
-static const u8* seq_base;
-
-static void emit(void* ctx, const u8* in, unsigned int ll, unsigned int ml, unsigned int off) {
-    (void)ctx;
-    seqs[n_seqs++] = (struct seq){(unsigned int)(in - seq_base), ll, ml, off};
-}
 
 static int fail(const char* what) {
     fprintf(stderr, "undelta.c: %s\n", what);
@@ -76,12 +72,20 @@ int main(void) {
     unsigned int n, i, h = 0, s, k, dist = 4, lit = 0, end;
 
     counter_page(page);
-    n = seqlz_compress(&st, page, comp, sizeof(comp), SEQLZ_LEVEL_OWN);
+    n = seqlz_compress_block(&st, page, comp, sizeof(comp), SEQLZ_LEVEL_OWN);
     if (!n || !(comp[2] >> SEQLZ_LIT_DELTA_AT) || comp[SEQLZ_LIT_HEADER(0)] != SEQLZ_DELTA_4)
         fail("level 3 does not store the page's literals with SEQLZ_DELTA_4");
     /* the sequences, as level 3's matcher finds them */
-    seq_base = page;
-    seqlz_match_block(st.table, page, true, emit, NULL);
+    {
+        static struct seqlz_sequence found[SEQLZ_MAX_SEQUENCES];
+        unsigned int pos = 0;
+
+        n_seqs = seqlz_find(&st, page, found, SEQLZ_LEVEL_OWN);
+        for (i = 0; i < n_seqs; i++) {
+            seqs[i] = (struct seq){pos, found[i].literals, found[i].match, found[i].offset};
+            pos += found[i].literals + found[i].match;
+        }
+    }
     if (n_seqs < 3 || seqs[0].pos || seqs[1].pos != seqs[0].ll + seqs[0].ml || seqs[1].pos + 16 + 4 > W)
         fail("the first two sequences do not fit the figure");
     /* the first takes the slow path, with a length value; the second the fast path, without */
@@ -91,7 +95,7 @@ int main(void) {
         fail("the first two sequences are not as the figure says");
     memset(scratch, 0xaa, sizeof(scratch));
     hook_dst = out;
-    if (seqlz_decode(comp, n, out, scratch) || memcmp(out, page, SEQLZ_BLOCK_SIZE))
+    if (seqlz_decompress(comp, n, out, scratch) || memcmp(out, page, SEQLZ_BLOCK_SIZE))
         fail("the page does not decode to itself");
     /*
      * the decoder's add4() calls in the first W bytes: the first sequence's words from byte 4 while

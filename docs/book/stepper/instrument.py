@@ -65,9 +65,9 @@ MATCH_STOPS = [
     ("if (!(rep_hit | cand_hit)) {", "STEP_B"),
     ("m = rep_hit ? pos - last : cand;", "STEP_B"),
     ("len = 4U + seqlz_match_len(src + pos + 4, src + m + 4, end);", "STEP_B"),
-    ("emit(ctx, src + anchor, pos - anchor, len, last);", "STEP_B"),
+    ("encode_seq(e, src + anchor, pos - anchor, len, last, lazy);", "STEP_B"),
     ("table[seqlz_hash5(get_unaligned_le64(src + pos - 2))] =", "STEP_B"),
-    ("emit(ctx, src + anchor, SEQLZ_BLOCK_SIZE - anchor, 0, 0);", "STEP_A"),
+    ("encode_seq(e, src + anchor, SEQLZ_BLOCK_SIZE - anchor, 0, 0, lazy);", "STEP_A"),
 ]
 
 # the function and its last line: the first "}" at the start of a line after it

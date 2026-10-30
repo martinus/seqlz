@@ -334,6 +334,7 @@ One line per entry, by area, newest first: date measured, verdict, link, result,
 
 **Kernel copy, zram glue, compilers**
 
+- 2026-10-30 **kept** [The matcher calls encode_seq() itself](#the-matcher-calls-encode_seq-itself-as-in-the-kernel-copy-level-3-writes-06-faster-in-the-vm-with-clang-levels-1-and-2-the-same-kept): `src/` as the kernel copy since #284; kernel VM, clang 22.1.8, four VM samples, 3 boots: level 3 writes 0.6% faster (0.2% to 0.8% per sample, control -0.3% to +0.2%), levels 1 and 2 and swap-ins the same. `Code:` PR #284. `Now:` current.
 - 2026-10-25 **measurement** [Kernel copy on arm, riscv64 and powerpc](#the-kernel-copy-on-arm-riscv64-and-powerpc-with-gcc-and-clang-no-warning-frames-below-1024-bytes--os-no-deeper-on-32-bit-arm): 15 builds with gcc 16.2.0 and clang 22.1.8, W=1 without a warning, no libgcc division, deepest frame 896 bytes (riscv64 gcc). 32-bit arm -Os no deeper than -O3: gcc 472 vs 536, 768 vs 864 with KASAN+UBSan; clang 648 vs 600. The Makefile's -O3 keeps speed as its only reason. Code: tools/kernel-port/port.py MAKEFILE; branch os-frames. Now: -O3 only with CC_OPTIMIZE_FOR_PERFORMANCE since 25 Oct, -Os builds keep -Os.
 - 2026-10-24 **kept in part** [Kernel copy against coding-style.rst](#the-kernel-copy-against-coding-stylerst-shorter-functions-the-same-instructions-kept-decode_block-split-12-slower-swap-ins-not-kept): pick_delta(), own_describe(), own_fill(), read_lit_header() split out, one declaration per line: instructions within 0.12%, VM within control. decode_block() split into three always-inline helpers: +1.6% instructions at level 1, swap-ins 1.1 to 1.9% slower, not kept. -O3 only with CC_OPTIMIZE_FOR_PERFORMANCE: -Os frames up to 976 bytes, not kept. Code: src/seqlz_compress_literals.c, src/seqlz_decompress_literals.c, tools/kernel-port/port.py; branch kernel-review. Now: -Os is no deeper on 32-bit arm (Kernel copy on arm, riscv64 and powerpc); -O3 only with CC_OPTIMIZE_FOR_PERFORMANCE since 25 Oct.
 - 2026-10-24 **kept** [Compressor uses no more of dst than SEQLZ_COMPRESS_BOUND](#the-compressor-uses-no-more-of-dst-than-seqlz_compress_bound-the-same-bytes-in-zram-kept-the-internal-names-keep-no-prefix): the bitstream no longer lands at the end of a large dst; the ten samples give the same bytes in 8 KiB and 64 KiB at level 3, the same instructions. Not done: a prefix on the 41 macros of the kernel copy's headers, none clashes and lib/lz4 has unprefixed ones too. Code: `seqlz_compress()`, `seqlz_encode()`; branch kernel-cleanup-2. Now: current.
@@ -7271,6 +7272,52 @@ stay raw, which read faster: where the code lands. The cold reads are within the
 tables of 13th October, none for 16 KiB. With the second try back, the test fails.
 
 Not measured: the kernel VM.
+
+## The matcher calls encode_seq() itself, as in the kernel copy: level 3 writes 0.6% faster in the VM with clang, levels 1 and 2 the same, kept
+
+Status: kept, 2026-10-30. Now: current.
+
+*Since #284 `src/seqlz_match.h` calls `encode_seq()` itself, with the kernel copy's signature, instead
+of a callback that every caller passed as a constant `__always_inline` function; the encoder moved to
+`src/seqlz_encoder.h` and `seqlz_find()` and `seqlz_encode()` to `src/seqlz_harness.c`. The kernel copy
+did not change: `port.py` made that direct call before too. But everything built from `src/`, the
+benchmarks, the VM's backends and the phone's module, now gets the matcher as the kernel does, and
+clang 9 for arm64 allocated registers a little differently in `compress_own()` and
+`seqlz_compress_block()`. Does that change the time? In the kernel VM with clang, the mean over the
+four VM samples: levels 1 and 2 write as fast as before, within the control's spread; level 3 writes
+0.6% faster, in each of the four samples by 0.2% to 0.8%, where the control moves by -0.3% to +0.2%.
+Swap-ins are the same, the decoder did not change. Kept: it was done for the reading, not for speed.*
+Code: PR #284, commit `16fddb0`; before it `96a63d7`.
+
+**Kernel VM**, `tools/zram-vm/run.sh` on `5b0764a53235` with `LLVM=1`, clang 22.1.8, `MODE=swap`,
+3 boots per kernel, the four VM samples of 20 000 pages, Ryzen 9 7950X, the VM's CPU at a fixed
+4.5 GHz, boost off. `VARIANTS="pre=<96a63d7> same=."` from `16fddb0`: `seqlz-N` is `16fddb0`, `pre-N`
+the code before #284, `same-N` a second copy of `16fddb0`, the control. Swap-out, the mean over the
+boots, µs per page:
+
+| | p3 | p5 | zram0 | zram0-2026-09-24 | mean |
+| --- | --- | --- | --- | --- | --- |
+| `seqlz-1` | 5.983 | 6.046 | 6.484 | 7.011 | 6.381 |
+| `pre-1` | 5.972 | 6.047 | 6.470 | 7.007 | -0.1% |
+| `seqlz-2` | 6.541 | 6.541 | 7.017 | 7.850 | 6.987 |
+| `pre-2` | 6.544 | 6.553 | 7.005 | 7.824 | -0.1% |
+| `same-2` | 6.567 | 6.584 | 7.043 | 7.866 | +0.4% |
+| `seqlz-3` | 10.029 | 9.908 | 10.448 | 11.954 | 10.585 |
+| `pre-3` | 10.053 | 9.965 | 10.533 | 12.021 | +0.6% |
+| `same-3` | 10.000 | 9.882 | 10.473 | 11.953 | -0.1% |
+
+Warm and flushed swap-ins, mean over the samples: `pre` against `seqlz` -0.8% to +0.2%, the control -0.1%
+to +0.3%.
+
+Not measured: gcc, whose code for `compress_block()` on x86-64 is byte for byte the same as before and
+for `compress_own()` differs in the order of one `lea`'s operands; the phone.
+
+```sh
+VARIANTS="pre=<a checkout of 96a63d7> same=." LLVM=1 BOOTS=3 MODE=swap \
+    ALGOS=seqlz-1,seqlz-2,seqlz-3,pre-1,pre-2,pre-3,same-2,same-3 \
+    tools/zram-vm/run.sh <linux tree> ~/seqlz-corpus/phone-dump/p3-sample20000 >p3.log
+tools/zram-vm/variants.py p3.log
+```
 
 ## The compressor uses no more of dst than SEQLZ_COMPRESS_BOUND: the same bytes in zram, kept; the internal names keep no prefix
 

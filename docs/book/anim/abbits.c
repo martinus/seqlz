@@ -9,6 +9,8 @@
 #include <stdio.h>
 #include <stdlib.h>
 
+#include <linux/unaligned.h>
+
 #include "pages.h"
 
 static char code_buf[32];
@@ -40,8 +42,8 @@ int main(void) {
     unsigned int len, n, raw, cls, tok, extra, sym, v, k, n_lit;
 
     ab_page(page);
-    len = seqlz_compress(&st, page, dst, sizeof dst, 1);
-    if (!len || seqlz_decode(dst, len, out, NULL) || memcmp(out, page, SEQLZ_BLOCK_SIZE))
+    len = seqlz_compress_block(&st, page, dst, sizeof dst, 1);
+    if (!len || seqlz_decompress(dst, len, out, NULL) || memcmp(out, page, SEQLZ_BLOCK_SIZE))
         return 1;
     n = seqlz_find(&st, page, seq, 2);
     n_lit = get_unaligned_le16(dst);

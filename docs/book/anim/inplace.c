@@ -102,17 +102,17 @@ int main(void) {
     unsigned long long h = 0;
 
     slab_page(page);
-    len = seqlz_compress(&st, page, raw, sizeof raw, 1);
-    if (!len || seqlz_compress(&st, page, level2, sizeof level2, 2) == 0)
+    len = seqlz_compress_block(&st, page, raw, sizeof raw, 1);
+    if (!len || seqlz_compress_block(&st, page, level2, sizeof level2, 2) == 0)
         fail("compress");
     n_lit = get_unaligned_le16(raw);
     bitstream_at = SEQLZ_HEADER + n_lit;
-    /* level 2 in place, as seqlz_compress() calls it, with the matcher's table as the copy */
+    /* level 2 in place, as seqlz_compress_block() calls it, with the matcher's table as the copy */
     memcpy(coded, raw, len);
     n = seqlz_code_literals(coded, len, st.literals);
     if (n == len || memcmp(coded, level2, n))
         fail("the page's literals are not coded as at level 2");
-    if (seqlz_decode(coded, n, out, scratch) || memcmp(out, page, SEQLZ_BLOCK_SIZE))
+    if (seqlz_decompress(coded, n, out, scratch) || memcmp(out, page, SEQLZ_BLOCK_SIZE))
         fail("the page does not decode");
     set = coded[2] & (SEQLZ_LIT_SETS - 1U);
     width = SEQLZ_SIZE_BITS_MIN + (coded[2] >> SEQLZ_LIT_WIDTH_AT & 7U);

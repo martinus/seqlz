@@ -11,6 +11,8 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include <linux/unaligned.h>
+
 #include "pages.h"
 #include "seqlz.h"
 
@@ -68,23 +70,23 @@ static inline const struct seqlz_tables* fact_tables(void) {
     return &seqlz_tables;
 }
 
-/* the page compressed as seqlz_compress() writes it at a level, 1 to SEQLZ_LEVELS, and decoded again */
+/* the page compressed as seqlz_compress_block() writes it at a level, 1 to SEQLZ_LEVELS, and decoded again */
 static inline unsigned int fact_compress_level(const unsigned char* page, unsigned char* dst, unsigned int level) {
     static struct seqlz_state st;
     static unsigned char out[SEQLZ_BLOCK_SIZE], scratch[SEQLZ_SCRATCH];
     unsigned int n;
 
-    fact_tables(); /* built once, for seqlz_compress() and seqlz_decode() */
-    n = seqlz_compress(&st, page, dst, 2 * SEQLZ_BLOCK_SIZE, level);
+    fact_tables(); /* built once, for seqlz_compress_block() and seqlz_decompress() */
+    n = seqlz_compress_block(&st, page, dst, 2 * SEQLZ_BLOCK_SIZE, level);
 
-    if (!n || seqlz_decode(dst, n, out, scratch) || memcmp(out, page, SEQLZ_BLOCK_SIZE)) {
+    if (!n || seqlz_decompress(dst, n, out, scratch) || memcmp(out, page, SEQLZ_BLOCK_SIZE)) {
         fprintf(stderr, "facts: a page does not come back\n");
         exit(1);
     }
     return n;
 }
 
-/* the page compressed as seqlz_compress() writes it, raw (coded = 0, level 1) or with coded literals (level 2) */
+/* the page compressed as seqlz_compress_block() writes it, raw (coded = 0, level 1) or with coded literals (level 2) */
 static inline unsigned int fact_compress(const unsigned char* page, unsigned char* dst, int coded) {
     return fact_compress_level(page, dst, coded ? 2U : 1U);
 }

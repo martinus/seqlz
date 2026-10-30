@@ -10,6 +10,7 @@
 #include <stddef.h>
 
 #include "facts.h"
+#include "seqlz_encoder.h" /* the matcher hands its sequences to encode_seq() */
 #include "seqlz_match.h"
 
 /* first_codes() and length_entry() are static: the file is included, and
@@ -386,13 +387,13 @@ static void ch08(void) {
     fact_num("ch08.lit.min34", min34);
 
     /* the generated files: where token s and literal b are */
-    k = line_of("src/seqlz_default_tables_4k.inc", "\t.token = {") + 1;
+    k = line_of("src/seqlz_lengths.h", "\t.token = {") + 1;
     fact_num("ch08.inc.tok_line", k);
     fact_num("ch08.inc.tok34_line", k + 34 / 16);
     fact_num("ch08.inc.tok34_col", 34 % 16 + 1);
     fact_num("ch08.inc.tok49_line", k + 49 / 16);
     fact_num("ch08.inc.esc_line", k + SEQLZ_ESCAPE / 16);
-    k = line_of("src/seqlz_lit_sets_4k.inc", "\t{") + 1;
+    k = line_of("src/seqlz_lengths.h", "\t{") + 1;
     fact_num("ch08.litinc.line", k);
     fact_num("ch08.litinc.line20", k + 0x20 / 16);
     fact_num("ch08.litinc.line60", k + 0x60 / 16);

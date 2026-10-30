@@ -13,6 +13,7 @@
 #include <string.h>
 
 #include "pages.h"
+#include "seqlz_encoder.h" /* the matcher hands its sequences to encode_seq() */
 #include "seqlz_match.h"
 
 #define A 130U
