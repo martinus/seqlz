@@ -15,14 +15,12 @@ out=${1:-$(mktemp -d)}
 mkdir -p "$out"
 
 for s in 4k 16k; do
-    for t in "--lengths seqlz_default_tables" "--lit-sets seqlz_lit_sets"; do
-        set -- $t
-        if ! (cd "$repo" && tools/kernel-port/gen-seqlz-lengths.py "$1" "bench/seqlz_counts_$s.txt" |
-            cmp -s - "src/${2}_$s.inc"); then
-            echo "src/${2}_$s.inc is not what tools/kernel-port/gen-seqlz-lengths.py $1 makes" >&2
-            exit 1
-        fi
-    done
+    f=src/seqlz_lengths.h
+    [[ $s == 4k ]] || f=src/seqlz_lengths_16k.h
+    if ! (cd "$repo" && tools/kernel-port/gen-seqlz-lengths.py --extern "bench/seqlz_counts_$s.txt" | cmp -s - "$f"); then
+        echo "$f is not what tools/kernel-port/gen-seqlz-lengths.py --extern makes" >&2
+        exit 1
+    fi
 done
 # and it refuses lengths that seqlz_tables_build() refuses, so the kernel's tables built from what it writes
 # cannot fail
@@ -46,7 +44,7 @@ EOF
 "$repo/tools/gen-tables/gen-tables.sh" "$out/seqlz_tables.c" -DSEQLZ_PAGE_BITS=12
 ${CC:-cc} -O2 -DSEQLZ_PAGE_BITS=12 -I"$repo/src" -o "$out/compress" "$repo/tools/seqlz-compress/compress.c" \
     "$repo/src/seqlz_codes.c" "$repo/src/seqlz_compress.c" "$repo/src/seqlz_compress_literals.c" "$repo/src/seqlz_decompress.c" "$repo/src/seqlz_decompress_literals.c" \
-    "$repo/src/seqlz_default_tables.c" "$repo/src/seqlz_lit_sets.c" "$out/seqlz_tables.c"
+    "$repo/src/seqlz_lengths.c" "$out/seqlz_tables.c"
 cp "$repo"/tools/seqlz-worst/pages/*.page "$out/"
 python3 - "$out" "$repo/docs/format.md" <<'EOF'
 import random

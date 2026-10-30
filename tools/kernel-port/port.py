@@ -253,7 +253,6 @@ def fix_comments(text):
                     rewrites_used[k] += t.count(a)
                     t = t.replace(a, b)
                 t = HEADING.sub("", t)
-                t = t.replace(".inc", ".h")
                 if t != p[1]:
                     p[1], changed = t, True
         if not changed:
@@ -442,11 +441,11 @@ obj-$(CONFIG_SEQLZ_KUNIT_TEST) += tests/seqlz_kunit.o
 def port_lengths_script():
     """scripts/gen-seqlz-lengths.py without what only the repository's userspace build uses"""
     t = (HERE / "gen-seqlz-lengths.py").read_text()
-    t = cut(t, r"def main_inc\(what, tables\):\n.*?\n\n\n(?=def main\(\):)")
-    t = must(t, '    what = None\n    if args and args[0] in ("--lengths", "--lit-sets"):\n'
-             "        what = args.pop(0)\n", "")
-    t = must(t, "    if what:\n        return main_inc(what, tables)\n", "")
-    return t
+    t = must(t, "#\n# --extern writes the tables without static, for the repository's src/.\n", "")
+    t = must(t, " [--extern]", "", 2)
+    t = must(t, '    if args[:1] == ["--extern"]:\n        storage = ""\n        args.pop(0)\n', "")
+    t = must(t, '    storage = "static "\n', "")
+    return must(t, "(tables, storage) +", '(tables, "static ") +', 3)
 
 
 def port_counts():

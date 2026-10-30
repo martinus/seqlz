@@ -12,7 +12,7 @@ base's file name. --counts takes counts trained before. Then, from the repositor
 - the 8 lit lines in the order that fits the committed literal tables best, by the sum of the
   differences of their code lengths, so that an unchanged table keeps its number (the order means
   nothing to the format);
-- bench/seqlz_counts_<4k|16k>.txt, and the two .inc of src/ by tools/kernel-port/gen-seqlz-lengths.py;
+- bench/seqlz_counts_<4k|16k>.txt, and src/seqlz_lengths.h or _16k.h by tools/kernel-port/gen-seqlz-lengths.py;
 - the SHA-256 of each table in docs/format.md.
 
 The counts' own line comes from the pages level 3 gives a table of their own with the tables <build> has
@@ -48,25 +48,30 @@ def numbers(text):
     return [int(x) for x in re.findall(r"\d+", text)]
 
 
-def lit_lengths(inc):
-    """the 8 literal tables' code lengths of a lit_sets .inc"""
-    end = inc.index("seqlz_own_lengths[SEQLZ_OWN_SYMBOLS] =")
-    v = numbers(inc[inc.index("seqlz_lit_sets[SEQLZ_LIT_SETS][256] =") : end].split("=", 1)[1])
+def lengths_file(size):
+    """src/seqlz_lengths.h, or _16k.h"""
+    return REPO / "src" / ("seqlz_lengths.h" if size == "4k" else f"seqlz_lengths_{size}.h")
+
+
+def lit_lengths(text):
+    """the 8 literal tables' code lengths of a seqlz_lengths.h"""
+    end = text.index("seqlz_own_lengths[SEQLZ_OWN_SYMBOLS] =")
+    v = numbers(text[text.index("seqlz_lit_sets[SEQLZ_LIT_SETS][256] =") : end].split("=", 1)[1])
     return [v[256 * k : 256 * (k + 1)] for k in range(8)]
 
 
-def own_lengths(inc):
-    """the code lengths of OWN, the code of a page's own literal table, of a lit_sets .inc"""
-    return numbers(inc[inc.index("seqlz_own_lengths[SEQLZ_OWN_SYMBOLS] =") :].split("=", 1)[1])
+def own_lengths(text):
+    """the code lengths of OWN, the code of a page's own literal table, of a seqlz_lengths.h"""
+    return numbers(text[text.index("seqlz_own_lengths[SEQLZ_OWN_SYMBOLS] =") :].split("=", 1)[1])
 
 
-def ordered(counts, old_inc):
+def ordered(counts, old_text):
     """counts with the lit lines in the order that fits the committed literal tables best"""
     with tempfile.NamedTemporaryFile("w", suffix=".txt") as f:
         f.write(counts)
         f.flush()
-        new = lit_lengths(gen("--lit-sets", f.name))
-    old = lit_lengths(old_inc)
+        new = lit_lengths(gen("--extern", f.name))
+    old = lit_lengths(old_text)
     cost = [[sum(abs(a - b) for a, b in zip(old[i], new[j])) for j in range(8)] for i in range(8)]
     perm = min(itertools.permutations(range(8)), key=lambda p: sum(cost[i][p[i]] for i in range(8)))
     lines = counts.split("\n")
@@ -87,11 +92,10 @@ def ordered(counts, old_inc):
 
 def table_hashes(size):
     """SHA-256 of each table's code lengths, as tools/seqlz-ref/seqlz_ref.py computes them"""
-    src = (REPO / "src" / f"seqlz_default_tables_{size}.inc").read_text()
+    src = lengths_file(size).read_text()
     field = lambda n: numbers(re.search(r"\." + n + r"\s*=\s*\{([^}]*)\}", src).group(1))  # noqa: E731
-    inc = (REPO / "src" / f"seqlz_lit_sets_{size}.inc").read_text()
-    lit = sum(lit_lengths(inc), [])
-    tables = {"TOK": field("token"), "LL": field("ll"), "ML": field("ml"), "LIT": lit, "OWN": own_lengths(inc)}
+    lit = sum(lit_lengths(src), [])
+    tables = {"TOK": field("token"), "LL": field("ll"), "ML": field("ml"), "LIT": lit, "OWN": own_lengths(src)}
     return {f"{k}_{size}": hashlib.sha256(bytes(v)).hexdigest() for k, v in tables.items()}
 
 
@@ -122,12 +126,10 @@ def main():
         raise SystemExit("no token line in the counts")
 
     before = table_hashes(size)
-    lit_inc = REPO / "src" / f"seqlz_lit_sets_{size}.inc"
-    counts, perm = ordered(counts, lit_inc.read_text())
+    counts, perm = ordered(counts, lengths_file(size).read_text())
     (REPO / "bench" / f"seqlz_counts_{size}.txt").write_text(counts)
     rel = f"bench/seqlz_counts_{size}.txt"
-    (REPO / "src" / f"seqlz_default_tables_{size}.inc").write_text(gen("--lengths", rel))
-    lit_inc.write_text(gen("--lit-sets", rel))
+    lengths_file(size).write_text(gen("--extern", rel))
     after = table_hashes(size)
 
     spec = REPO / "docs" / "format.md"

@@ -8,7 +8,7 @@
  *   tools/gen-tables/gen-tables.sh seqlz_tables.c
  *   cc -O2 -Isrc -o bound tools/seqlz-bound/bound.c src/seqlz_codes.c src/seqlz_compress.c \
  *      src/seqlz_compress_literals.c src/seqlz_decompress.c src/seqlz_decompress_literals.c \
- *      src/seqlz_default_tables.c src/seqlz_lit_sets.c seqlz_tables.c
+ *      src/seqlz_lengths.c seqlz_tables.c
  */
 #include <stdio.h>
 #include <stdlib.h>

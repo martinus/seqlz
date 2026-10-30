@@ -15,7 +15,7 @@ src=$here/../../src
 tmp=$(mktemp -d)
 trap 'rm -rf "$tmp"' EXIT
 "${HOSTCC:-cc}" -std=gnu11 -O2 "$@" -I"$src" -o "$tmp/gen_seqlz_tables" "$here/gen_seqlz_tables.c" "$src/seqlz_codes.c" \
-    "$src/seqlz_default_tables.c" "$src/seqlz_lit_sets.c"
+    "$src/seqlz_lengths.c"
 "$tmp/gen_seqlz_tables" >"$tmp/seqlz_tables.c"
 # whole or not at all, so that a make that was stopped does not take half a file for done
 mv "$tmp/seqlz_tables.c" "$out"

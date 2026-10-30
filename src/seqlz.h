@@ -33,8 +33,7 @@ int seqlz_tables_build(struct seqlz_tables *t,
 		       const struct seqlz_lengths *lengths);
 
 /*
- * the code lengths of the format, see seqlz_default_tables.c and
- * seqlz_lit_sets.c
+ * the code lengths of the format, see seqlz_lengths.c
  */
 extern const struct seqlz_lengths seqlz_default_lengths;
 extern const u8 seqlz_lit_sets[SEQLZ_LIT_SETS][256];
