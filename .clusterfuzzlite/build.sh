@@ -5,7 +5,8 @@
 # fuzz job in ci.yml has 16 KiB pages and MSan too.
 # the tables, generated with clang for the build machine, without the sanitizer flags
 HOSTCC=clang tools/gen-tables/gen-tables.sh "$WORK/seqlz_tables.c"
-codec="src/seqlz_codes.c src/seqlz_compress.c src/seqlz_compress_literals.c src/seqlz_decompress.c src/seqlz_decompress_literals.c src/seqlz_lengths.c $WORK/seqlz_tables.c"
+# the codec: every src/seqlz_*.c, a glob that $codec expands where it is used
+codec="src/seqlz_*.c $WORK/seqlz_tables.c"
 for t in decode roundtrip diff encode; do
     extra=""
     if [ "$t" = diff ]; then

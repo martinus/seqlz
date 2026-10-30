@@ -7,7 +7,7 @@
  * a page. A match at one of them moves it to the front, as zstd's repeat offsets. Build from the
  * repository's root:
  *   tools/gen-tables/gen-tables.sh seqlz_tables.c && cc -O2 -Isrc -o seqsrep tools/seqlz-bound/seqsrep.c
- * src/seqlz_{codes,compress,compress_literals,decompress,decompress_literals,lengths}.c
+ * src/seqlz_{codes,compress,compress_literals,decompress,decompress_literals,harness,lengths}.c
  * seqlz_tables.c
  */
 #include <stdio.h>

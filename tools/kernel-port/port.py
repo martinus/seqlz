@@ -7,8 +7,8 @@ src/ stays the one source of the codec. This writes from it:
   lib/seqlz/seqlz_format.h, seqlz_tables.h, seqlz_internal.h: from src/, without what only the harness
                                         uses
   lib/seqlz/seqlz_compress.c, seqlz_compress_literals.c, seqlz_decompress.c,
-  seqlz_decompress_literals.c:          from src/; the matcher of src/seqlz_match.h in
-                                        seqlz_compress.c, calling the encoder itself
+  seqlz_decompress_literals.c:          from src/; the encoder of src/seqlz_encoder.h and the
+                                        matcher of src/seqlz_match.h in seqlz_compress.c
   lib/seqlz/gen_seqlz_tables.c          src/seqlz_codes.c and tools/gen-tables/gen_seqlz_tables.c, a
                                         program for the build host that writes the codes and decode
                                         tables, seqlz_tables.c, when the kernel is built
@@ -354,37 +354,27 @@ def port_c(name):
     return (SRC / f"seqlz_{name}.c").read_text()
 
 
+def header_body(name, into):
+    """src/<name> without its head and its include guard, what follows its last include, for the file into;
+    fails if the header includes a kernel header that into does not"""
+    h = (SRC / name).read_text()
+    missing = set(re.findall(r"^#include <.*>$", h, re.M)) - set(re.findall(r"^#include <.*>$", into, re.M))
+    assert not missing, (name, missing)
+    last = list(re.finditer(r"^#include .*\n", h, re.M))[-1]
+    return h[last.end():h.rindex("#endif")].strip("\n")
+
+
 def port_compress():
     t = port_c("compress")
-    # what only the harness uses: seqlz_find(), seqlz_encode() and their helpers
-    t = cut(t, r"/\* ---- the matcher of seqlz_match\.h, for seqlz_find\(\) ---- \*/\n.*?(?=/\* ---- encoder ---- \*/)")
-    t = cut(t, r"/\* seqlz_encode\(\) up to the coded literals, with the compressor's encoder \*/\n"
-               r"static unsigned int encode_raw\(.*?\n\}\n\n")
-    t = cut(t, r"unsigned int seqlz_encode\(.*?\n\}\n\n")
-    # the matcher of seqlz_match.h, right before the one function that calls it, calling encode_seq()
-    # itself: in the kernel's copy it has no other caller
-    lz = (SRC / "seqlz_match.h").read_text()
-    lz = lz[lz.index('#include "seqlz_internal.h"\n') + len('#include "seqlz_internal.h"\n'):lz.rindex("#endif")].strip("\n")
-    lz = cut(lz, r"/\*\n \* The matcher calls this for every sequence it finds.*?\);\n\n")
-    lz = must(lz, "static __always_inline void\n"
-                  "seqlz_match_block(u16 *table, const u8 *src, bool lazy, emit_fn emit, void *ctx)\n",
-              "static __always_inline void seqlz_match_block(u16 *table, const u8 *src,\n"
-              "\t\t\t\t\t      bool lazy,\n"
-              "\t\t\t\t\t      struct seqlz_encoder *e)\n")
-    # encode_seq() with the records of SEQLZ_LEVEL_OWN in the lazy copy, lazy a constant there
-    lz, k = re.subn(r"\bemit\(ctx, (.*?)\);", r"encode_seq(e, \1, lazy);", lz)
-    assert k == 2, k
-    # what only the harness uses: its interface, seqlz.h, and the matcher's own header
-    t = must(t, '#include "seqlz.h"\n#include "seqlz_match.h"\n', '#include "seqlz_internal.h"\n')
-    t = must(t, "static unsigned int compress_block(", "/* ---- the matcher ---- */\n\n" + lz + "\n\n"
+    # the encoder of seqlz_encoder.h and the matcher of seqlz_match.h in place, right before the
+    # functions that call them: the headers are there for seqlz_find() and seqlz_encode() of
+    # seqlz_harness.c, which only the harness uses
+    t = must(t, '#include "seqlz.h"\n#include "seqlz_encoder.h"\n#include "seqlz_match.h"\n',
+             '#include "seqlz_internal.h"\n')
+    t = must(t, "static unsigned int compress_block(",
+             "/* ---- encoder ---- */\n\n" + header_body("seqlz_encoder.h", t) + "\n\n"
+             "/* ---- the matcher ---- */\n\n" + header_body("seqlz_match.h", t) + "\n\n"
              "static unsigned int compress_block(")
-    t = must(t, "\t\tseqlz_match_block(st->table, src, true, encode_emit_rec, &e);\n",
-             "\t\tseqlz_match_block(st->table, src, true, &e);\n")
-    t = must(t, "\tseqlz_match_block(st->table, src, false, encode_emit, &e);\n",
-             "\tseqlz_match_block(st->table, src, false, &e);\n")
-    # the matcher's callbacks: the kernel's copy calls encode_seq() itself
-    t = cut(t, r"/\* encode_seq\(\) as the matcher calls it, without and with records \*/\n.*?"
-               r"encode_seq\(ctx, in, ll, ml, off, true\);\n\}\n\n")
     # static: the interface's seqlz_compress() below is its one caller, checks the level, and has the
     # kernel-doc, in include/linux/seqlz.h
     t = make_static(t, "seqlz_compress_block")

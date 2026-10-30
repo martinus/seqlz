@@ -4,7 +4,7 @@
  * pages that have a literal table of their own (coded literals, byte 2's code 8) to out.bin, each as
  * a 2-byte little endian length and its bytes; for own_context.py. Build:
  * tools/gen-tables/gen-tables.sh seqlz_tables.c && gcc -O2 -Isrc -o owndump tools/seqlz-bound/owndump.c
- * src/seqlz_{codes,compress,compress_literals,decompress,decompress_literals,lengths}.c
+ * src/seqlz_{codes,compress,compress_literals,decompress,decompress_literals,harness,lengths}.c
  * seqlz_tables.c
  */
 #include <stdio.h>

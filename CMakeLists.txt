@@ -91,7 +91,7 @@ set_source_files_properties(${SEQLZ_TABLES} PROPERTIES INCLUDE_DIRECTORIES ${CMA
 # seqlz without kernel code, for the tests and tools. seqlz's sources, for every target that builds it:
 # this library, the kernel codecs, the fuzzers
 set(SEQLZ_SOURCES src/seqlz_codes.c src/seqlz_compress.c src/seqlz_compress_literals.c src/seqlz_decompress.c
-    src/seqlz_decompress_literals.c src/seqlz_lengths.c ${SEQLZ_TABLES})
+    src/seqlz_decompress_literals.c src/seqlz_harness.c src/seqlz_lengths.c ${SEQLZ_TABLES})
 add_library(seqlz STATIC ${SEQLZ_SOURCES})
 target_include_directories(seqlz PUBLIC src)
 target_link_libraries(seqlz PRIVATE seqlz_warnings)

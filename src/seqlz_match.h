@@ -5,7 +5,10 @@
 /*
  * The part of seqlz that is plain LZ: the matcher, which finds the sequences of
  * a block. All of it is static inline, so that it ends up inside the loops of
- * seqlz_compress.c.
+ * seqlz_compress.c; the kernel's seqlz_compress.c has it in place. It hands
+ * each sequence to encode_seq() and its struct seqlz_encoder, which the file
+ * that includes it has: the encoder of seqlz_encoder.h in seqlz_compress.c, a
+ * recorder of the sequences for seqlz_find() in seqlz_harness.c.
  */
 
 #include "seqlz_internal.h"
@@ -111,13 +114,6 @@ seqlz_lazy(u16 *table, const u8 *src, unsigned int *pos, unsigned int *m,
 }
 
 /*
- * The matcher calls this for every sequence it finds, with the literals before
- * the match, the match length (0 for the last sequence) and the offset.
- */
-typedef void (*emit_fn)(void *ctx, const u8 *literals, unsigned int ll,
-			unsigned int ml, unsigned int off);
-
-/*
  * Finds the sequences of a block, greedy like lz4's fast mode: at each position
  * it tries two places where the next 4 bytes might have been before, and takes
  * the first match it finds. One is the offset of the match before, which
@@ -144,7 +140,7 @@ typedef void (*emit_fn)(void *ctx, const u8 *literals, unsigned int ll,
  * inlined, finding and writing the sequences is one pass over the block.
  */
 static __always_inline void
-seqlz_match_block(u16 *table, const u8 *src, bool lazy, emit_fn emit, void *ctx)
+seqlz_match_block(u16 *table, const u8 *src, bool lazy, struct seqlz_encoder *e)
 {
 	/*
 	 * Positions in the block, not pointers: the limit is a constant, and
@@ -221,7 +217,7 @@ seqlz_match_block(u16 *table, const u8 *src, bool lazy, emit_fn emit, void *ctx)
 		}
 		last = pos - m;
 		back = -(long)last;
-		emit(ctx, src + anchor, pos - anchor, len, last);
+		encode_seq(e, src + anchor, pos - anchor, len, last, lazy);
 		pos += len;
 		anchor = pos;
 		/*
@@ -238,7 +234,7 @@ seqlz_match_block(u16 *table, const u8 *src, bool lazy, emit_fn emit, void *ctx)
 			cand_bytes = get_unaligned_le32(src + cand);
 		}
 	}
-	emit(ctx, src + anchor, SEQLZ_BLOCK_SIZE - anchor, 0, 0);
+	encode_seq(e, src + anchor, SEQLZ_BLOCK_SIZE - anchor, 0, 0, lazy);
 }
 
 #endif
