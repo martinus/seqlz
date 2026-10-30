@@ -74,6 +74,8 @@ CPU_MODEL = re.compile(r"read_cpuid|\bMIDR_|boot_cpu_data|x86_model")
 FORBIDDEN = re.compile(r"docs/|explored|seqlz-bench|seqlz-score|seqlz-train|\bbench_|SEQLZ_PAGE_BITS|tools/|bench/|"
                        r"CMake|\.inc\b|src/|#\d{2,3}\b|"
                        r"seqlz-fast|seqlz-[0-9]\b|zramphone|\bdump\b|\bcorpus\b|"
+                       # src/'s old name of seqlz_decompress(), which the kernel never had
+                       r"\bseqlz_decode\(|"
                        # the reasons of an old kernel, a distribution or our test machines, which mainline
                        # does not have
                        r"4\.14|Mi 9T|Fedora|kernel VM|\bthe phone|\bthe PC\b")
@@ -419,9 +421,9 @@ def port_compress():
     # the matcher's callbacks: the kernel's copy calls encode_seq() itself
     t = cut(t, r"/\* encode_seq\(\) as the matcher calls it, without and with records \*/\n.*?"
                r"encode_seq\(ctx, in, ll, ml, off, true\);\n\}\n\n")
-    # the interface's seqlz_compress() below calls it, with the work memory and a level
+    # static: the interface's seqlz_compress() below is its one caller, checks the level, and has the
+    # kernel-doc, in include/linux/seqlz.h
     t = make_static(t, "seqlz_compress_block")
-    # the interface's kernel-doc is in include/linux/seqlz.h, and seqlz_compress() checked the level
     t = put_doc(t, "seqlz_compress_block", "/* one block, for the interface below, which checked the level */\n")
     t = must(t, "\tif (level < 1 || level > SEQLZ_LEVELS)\n\t\treturn 0;\n", "")
     t = t.rstrip("\n") + "\n\n" + (HERE / "api_compress.c").read_text()
