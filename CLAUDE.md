@@ -45,7 +45,8 @@ much closer it gets, not by whether it arrives.
 ## Layout
 
 ```text
-src/            codec, freestanding C11, kernel rules: seqlz_compress.c + seqlz_match.h (matcher),
+src/            codec, freestanding C11, kernel rules: seqlz_compress.c + seqlz_encoder.h (encoder)
+                + seqlz_match.h (matcher), seqlz_harness.c (seqlz_find(), seqlz_encode(): not kernel),
                 seqlz_compress_literals.c, seqlz_decompress.c, seqlz_decompress_literals.c,
                 seqlz_codes.c (builds the tables; tools/gen-tables/ prints them as C at build time),
                 headers seqlz_format.h (format), seqlz_tables.h (tables' layout), seqlz_internal.h
@@ -86,7 +87,7 @@ clang-format --dry-run --Werror $(git ls-files '*.cpp' '*.h' '*.c')   # must be 
 fuzz/smoke.sh 10 $S/build-fuzz -DFETCHCONTENT_SOURCE_DIR_DOCTEST=...  # clang, ASan+UBSan
 fuzz/smoke.sh 10 $S/build-msan -DSEQLZ_SANITIZE=OFF -DSEQLZ_MSAN=ON  # MSan, fuzz targets only
 tools/gen-tables/gen-tables.sh $S/t.c   # the tables, which every build of src/ outside CMake needs too
-gcc -O2 -Isrc -o le test/seqlz_endian.c $S/t.c src/seqlz_{codes,compress,compress_literals,decompress,decompress_literals,lengths}.c
+gcc -O2 -Isrc -o le test/seqlz_endian.c $S/t.c src/seqlz_{codes,compress,compress_literals,decompress,decompress_literals,harness,lengths}.c
 python3 tools/seqlz-ref/seqlz_ref.py <compressed page>...           # spec decoder, checks table hashes
 tools/seqlz-ref/check.sh && tools/check-links.py                    # before pushing docs or tables
 K=/home/martinus/gra/linux/finehill   # src/ or tools/kernel-port/ changed:

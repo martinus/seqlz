@@ -48,10 +48,11 @@ in [`fuzz/`](../fuzz) reach every decoder path.
 
 ## 4. The compressor, about 1520 lines
 
-[`src/seqlz_match.h`](../src/seqlz_match.h), the matcher, [`src/seqlz_compress.c`](../src/seqlz_compress.c), the
-encoder, then [`src/seqlz_compress_literals.c`](../src/seqlz_compress_literals.c): the coded literals, a block's own literal table and the deltas. A bug
+[`src/seqlz_encoder.h`](../src/seqlz_encoder.h), the encoder, [`src/seqlz_match.h`](../src/seqlz_match.h), the
+matcher, [`src/seqlz_compress.c`](../src/seqlz_compress.c), which has both in the kernel's copy, then
+[`src/seqlz_compress_literals.c`](../src/seqlz_compress_literals.c): the coded literals, a block's own literal table and the deltas. A bug
 here costs bytes or time, not memory safety. The one thing to check hard is that it never writes past
-`dst_cap`: `ENC_ROOM`, [`encoder_finish()`](../src/seqlz_compress.c), and the fallback to raw literals.
+`dst_cap`: `ENC_ROOM`, [`encoder_finish()`](../src/seqlz_encoder.h), and the fallback to raw literals.
 
 ## 5. Tables and glue, about 480 lines
 
@@ -64,7 +65,8 @@ Then [`tools/kernel-port/backend_seqlz.c`](../tools/kernel-port/backend_seqlz.c)
 
 ## What to skip
 
-[`src/seqlz.h`](../src/seqlz.h) is the interface for the tests and tools,
+[`src/seqlz.h`](../src/seqlz.h) is the interface for the tests and tools, [`src/seqlz_harness.c`](../src/seqlz_harness.c) has
+the two functions of it the kernel does not, `seqlz_find()` and `seqlz_encode()`,
 [`src/zram_seqlz.c`](../src/zram_seqlz.c) and the other headers of [`src/linux/`](../src/linux) are the
 harness's glue, `seqlz_lengths.h` and `seqlz_lengths_16k.h` are generated tables.
 
