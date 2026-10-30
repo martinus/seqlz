@@ -61,6 +61,9 @@ else
     codec_objs() { (cd "$1" && ls seqlz*.c | sed 's/\.c$/.o/' | tr '\n' ' '); }
     cp "$here/backend_seqlz.c" "$here/backend_seqlz.h" "$here/../../src/"seqlz*.c "$here/../../src/"*.h \
         "$here/../../src/"*_4k.inc "$z/"
+    # the codec's interface, <linux/seqlz.h>; the other headers of src/linux/ are the kernel's own here
+    mkdir -p "$z/linux"
+    cp "$here/../../src/linux/seqlz.h" "$z/linux/"
     "$here/../gen-tables/gen-tables.sh" "$z/seqlz_tables.c"
     sed -i 's|#include "backend_842.h"|#include "backend_842.h"\n#include "backend_seqlz.h"|' "$z/zcomp.c"
     for l in $levels; do
@@ -69,8 +72,9 @@ else
     objs="$(codec_objs "$here/../../src") seqlz_tables.o"
     printf 'zram-y += backend_seqlz.o %s\n' "$objs" >>"$z/Makefile"
     for o in $objs; do
-        printf 'CFLAGS_%s += -O3\n' "$o" >>"$z/Makefile"
+        printf 'CFLAGS_%s += -O3 -I$(src)\n' "$o" >>"$z/Makefile"
     done
+    printf 'CFLAGS_backend_seqlz.o += -I$(src)\n' >>"$z/Makefile"
     for v in ${VARIANTS:-}; do
         name=${v%%=*} rest=${v#*=} flags=
         dir=${rest%%:*}
@@ -82,6 +86,11 @@ else
         [[ -f $bdir/backend_seqlz.c ]] || bdir=$here
         cp "$bdir/backend_seqlz.c" "$bdir/backend_seqlz.h" "$d/"
         cp "$dir/src/"seqlz*.c "$dir/src/"*.h "$dir/src/"*_4k.inc "$d/"
+        # its interface, <linux/seqlz.h>, where its src/ has one
+        if [[ -f $dir/src/linux/seqlz.h ]]; then
+            mkdir -p "$d/linux"
+            cp "$dir/src/linux/seqlz.h" "$d/linux/"
+        fi
         # its tables, by its own generator; an older src/ builds them at run time, in its own backend
         if [[ -x $dir/tools/gen-tables/gen-tables.sh ]]; then
             "$dir/tools/gen-tables/gen-tables.sh" "$d/seqlz_tables.c"
@@ -95,7 +104,7 @@ else
         # its files built for the host, whichever version it is, and the backend's
         o=$(mktemp -d)
         for f in "$d"/seqlz*.c; do
-            cc -std=gnu11 -c -I"$d" -o "$o/$(basename "$f" .c).o" "$f" || { echo "variant $name: $f does not build" >&2; exit 1; }
+            cc -std=gnu11 -c -I"$d" -I"$dir/src" -o "$o/$(basename "$f" .c).o" "$f" || { echo "variant $name: $f does not build" >&2; exit 1; }
         done
         syms=$(nm -g --defined-only "$o"/*.o | awk 'NF == 3 { print $3 }' | sort -u)
         rm -rf "$o"
@@ -105,7 +114,7 @@ else
         objs="v_$name/backend_seqlz.o $(codec_objs "$d" | sed "s#\([^ ][^ ]*\)#v_$name/\1#g")"
         printf 'zram-y += %s\n' "$objs" >>"$z/Makefile"
         for o in $objs; do
-            printf 'CFLAGS_%s += -include $(src)/v_%s/rename.h -I$(src)\n' "$o" "$name" >>"$z/Makefile"
+            printf 'CFLAGS_%s += -include $(src)/v_%s/rename.h -I$(src)/v_%s -I$(src)\n' "$o" "$name" "$name" >>"$z/Makefile"
         done
         for o in $(codec_objs "$d"); do
             printf 'CFLAGS_v_%s/%s += -O3 %s\n' "$name" "$o" "$flags" >>"$z/Makefile"

@@ -1,9 +1,17 @@
-// SPDX-License-Identifier: MIT OR GPL-2.0-only
+// SPDX-License-Identifier: GPL-2.0-only OR MIT
 /*
  * The compressor's literals: they stay raw, or are coded with one of the
  * fixed literal tables or with a table of the block's own, and at
  * SEQLZ_LEVEL_OWN they can be deltas to earlier bytes of the block first.
  */
+#include <linux/build_bug.h>
+#include <linux/math64.h>
+#include <linux/minmax.h>
+#include <linux/stddef.h>
+#include <linux/string.h>
+#include <linux/swab.h>
+#include <linux/unaligned.h>
+
 #include "seqlz_internal.h"
 
 /*

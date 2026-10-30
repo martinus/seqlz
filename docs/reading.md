@@ -13,11 +13,11 @@ check against it. Keep it open next to the decoder.
 
 ## 1. The interface, about 220 lines
 
-[`tools/kernel-port/seqlz.h`](../tools/kernel-port/seqlz.h), [`api_compress.c`](../tools/kernel-port/api_compress.c) and
-[`api_decompress.c`](../tools/kernel-port/api_decompress.c): what a kernel reviewer sees first. Check the contract: the
-block size, `SEQLZ_COMPRESS_BOUND`, the work memory `SEQLZ_MEM_COMPRESS` and
-`SEQLZ_MEM_DECOMPRESS`, the return values, and that a `NULL` scratch is only valid for blocks without
-coded literals.
+[`src/linux/seqlz.h`](../src/linux/seqlz.h), and `seqlz_compress()` and `seqlz_decompress()` at the ends of
+[`seqlz_compress.c`](../src/seqlz_compress.c) and [`seqlz_decompress.c`](../src/seqlz_decompress.c): what a kernel
+reviewer sees first. Check the contract: the block size, `SEQLZ_COMPRESS_BOUND`, the work memory
+`SEQLZ_MEM_COMPRESS` and `SEQLZ_MEM_DECOMPRESS`, the return values, and that a `NULL` scratch is only valid for
+blocks without coded literals.
 
 ## 2. The format as constants, about 480 lines
 
@@ -65,7 +65,7 @@ Then [`tools/kernel-port/backend_seqlz.c`](../tools/kernel-port/backend_seqlz.c)
 ## What to skip
 
 [`src/seqlz.h`](../src/seqlz.h) is the interface for the tests and tools,
-[`src/zram_seqlz.c`](../src/zram_seqlz.c) and [`src/seqlz_compat.h`](../src/seqlz_compat.h) are the
+[`src/zram_seqlz.c`](../src/zram_seqlz.c) and the other headers of [`src/linux/`](../src/linux) are the
 harness's glue, the `*.inc` files are generated tables.
 
 ## How to read it

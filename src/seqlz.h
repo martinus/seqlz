@@ -1,19 +1,13 @@
-/* SPDX-License-Identifier: MIT OR GPL-2.0-only */
+/* SPDX-License-Identifier: GPL-2.0-only OR MIT */
 #ifndef SEQLZ_H
 #define SEQLZ_H
 
 /*
- * seqlz for userspace: the harness, the tests and the tools call these. The
- * kernel has its own interface, see tools/kernel-port/seqlz.h.
+ * seqlz for userspace: the harness, the tests and the tools call these, and
+ * the interface the kernel has, linux/seqlz.h.
  */
 
 #include "seqlz_internal.h"
-
-/*
- * Room at dst with which seqlz_compress_block() never fails, as the kernel's
- * interface has it; it uses no more
- */
-#define SEQLZ_COMPRESS_BOUND (2 * SEQLZ_BLOCK_SIZE)
 
 /* a sequence as the matcher finds it, see seqlz_find() */
 struct seqlz_sequence {
@@ -45,22 +39,6 @@ int seqlz_tables_build(struct seqlz_tables *t,
 extern const struct seqlz_lengths seqlz_default_lengths;
 extern const u8 seqlz_lit_sets[SEQLZ_LIT_SETS][256];
 extern const u8 seqlz_own_lengths[SEQLZ_OWN_SYMBOLS];
-
-/**
- * seqlz_decompress() - Decompress one block
- * @src: the compressed block
- * @src_len: its length
- * @dst: SEQLZ_BLOCK_SIZE bytes for the block
- * @wrkmem: SEQLZ_SCRATCH bytes for coded literals, or NULL
- *
- * Safe for any input: it never reads outside @src and @src_len, and never
- * writes outside @dst and @wrkmem. Without @wrkmem, blocks with coded
- * literals are not valid.
- *
- * Return: 0, or -EINVAL if @src is not a valid block for the tables.
- */
-int seqlz_decompress(const void *src, unsigned int src_len, void *dst,
-		     void *wrkmem);
 
 /* every sequence but the last covers at least 4 bytes of the block */
 #define SEQLZ_MAX_SEQUENCES (SEQLZ_BLOCK_SIZE / 4U + 1U)

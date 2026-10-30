@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MIT OR GPL-2.0-only
+// SPDX-License-Identifier: GPL-2.0-only OR MIT
 /*
  * seqlz as a zram backend calls it, for the benchmarks: "seqlz-1" to "seqlz-3",
  * one per level of seqlz_compress_block(). The tables are fixed, part of the

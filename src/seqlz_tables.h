@@ -1,11 +1,13 @@
-/* SPDX-License-Identifier: MIT OR GPL-2.0-only */
-#ifndef SEQLZ_TABLES_H
-#define SEQLZ_TABLES_H
+/* SPDX-License-Identifier: GPL-2.0-only OR MIT */
+#ifndef _LIB_SEQLZ_SEQLZ_TABLES_H
+#define _LIB_SEQLZ_SEQLZ_TABLES_H
 
 /*
  * What the compressor, the decompressor and the code that builds their tables
  * share: the tables' layout and the token table's entries.
  */
+
+#include <linux/build_bug.h>
 
 #include "seqlz_format.h"
 

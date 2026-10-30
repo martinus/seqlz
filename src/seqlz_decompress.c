@@ -1,6 +1,12 @@
-// SPDX-License-Identifier: MIT OR GPL-2.0-only
+// SPDX-License-Identifier: GPL-2.0-only OR MIT
 /* The decompressor: seqlz_decompress(). */
-#include "seqlz.h"
+#include <linux/build_bug.h>
+#include <linux/errno.h>
+#include <linux/export.h>
+#include <linux/module.h>
+#include <linux/unaligned.h>
+
+#include "seqlz_internal.h"
 
 /*
  * Copies of 8 and 16 bytes with __builtin_memcpy(), as lib/lz4's LZ4_memcpy(),
@@ -609,3 +615,11 @@ int seqlz_decompress(const void *src, unsigned int src_len, void *dst,
 		return decode_block(src, src_len, dst, wrkmem, true);
 	return decode_block(src, src_len, dst, wrkmem, false);
 }
+EXPORT_SYMBOL_GPL(seqlz_decompress);
+
+/* the interface's work memory is the buffer of coded literals */
+static_assert(SEQLZ_MEM_DECOMPRESS == SEQLZ_SCRATCH);
+static_assert(SEQLZ_BLOCK_SIZE == 1U << SEQLZ_BLOCK_BITS);
+
+MODULE_LICENSE("Dual MIT/GPL");
+MODULE_DESCRIPTION("LZ compression of 4 KiB blocks with static Huffman codes");

@@ -1,9 +1,12 @@
-// SPDX-License-Identifier: MIT OR GPL-2.0-only
+// SPDX-License-Identifier: GPL-2.0-only OR MIT
 /*
  * The codes and decode tables, built from the code lengths:
  * seqlz_tables_build(). A program for the build host prints them as C, see
  * tools/gen-tables/, and every build of seqlz compiles that.
  */
+#include <linux/errno.h>
+#include <linux/string.h>
+
 #include "seqlz.h"
 
 /*

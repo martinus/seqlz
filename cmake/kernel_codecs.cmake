@@ -123,9 +123,12 @@ seqlz_kernel_codec(seqlz_kernel_zstd lib/zstd ""
     "${SEQLZ_KERNEL_TREE}/lib/xxhash.c"
     bench/kernel_codecs/zram_zstd.c)
 
-# seqlz with lz4's flags, -O3 included
-seqlz_kernel_codec(seqlz_kernel_seqlz lib/lz4 -O3 ${SEQLZ_SOURCES} src/zram_seqlz.c)
-target_include_directories(seqlz_kernel_seqlz PRIVATE "${CMAKE_SOURCE_DIR}/src")
+# seqlz with lz4's flags, -O3 included. Its kernel headers are the ones of src/linux/, not the ones of
+# bench/kernel_codecs/compat/ for lz4, lzo and zstd, which define some of the same names
+add_library(seqlz_kernel_seqlz STATIC ${SEQLZ_SOURCES} src/zram_seqlz.c)
+target_compile_options(seqlz_kernel_seqlz PRIVATE ${SEQLZ_KERNEL_CFLAGS} -O3 -nostdinc "SHELL:-isystem ${seqlz_cc_include}")
+target_include_directories(seqlz_kernel_seqlz PRIVATE "${CMAKE_SOURCE_DIR}/src" "${CMAKE_SOURCE_DIR}/bench/kernel_codecs")
+target_link_libraries(seqlz_kernel_seqlz PUBLIC seqlz_kernel_runtime)
 
 foreach(codec lz4 lz4hc lzo lzo_rle zstd seqlz_1 seqlz_2 seqlz_3)
     string(REPLACE "_" "-" name ${codec})
