@@ -334,6 +334,7 @@ One line per entry, by area, newest first: date measured, verdict, link, result,
 
 **Kernel copy, zram glue, compilers**
 
+- 2026-10-30 **not kept** [The matcher's first candidate as a constant](#the-matchers-first-candidate-as-a-constant-instead-of-a-load-from-the-cleared-table-levels-1-and-2-write-2-slower-with-clang-not-kept): `cand = 0` instead of `table[h]` after the table's clear; userspace folds the load, the kernel copy does not, and the matcher gets other registers. Same bytes. Mi 9T p2, 4 rounds: levels 1 and 2 write 0.5 to 0.6 µs slower on the A55, 0.3 to 0.4 on the A76 (1.8% to 3.4%, `main` twice within 0.10). Kernel VM, four samples, 3 boots: clang +2.7% / +2.2% / +0.5% at levels 1 / 2 / 3, gcc -1.4% / -1.4% / -0.8%, control within 0.8%. Code: `seqlz_match_block()`, a comment why the load stays. Now: current.
 - 2026-10-30 **kept** [The matcher calls encode_seq() itself](#the-matcher-calls-encode_seq-itself-as-in-the-kernel-copy-level-3-writes-06-faster-in-the-vm-with-clang-levels-1-and-2-the-same-kept): `src/` as the kernel copy since #284; kernel VM, clang 22.1.8, four VM samples, 3 boots: level 3 writes 0.6% faster (0.2% to 0.8% per sample, control -0.3% to +0.2%), levels 1 and 2 and swap-ins the same. `Code:` PR #284. `Now:` current.
 - 2026-10-25 **measurement** [Kernel copy on arm, riscv64 and powerpc](#the-kernel-copy-on-arm-riscv64-and-powerpc-with-gcc-and-clang-no-warning-frames-below-1024-bytes--os-no-deeper-on-32-bit-arm): 15 builds with gcc 16.2.0 and clang 22.1.8, W=1 without a warning, no libgcc division, deepest frame 896 bytes (riscv64 gcc). 32-bit arm -Os no deeper than -O3: gcc 472 vs 536, 768 vs 864 with KASAN+UBSan; clang 648 vs 600. The Makefile's -O3 keeps speed as its only reason. Code: tools/kernel-port/port.py MAKEFILE; branch os-frames. Now: -O3 only with CC_OPTIMIZE_FOR_PERFORMANCE since 25 Oct, -Os builds keep -Os.
 - 2026-10-24 **kept in part** [Kernel copy against coding-style.rst](#the-kernel-copy-against-coding-stylerst-shorter-functions-the-same-instructions-kept-decode_block-split-12-slower-swap-ins-not-kept): pick_delta(), own_describe(), own_fill(), read_lit_header() split out, one declaration per line: instructions within 0.12%, VM within control. decode_block() split into three always-inline helpers: +1.6% instructions at level 1, swap-ins 1.1 to 1.9% slower, not kept. -O3 only with CC_OPTIMIZE_FOR_PERFORMANCE: -Os frames up to 976 bytes, not kept. Code: src/seqlz_compress_literals.c, src/seqlz_decompress_literals.c, tools/kernel-port/port.py; branch kernel-review. Now: -Os is no deeper on 32-bit arm (Kernel copy on arm, riscv64 and powerpc); -O3 only with CC_OPTIMIZE_FOR_PERFORMANCE since 25 Oct.
@@ -7315,6 +7316,89 @@ for `compress_own()` differs in the order of one `lea`'s operands; the phone.
 ```sh
 VARIANTS="pre=<a checkout of 96a63d7> same=." LLVM=1 BOOTS=3 MODE=swap \
     ALGOS=seqlz-1,seqlz-2,seqlz-3,pre-1,pre-2,pre-3,same-2,same-3 \
+    tools/zram-vm/run.sh <linux tree> ~/seqlz-corpus/phone-dump/p3-sample20000 >p3.log
+tools/zram-vm/variants.py p3.log
+```
+
+## The matcher's first candidate as a constant instead of a load from the cleared table: levels 1 and 2 write 2% slower with clang, not kept
+
+Status: not kept, 2026-10-30. Now: current.
+
+*`seqlz_match_block()` clears its table and then loads `cand = table[h]` for position 1, which is
+always 0. Is `cand = 0` and `get_unaligned_le32(src)` cheaper? In userspace gcc and clang already fold
+the load, the code is the same. In the kernel copy they do not: `tools/samecode/samecode.sh` finds
+`compress_own()` and `seqlz_compress()` different on x86-64 with gcc and clang and on arm64, and the
+phone's module differs too. One load per block less, but the matcher is inlined into both functions and
+gets other registers, which reaches its loop. Measured, the same bytes stored: on the Mi 9T levels 1
+and 2 write 0.5 to 0.6 µs slower on the A55 and 0.3 to 0.4 µs on the A76 (1.8% to 3.4% of the mean of the two copies of `main`), where two copies
+of `main` differ by at most 0.10 µs; in the kernel VM with clang 2.0% to 3.1% slower, with gcc 1.2% to 1.8%
+faster. A sign that turns between gcc and clang is where the code lands, and clang is what Android
+builds with. Not kept: the load stays, with a comment that says it reads 0 and why it stays.* Code:
+`seqlz_match_block()` in `src/seqlz_match.h`; not committed, a one-line change on `f7fa44d`.
+
+**The Mi 9T**, `tools/zram-phone/run.sh` with `BUS=1`, `COOL=45`, 4 rounds, 20 000 pages of the second
+phone dump (19 844 not same-filled), NDK r21e's clang 9, functions aligned to 64 bytes, the A55 at
+1.80 GHz and the A76 at 2.21 GHz. Each codec alone in its process, in turns. `a` and `a2` are `main`
+(`f7fa44d`) twice, `b` is `cand = 0`. Write means in µs, the range over the rounds in brackets:
+
+| | `a` | `a2` | `b` |
+| --- | --- | --- | --- |
+| A55, level 1 | 28.15 (28.04 to 28.26) | 28.07 (27.96 to 28.26) | 28.69 (28.60 to 28.88) |
+| A55, level 2 | 31.69 (31.58 to 31.88) | 31.62 (31.51 to 31.88) | 32.21 (32.08 to 32.41) |
+| A55, level 3 | 49.61 (49.48 to 49.88) | 49.71 (49.62 to 49.90) | 49.97 (49.88 to 50.22) |
+| A76, level 1 | 10.57 (10.53 to 10.63) | 10.49 (10.45 to 10.50) | 10.89 (10.85 to 10.93) |
+| A76, level 2 | 11.72 (11.62 to 11.79) | 11.68 (11.62 to 11.77) | 12.07 (12.04 to 12.10) |
+| A76, level 3 | 18.92 (18.85 to 18.96) | 19.00 (18.97 to 19.08) | 19.07 (19.00 to 19.11) |
+
+Warm reads within 0.08 µs of `a` or `a2`, the decoder is the same code; cold reads as noisy as always
+on the A55.
+
+**Kernel VM**, `tools/zram-vm/run.sh` on `5b0764a53235`, `MODE=swap`, 3 boots per kernel, the four VM
+samples of 20 000 pages, Ryzen 9 7950X, the VM's CPU at a fixed 4.5 GHz, boost off.
+`VARIANTS="main=<f7fa44d> same=."` from `cand = 0`: `seqlz-N` is `cand = 0`, `main-N` is `main`,
+`same-N` a second copy of `cand = 0`, the control. Swap-out, the mean over the boots, µs per page; the
+last column is the mean of the four samples for `main`, the mean difference to `main` for the others:
+
+clang 22.1.8 (`LLVM=1`):
+
+| | p3 | p5 | zram0 | zram0-2026-09-24 | mean |
+| --- | --- | --- | --- | --- | --- |
+| `main-1` | 5.985 | 6.049 | 6.485 | 7.059 | 6.395 |
+| `seqlz-1` | 6.163 | 6.191 | 6.687 | 7.233 | +2.7% |
+| `main-2` | 6.557 | 6.548 | 7.024 | 7.879 | 7.002 |
+| `seqlz-2` | 6.694 | 6.695 | 7.188 | 8.037 | +2.2% |
+| `same-2` | 6.748 | 6.716 | 7.227 | 8.083 | +2.7% |
+| `main-3` | 10.038 | 9.933 | 10.495 | 11.990 | 10.614 |
+| `seqlz-3` | 10.100 | 9.954 | 10.527 | 12.070 | +0.5% |
+| `same-3` | 10.104 | 9.973 | 10.541 | 12.134 | +0.7% |
+
+gcc 16.2.1:
+
+| | p3 | p5 | zram0 | zram0-2026-09-24 | mean |
+| --- | --- | --- | --- | --- | --- |
+| `main-1` | 6.603 | 7.212 | 7.769 | 8.424 | 7.502 |
+| `seqlz-1` | 6.502 | 7.120 | 7.675 | 8.277 | -1.4% |
+| `main-2` | 7.132 | 7.723 | 8.323 | 9.236 | 8.104 |
+| `seqlz-2` | 7.049 | 7.633 | 8.208 | 9.068 | -1.4% |
+| `same-2` | 7.008 | 7.601 | 8.174 | 9.065 | -1.7% |
+| `main-3` | 10.487 | 11.029 | 11.674 | 13.338 | 11.632 |
+| `seqlz-3` | 10.418 | 10.949 | 11.587 | 13.183 | -0.8% |
+| `same-3` | 10.394 | 10.930 | 11.626 | 13.187 | -0.8% |
+
+The control differs from `seqlz-N` by 0.0% to +0.8% with clang and -0.6% to +0.3% with gcc, so level 3
+is within it with clang and just outside with gcc, levels 1 and 2 outside on both. Swap-ins, warm and flushed, `seqlz` against `main` -1.2%
+to +1.5%, the control -1.0% to +1.3%. zram's `mm_stat` is the same for `seqlz-N` and `main-N`.
+
+Not measured: why the kernel build keeps the load where userspace folds it.
+
+```sh
+tools/samecode/samecode.sh <linux tree> origin/main      # from the change: which functions differ
+tools/zram-phone/build.sh a <main's src/> out/a; tools/zram-phone/build.sh a2 <main's src/> out/a2
+tools/zram-phone/build.sh b src out/b
+BUS=1 COOL=45 ROUNDS=4 CODECS="seqlz-a-1 ... seqlz-b-3" tools/zram-phone/run.sh \
+    ~/seqlz-corpus/phone-dump/p2-sample20000.pages out/run out/a/seqlz_a.ko out/a2/seqlz_a2.ko out/b/seqlz_b.ko
+VARIANTS="main=<main> same=." [LLVM=1] BOOTS=3 MODE=swap \
+    ALGOS=seqlz-1,seqlz-2,seqlz-3,main-1,main-2,main-3,same-2,same-3 \
     tools/zram-vm/run.sh <linux tree> ~/seqlz-corpus/phone-dump/p3-sample20000 >p3.log
 tools/zram-vm/variants.py p3.log
 ```

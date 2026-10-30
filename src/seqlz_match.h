@@ -171,6 +171,11 @@ seqlz_match_block(u16 *table, const u8 *src, bool lazy, struct seqlz_encoder *e)
 	memset(table, 0, sizeof(u16) << SEQLZ_HASH_BITS);
 	v = get_unaligned_le64(src + pos);
 	h = seqlz_hash5(v);
+	/*
+	 * The table was just cleared, so cand is 0. A load all the same: with
+	 * cand = 0, clang gave the matcher other registers, and levels 1 and 2
+	 * wrote 2% to 3% slower.
+	 */
 	cand = table[h];
 	cand_bytes = get_unaligned_le32(src + cand);
 
