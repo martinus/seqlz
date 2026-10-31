@@ -1120,13 +1120,52 @@ std::vector<unsigned char> encode_coded(seqlz_page const& p) {
     return c;
 }
 
+unsigned stream_size(std::vector<unsigned char> const& c, unsigned st);
+
+TEST_CASE("seqlz: a level 2 page's stream sizes are its literals' code lengths per stream, rounded up") {
+    // The sizes in the header come from where each stream ends in its slot, not from a sum of the code
+    // lengths before the streams are written: both must agree, the last byte of a stream, partly
+    // used, included.
+    auto st = std::make_unique<seqlz_state>();
+    auto rng = std::mt19937_64(73);
+    auto seq = std::vector<seqlz_sequence>(SEQLZ_MAX_SEQUENCES);
+    auto coded = 0;
+    for (int round = 0; round < 300; ++round) {
+        CAPTURE(round);
+        auto const p =
+            page_with_literals_from(rng, round % 4, bytes_as_coded_by(rng, static_cast<unsigned>(round) % SEQLZ_LIT_SETS));
+        auto c = std::vector<unsigned char>(2 * page_size);
+        auto const len = seqlz_compress_block(st.get(), p.bytes.data(), c.data(), 2 * page_size, 2);
+        REQUIRE(len > 0);
+        c.resize(len);
+        if (!lits_coded(c)) {
+            continue;
+        }
+        ++coded;
+        auto const table = c[2] & SEQLZ_LIT_CODE_MASK;
+        REQUIRE(table < SEQLZ_LIT_SETS);
+        auto const n = seqlz_find(st.get(), p.bytes.data(), seq.data(), 2);
+        auto const lits = literals_of(p.bytes, seq.data(), n);
+        for (unsigned j = 0; j < SEQLZ_LIT_STREAMS; ++j) {
+            CAPTURE(j);
+            auto bits = 0U;
+            for (auto k = j; k < lits.size(); k += SEQLZ_LIT_STREAMS) {
+                bits += seqlz_lit_sets[table][lits[k]];
+            }
+            CHECK(stream_size(c, j) == (bits + 7) / 8);
+        }
+    }
+    CHECK(coded > 100);
+}
+
 TEST_CASE("seqlz: coded literals use the literal table with the fewest bits for them") {
     auto rng = std::mt19937_64(5);
     auto chosen = std::array<int, SEQLZ_LIT_SETS>{};
     for (int round = 0; round < 400; ++round) {
         CAPTURE(round);
         // literals as one of the tables expects them; in every other page every 8th literal, the first
-        // stream, as another table expects them
+        // stream, as another table expects them. Level 2 picks its table from every 5th literal, which on
+        // these pages is the table of all of them.
         auto const want = static_cast<unsigned>(round) % SEQLZ_LIT_SETS;
         auto p = page_with_literals_from(rng, round % 4, bytes_as_coded_by(rng, want));
         if (round % 2 == 1) {
