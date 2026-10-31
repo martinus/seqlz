@@ -491,7 +491,7 @@ with lz4 or zstd. For reference, `seqlz_compress()` writes:
   description take at least 16 bytes less than the best fixed table. Its code lengths are close to a
   Huffman code's, at most 10 bits;
 - at level 3, literals as deltas, with the `dt` whose deltas take the fewest bits in the best fixed
-  table, counted for every 5th literal of the block, with `dt`'s 8 bits scaled the same way, as 1, where
+  table, counted for every 11th literal of the block, with `dt`'s 8 bits scaled the same way, as 1, where
   that is not `e = 0` and the deltas get coded; else the literals as they are.
 
 The compressed block fits the buffer the compressor is given, or the compressor fails. zram gives it two

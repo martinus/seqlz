@@ -16,11 +16,14 @@
 
 /*
  * seqlz_delta_literals() prices the deltas with every DELTA_STEP-th literal.
- * Pricing every literal made blocks almost no smaller and the encoder slower.
- * Not every 4th: in fields of 4 or 8 bytes that is the same byte of each field,
- * and blocks were larger.
+ * Every 11th instead of every 5th made blocks 0.08% larger, and level 3 wrote
+ * them about 3% faster; every literal made them 0.05% smaller than every 5th,
+ * for a fifth more instructions. A prime, so that it is not the same byte of
+ * each field of 2, 3, 4 or 8 bytes: every 4th made blocks larger.
  */
-#define DELTA_STEP 5U
+#define DELTA_STEP 11U
+/* a delta's byte in the header, 8 bits scaled as the sums are, at least 1 */
+#define DELTA_HDR_BITS (8U / DELTA_STEP ? 8U / DELTA_STEP : 1U)
 
 /*
  * The bits of sum j in literal table k, from its lane of 16 bits in even or
@@ -89,9 +92,8 @@ static __always_inline void read_rec(const u8 *p, unsigned int *pos,
  *
  * Each delta is priced as code_literals() prices the fixed tables, with the
  * code lengths of seqlz_tables.lit_cost, on every DELTA_STEP-th literal. A
- * delta also pays for its byte in the header, 8 bits, scaled as the sums are,
- * 8 / DELTA_STEP, 1 in whole bits. The bits of the fixed tables also tell which
- * delta suits a table of the block's own.
+ * delta also pays for its byte in the header, DELTA_HDR_BITS. The bits of the
+ * fixed tables also tell which delta suits a table of the block's own.
  */
 static unsigned int pick_delta(const u8 *d, const u8 *end, const u8 *block)
 {
@@ -138,7 +140,7 @@ static unsigned int pick_delta(const u8 *d, const u8 *end, const u8 *block)
 	for (x = 0; x < 4; x++)
 		for (k = 0; k < SEQLZ_LIT_SETS; k++) {
 			unsigned int b = lit_bits(even, odd, x, k) +
-					 (x ? 8U / DELTA_STEP : 0U);
+					 (x ? DELTA_HDR_BITS : 0U);
 
 			if (b < best) {
 				best = b;
