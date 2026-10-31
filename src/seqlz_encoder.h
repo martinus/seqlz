@@ -66,6 +66,14 @@ static_assert(SEQLZ_HEADER + SEQLZ_BLOCK_SIZE + ENC_BITSTREAM_MAX + ENC_ROOM <=
 		      SEQLZ_COMPRESS_BOUND,
 	      "two blocks are always room enough");
 
+/*
+ * SEQLZ_OFF_SHIFT(), but 15 for class 0: an offset is below 1 << 15, so its
+ * shifted bits are 0 there, as class 0 sends none, without a test of the class
+ */
+#define ENC_SHIFT(cls) (((SEQLZ_SHIFT_NIBBLES | 15U) >> (4U * (cls))) & 15U)
+static_assert(SEQLZ_BLOCK_SIZE <= 1U << 15 && SEQLZ_OFF_SHIFT(0) == 0U,
+	      "class 0's offset shifted by 15 is 0");
+
 struct seqlz_encoder {
 	u64 acc; /* the bits not yet written, the newest in the low bits */
 	unsigned int cnt; /* how many bits of acc count */
@@ -204,12 +212,11 @@ static __always_inline void encode_seq(struct seqlz_encoder *e, const u8 *in,
 	code = token_code(seqlz_token(ll, ml, cls), &tlen);
 	/*
 	 * The offset's bits right after the token's code: classes 1 to 5 send
-	 * off >> SEQLZ_OFF_SHIFT(cls) in raw_bits bits. Class 0 sends none, so
-	 * there off is masked to 0.
+	 * off >> SEQLZ_OFF_SHIFT(cls), which is below 1 << raw_bits, in
+	 * raw_bits bits. Class 0 sends none, ENC_SHIFT() shifts its offset to
+	 * 0.
 	 */
-	enc_put(e,
-		(u64)code << raw_bits |
-			((off >> SEQLZ_OFF_SHIFT(cls)) & (0U - (cls != 0))),
+	enc_put(e, (u64)code << raw_bits | off >> ENC_SHIFT(cls),
 		tlen + raw_bits);
 	if (ll >= SEQLZ_LL_CAP) {
 		put_len_value(e, &seqlz_tables.ll, ll - SEQLZ_LL_CAP);
