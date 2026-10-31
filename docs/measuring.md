@@ -299,6 +299,11 @@ Each of these cost a wrong result first. The measurements behind them are in
 
 - **Nothing else runs while a benchmark times.** A build or a test run during a benchmark gave numbers
   that the next clean run did not reproduce.
+- **Sample literals with a prime step.** Every 4th or 8th literal is the same byte of each 4- or
+  8-byte field, so the sample sees one lane of the page's records: every 4th made the deltas' pricing
+  1.0 byte per page worse, the literal table's choice 5.3 bytes, and every 8th lost a third of the hot
+  bytes' gain (#299, #301, 31 Oct). The codec samples every 7th and 11th. The step is measured for each
+  sampler, not taken from another: the deltas' 11 costs the table's choice more bytes than its 7.
 - **Interleave, always.** Separate runs drifted by 6%, as much as the effects measured.
 - **Reverse the codec order** when a difference is below about 200 ns. All codecs are in one binary,
   and the code layout of one shifts the others.

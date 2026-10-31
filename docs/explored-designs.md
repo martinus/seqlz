@@ -284,14 +284,15 @@ One line per entry, by area, newest first: date measured, verdict, link, result,
 
 **Literals**
 
+- 2026-10-31 **kept** [The literal table from a sample, the streams into slots](#the-literal-table-from-a-sample-the-streams-into-slots-level-2-writes-14-to-18-faster-on-the-mi-9t-for-05-bytes-per-page-kept-the-sample-before-the-pass-level-3-from-the-counts-and-four-counts-not-kept): below level 3, 4 KiB blocks: the fixed table from every 7th literal, the 8 streams written into slots in the matcher's state and moved into place once their sizes are known, raw without writing where the sample says so by 8 bytes; no pass over every literal. Ten samples: level 2 +0.67 bytes per page, -2.0% compress instructions with every 7th literal (every 5th +0.51, -1.6%; 11 and 13 cost more bytes per instruction). Mi 9T p3, two copies each, with every 5th: level 2 writes -0.46 µs A55 (1.4%), -0.21 µs A76 (1.8%), `main`'s copies within 0.08. Kernel VM, clang, four samples: -0.07 to -0.12 µs per page written for +2.0 bytes of `mem_used`, swap-ins the same. Not kept: a sample before the exact pass (+1.7% to +3.4%, every 4th +5.3 bytes), level 3's table bits from the counts (+3.3%), four counts (+0.75%, Mi 9T +0.15 / +0.17 µs). The pricing pass was 5% of level 2's compress instructions. Code: `LIT_SLOTS`, `code_literals()`, `lit_streams()`; branch `lit-slots`; experiments `47b0a78`, `110fa61` on `lit-pricing`; #301. Now: current. Untried: 16 KiB blocks (the slots do not fit); gcc in the VM.
 - 2026-10-31 **not kept** [A page's most frequent literals moved to a fixed table's shortest codes](#a-pages-most-frequent-literals-moved-to-a-fixed-tables-shortest-codes-115-fewer-bytes-at-level-2-writes-19-µs-slower-on-the-a76-not-kept): literal code 9, a fixed table with up to 3 of the page's most frequent bytes moved to its shortest codes, 2 to 4 header bytes. Ten samples: level 2 -11.28 bytes per page (-1.15%), level 3 -2.78; level 2 compress +11.5% instructions. Kernel VM, clang, four samples: level 2 -9.7 bytes for +0.69 µs per page written, 14 bytes per µs against the hull's 26. Mi 9T p3, two copies each: level 2 writes +1.92 µs A76, +6.40 µs A55, 6.9 and 2.0 bytes per µs against 17.9 and 6.1. The encoder would have to cost a third. Counting every 8th literal loses a third of the gain. Code: `swap_try()`, `read_swaps()`, `SEQLZ_LIT_SWAP`, commit `12b40bb`, branch `hot-swap`; #299. Now: current. Untried: tables trained with the moves; an encoder at a third of the cost.
-- 2026-10-31 **not built** [Level 2's literals coded without their copy](#level-2s-literals-coded-without-their-copy-into-the-matchers-table-at-most-03-of-a-write-not-built): the copy into the matcher's table before coding: x86-64 `memcpy`/`memmove` 0.15% of level 2's compression; Mi 9T all kernel `memcpy` 1.07% / 2.02% (A55 / A76), zram's own in it; by estimate at most 0.3% of a write. Coding in place overwrites raw literals not read yet (stream 7 starts at 7/8 of the coded size); coding into the table and copying the coded literals back saves a third of the copy. Code: `code_literals()`, #293. Now: current.
+- 2026-10-31 **not built** [Level 2's literals coded without their copy](#level-2s-literals-coded-without-their-copy-into-the-matchers-table-at-most-03-of-a-write-not-built): the copy into the matcher's table before coding: x86-64 `memcpy`/`memmove` 0.15% of level 2's compression; Mi 9T all kernel `memcpy` 1.07% / 2.02% (A55 / A76), zram's own in it; by estimate at most 0.3% of a write. Coding in place overwrites raw literals not read yet (stream 7 starts at 7/8 of the coded size); coding into the table and copying the coded literals back saves a third of the copy. Code: `code_literals()`, #293. Now: current. The copy is gone since the same day's slots ([the slots](#the-literal-table-from-a-sample-the-streams-into-slots-level-2-writes-14-to-18-faster-on-the-mi-9t-for-05-bytes-per-page-kept-the-sample-before-the-pass-level-3-from-the-counts-and-four-counts-not-kept)).
 - 2026-10-31 **kept** [The literal coding thresholds per level](#the-literal-coding-thresholds-per-level-35-bytes-at-level-2-19-at-level-3-own-tables-from-32-33-and-49-bytes-per-page-less-kept): `SEQLZ_LIT_CODED_MIN` 35 at level 2, `SEQLZ_LIT_CODED_MIN_OWN` 19 at level 3 (both were 51), `OWN_SAVES_MIN` 32 (was 16). Ten samples: level 2 -3.27 bytes per page (-0.33%), level 3 -4.92 (-0.55%). Mi 9T p2, 4 rounds, two copies each: level 2 same on the A76, A55 writes +0.12 µs; level 3 writes -0.07 to -0.14 µs, warm reads +0.13 µs A76, +0.25 A55. Code: `code_literals()` and `own_code()` take the minimum; branch coding-thresholds. Now: current. Untried: the kernel VM for level 3; level 2 from 19 measured 31 Oct, -2.93 bytes against 35, not taken ([levels between 2 and 3](#levels-between-2-and-3-with-the-deltas-greedy-with-an-own-table-on-the-hull-in-the-vm-and-on-the-mi-9t-greedy-with-fixed-tables-2-to-8-bytes-above-it-not-built)).
 - 2026-10-21 **not kept** [Literals by byte lane, formats 1 to 4](#literals-by-byte-lane-formats-1-to-4-40-to-61-fewer-bytes-than-seqlz-3-on-phone-pages-reads-27-to-77-slower-on-the-a76-not-kept): level 3's parse; bound on the phone: one trained table by the byte 8 before -74 bytes per page (8.9% of seqlz-3), mixes -121 to -157 (14.7% to 18.9%); the high bytes of 4-byte fields, a distribution per page and lane. Formats by lane with the fixed tables, a XOR and swapped bytes per lane: phone -4.0% to -6.1%, desktop -1.2% to -2.0%; reads +27% to +77% on the A76, +34% to +100% on the A55. As zram's second codec (format 3): 896.3 / 816.9 bytes per page against zstd 3's 911.4 / 820.9 in 24.5 / 22.0 µs against 25.8 / 24.5 (A76, p3 / 4 Oct). Without its XORs format 3 is seqlz-3's size. Code: not committed; ~/seqlz-corpus/research/2026-10-21-tools/. Now: its XOR without lanes is level 3 ([the XOR](#level-3-xors-its-literals-with-an-earlier-byte-of-the-page-38-fewer-bytes-than-seqlz-3-of-15-october-kept)). Untried: 16 KiB pages; recompression from the compressed page (needs zram).
 - 2026-10-19 **measurement** [Where the bytes of a phone page go](#where-the-bytes-of-a-phone-page-go-literals-are-two-thirds-of-seqlz-2s-a-context-modelling-coder-14-under-zstd-3-measured-offline): seqlz-2's parse, p3: 906.6 bytes per page, literals 69% (coded 316, raw 310), tokens 18%, offset bits 11%. Ten samples, zsmalloc cost: lz4 1368, seqlz-1 1074, seqlz-2 984, seqlz-3 940, zstd 3 936, zstd 19 851, LZMA with a 4 KiB dictionary 807 (14% under zstd 3). Literals about 6 bits per byte order 0 per page, short gaps and long runs alike; fixed-width palettes per page +5% on tokens, +2.5% on literals; a zero mask is worse. Code: offline, ~/seqlz-corpus/research/2026-10-17-tools/. Now: current; lane, order 1 and pointer models of the literals measured 21 Oct ([literals by byte lane](#literals-by-byte-lane-formats-1-to-4-40-to-61-fewer-bytes-than-seqlz-3-on-phone-pages-reads-27-to-77-slower-on-the-a76-not-kept)). Untried: 16 KiB pages.
 - 2026-10-14 **not kept** [Literal codes of up to 11 bits](#literal-codes-of-up-to-11-bits-003-to-006-smaller-on-the-phone-not-kept): seqlz-2, literal tables retrained on the pages of the tables of 13th October: -0.03% to -0.06% on the phone dumps, -0.70% on desktop 24th September, +0.04% Android 17 emulator. Decode tables double to 4 KiB each, 32 KiB for 8. Now: current.
 - 2026-10-09 **not kept** [Bitstream copied once behind coded literals](#the-bitstream-copied-once-behind-the-literals-raw-or-coded-writes-up-to-03-µs-slower-in-the-vm-and-08-µs-on-the-a55-not-kept): Same bytes, estimated 0.01 to 0.02 µs saved per page on the PC. Measured slower, seqlz-1 too: x86-64 VM writes up to 0.3 µs, Mi 9T writes 0.8 µs on A55, 0.2 µs on A76. gcc gave the matcher's loop other registers and padding. Code: branch seqlz-bitstream-once. Now: current. Untried: Not built: code literals into the matcher's table and copy them back (215 to 392 bytes less copied per coded page).
-- 2026-10-09 **kept** [Coded literals staged in the matcher's table](#coded-literals-from-the-matchers-table-a-buffer-of-one-page-costs-01-to-05-instead-of-16-to-29-kept): Raw literals copied into the free matcher table, coded ones written over their place. One-page buffer costs 0.1% to 0.5% instead of 1.6% to 2.9% (seqlz-2, four dumps); same bytes in two pages; x86-64 VM writes 0.08 to 0.18 µs faster; Mi 9T same. Code: code_literals(), seqlz_compress() in src/seqlz.c (now src/seqlz_compress.c); #142. Now: Code in src/seqlz_compress.c since "seqlz.c split in three". Verdict current. Untried: 28 to 123 pages per 20 000 still fail in one page: raw form written first; the matcher would need another literal buffer.
+- 2026-10-09 **kept** [Coded literals staged in the matcher's table](#coded-literals-from-the-matchers-table-a-buffer-of-one-page-costs-01-to-05-instead-of-16-to-29-kept): Raw literals copied into the free matcher table, coded ones written over their place. One-page buffer costs 0.1% to 0.5% instead of 1.6% to 2.9% (seqlz-2, four dumps); same bytes in two pages; x86-64 VM writes 0.08 to 0.18 µs faster; Mi 9T same. Code: code_literals(), seqlz_compress() in src/seqlz.c (now src/seqlz_compress.c); #142. Now: Code in src/seqlz_compress.c since "seqlz.c split in three". Verdict current. Untried: 28 to 123 pages per 20 000 still fail in one page: raw form written first; the matcher would need another literal buffer. Since 31 Oct below level 3, 4 KiB: no copy, the streams go into slots in the state first ([the slots](#the-literal-table-from-a-sample-the-streams-into-slots-level-2-writes-14-to-18-faster-on-the-mi-9t-for-05-bytes-per-page-kept-the-sample-before-the-pass-level-3-from-the-counts-and-four-counts-not-kept)).
 - 2026-10-06 **kept** [The 51-byte minimum again with new prefetches](#9-the-51-bytes-of-coded-literals-only-where-they-save-51-bytes-again-with-item-4s-and-7s-prefetches): With compressed data prefetched and token prefetch on in-order cores only: 51 vs 19 saves 0.4 µs per page written (A76) and 0.8 (A55), was 1.1 and 2.7, within noise. 83 no faster. 51 stays. Code: SEQLZ_LIT_CODED_MIN in src/seqlz.h. Now: Measured with the per-core token prefetch, replaced by prefetch on every core since #152. 35 at level 2 and 19 at level 3 since 31 Oct ([thresholds per level](#the-literal-coding-thresholds-per-level-35-bytes-at-level-2-19-at-level-3-own-tables-from-32-33-and-49-bytes-per-page-less-kept)).
 - 2026-10-06 **not kept** [Coded literals' cost on the A55](#8-coded-literals-on-the-a55-78-instructions-per-literal-at-one-per-cycle): A55 userspace: seqlz-2 decodes in 15 987 cycles per page, seqlz-1 13 877; 8 cycles per literal, no hot spot. Loads before uses: 2.8% fewer cycles, not built. Counting every 8th literal first: same bytes, 1150 more instructions per page; not kept. Code: decode_literals(), code_literals(); seqlz-bench-interleaved built with NDK r30, simpleperf. Now: code_literals() rewritten in "Coded literals from the matcher's table" (9 Oct); decode_literals() streams as arrays in "Five simplifications" (10 Oct). Cycle numbers predate both. Untried: Loads-first order in decode_literals(): 2.8% fewer A55 cycles in userspace, not built into the kernel module.
 - 2026-10-05 **kept** [Coded literals only if they save 51 bytes](#coded-literals-only-where-they-save-51-bytes-27-µs-per-page-written-less-on-the-a55-kept): Minimum 19 to 51 bytes. Mi 9T kernel, second phone dump: 929.0 to 936.9 bytes per page, 2.7 µs per page written less on the A55, 1.1 on the A76. Kernel VM: 0.1 µs for 20 bytes, no gain; kept for the phone. Code: SEQLZ_LIT_CODED_MIN (51) in src/seqlz.h, used in src/seqlz_compress.c. Now: "Six choices" item 9 (6 Oct), with the new prefetches: 51 saves only 0.4 µs (A76) and 0.8 µs (A55), within noise; 51 stays. 35 at level 2 and 19 at level 3 since 31 Oct ([thresholds per level](#the-literal-coding-thresholds-per-level-35-bytes-at-level-2-19-at-level-3-own-tables-from-32-33-and-49-bytes-per-page-less-kept)). Untried: Only 19, 51, 115 timed, 43 might save as much; per-device minimum through zram's level parameter not done.
@@ -6704,7 +6705,7 @@ own, as in "The harness on the PC: a codec's times depend on the other codecs in
 
 ## Coded literals from the matcher's table: a buffer of one page costs 0.1% to 0.5% instead of 1.6% to 2.9%, kept
 
-Status: kept, 2026-10-09. Now: Code in src/seqlz_compress.c since "seqlz.c split in three". Verdict current.
+Status: kept, 2026-10-09. Now: Code in src/seqlz_compress.c since "seqlz.c split in three". Verdict current. Since 31 Oct the copy is gone below level 3 for 4 KiB blocks: the streams go into slots in the state first ([the slots](#the-literal-table-from-a-sample-the-streams-into-slots-level-2-writes-14-to-18-faster-on-the-mi-9t-for-05-bytes-per-page-kept-the-sample-before-the-pass-level-3-from-the-counts-and-four-counts-not-kept)).
 
 *`code_literals()` moved the raw literals and the bitstream to the end of the buffer and wrote the coded
 literals from its front, so all three had to fit at once: into exactly one page, as zswap gives, that
@@ -6786,7 +6787,7 @@ The book draws dst at every step of chapter 16's page, with both ends and the ro
 
 ## Level 2's literals coded without their copy into the matcher's table: at most 0.3% of a write, not built
 
-Status: not built, 2026-10-31. Now: current.
+Status: not built, 2026-10-31. Now: the copy is gone the same day, by the slots ([the slots](#the-literal-table-from-a-sample-the-streams-into-slots-level-2-writes-14-to-18-faster-on-the-mi-9t-for-05-bytes-per-page-kept-the-sample-before-the-pass-level-3-from-the-counts-and-four-counts-not-kept)): the streams are written into the state and moved over the raw literals.
 
 *At level 2 `code_literals()` copies the raw literals into the matcher's table, `spare`, once it is
 clear they get coded, and writes the coded ones from there over the raw ones in dst. Could the copy go?
@@ -6806,6 +6807,138 @@ gcc 16.2.1 with the kernel's flags, Ryzen 9 7950X at 4.5 GHz: `compress_block` 8
 cpu-cycles:k` around one `zramphone` run at level 2, 20 000 pages of p2, each written 3 times and read 6
 times: `memcpy` 1.07% (A55) and 2.02% (A76) of the kernel's cycles, `seqlz_code_literals` 2.34% and
 2.92%; the other functions of the codec show as `$x`.
+
+## The literal table from a sample, the streams into slots: level 2 writes 1.4% to 1.8% faster on the Mi 9T for 0.5 bytes per page, kept; the sample before the pass, level 3 from the counts and four counts not kept
+
+Status: kept, 2026-10-31. Now: current.
+
+*`code_literals()` added every literal's code length in all 8 fixed tables, `lit_cost`, one `u64` per
+literal, and at level 3 counts the bytes in the same loop. On x86-64 that pass is 34% of
+`code_literals()`' instructions at level 2 and `code_literals()` 15% of the compression: 5% of level 2's
+compress instructions is all a cheaper pricing can win. Three forms, from #301. A sample of every k-th
+literal before the pass, with an early exit where it says raw: the exact pass still runs on every coded
+block, since the header needs each stream's size, so k 2 to 3 add 1.7% to 3.4% instructions and k 4
+costs 5.3 bytes per page (every 4th literal is the same byte of each 4-byte field, as `pick_delta()`
+learned). The sample alone picks the table well: 0.06 to 0.14 bytes per page worse. So the kept form
+takes the table from a sample of the literals, writes the 8 streams into slots in the matcher's state
+and takes the sizes from where they end, with no pass over every literal; a block the sample says
+stays raw by 8 bytes or more is left raw without writing them. With every 5th literal that saves 1.6%
+of level 2's compress instructions for 0.51 bytes per page (a margin of 16: 0.6% for 0.30; without the
+exit it costs 6.8%, the streams of two thirds of the blocks written for nothing); the kept step is 7,
+2.0% for 0.67 bytes, and 11 or 13 cost more bytes per instruction saved. On the Mi 9T, two copies
+each, measured with every 5th, level 2
+writes 0.46 µs faster on the A55 (1.4%) and 0.21 µs on the A76 (1.8%), where two copies of `main`
+differ by 0.08 and 0.06; in the kernel VM 0.07 to 0.12 µs per page (1% to 1.6%) for 2.0 bytes of zram's
+memory, swap-ins the same. By the hull's slopes to the right of `seqlz-2`, 6.1 and 17.9 bytes per µs on
+the phone's cores and 26 in the VM, that pays on the phone and is at the line in the VM. Level 3's
+fixed-table bits from the counts, the exact stream sizes only where a fixed table is taken: +3.3%
+instructions, the exact sizes are the same pass again. Four counts instead of two, as zstd's
+`HIST_count_parallel`: the same bytes, +0.75% instructions, and level 3 writes 0.15 µs slower on the
+A76 and 0.17 on the A55, reads the same. Kept: the slots, for 4 KiB blocks below level 3; the slots do
+not fit the state for 16 KiB blocks, and level 3 counts the bytes in the pass anyway.* The phone cannot tell 5 from 7: 0.4% of the instructions is about 0.05 µs on the A76. Code:
+`LIT_SLOTS`, `LIT_SLOT()`, `LIT_SAMPLE_STEP`, `LIT_SAMPLE_MARGIN`, `code_literals()` and `lit_streams()`
+in `src/seqlz_compress_literals.c`, branch `lit-slots`; the forms not kept as `LIT_PRE_STEP`,
+`LIT_PRE_CHOICE`, `LIT_HIST_COST`, `LIT_HIST4` at `47b0a78` and the slots as a knob at `110fa61` on
+branch `lit-pricing`, not merged; #301.
+
+**Offline**, the ten samples of 20 000 pages, zsmalloc bytes per page from `seqlz-bench-seqlz-N
+--no-timing`, instructions per page from `seqlz-worst --level N count`, gcc 16.2.1, x86-64, user space,
+`main` at `635ba8a`. The sample before the exact pass, with the exit where the sample says raw and
+no margin (`LIT_PRE_STEP`); the table from the sample with the exact pass kept (`LIT_PRE_CHOICE`):
+
+| | level 2 bytes | level 2 compress | level 3 bytes | level 3 compress |
+| --- | ---: | ---: | ---: | ---: |
+| `main` | 981.22 | 62 128 | 889.93 | 96 542 |
+| sample every 2nd, exit | +1.21 | +3.4% | +0.13 | +0.4% |
+| every 3rd, exit | +0.42 | +1.7% | +0.10 | +0.2% |
+| every 4th, exit | +5.33 | -0.1% | +0.38 | +0.1% |
+| every 5th, exit | +0.87 | +0.0% | +0.26 | +0.0% |
+| every 7th, exit | +1.10 | -0.5% | +0.33 | -0.0% |
+| table from every 3rd, pass kept | +0.06 | | +0.04 | |
+| table from every 5th, pass kept | +0.12 | | +0.04 | |
+| table from every 7th, pass kept | +0.14 | | +0.08 | |
+
+The streams into slots (`LIT_SLOTS`, the table from every 5th literal), against the same source with
+the slots off, whose `lit_streams()` reports its ends and so is not the same code as `main` (61 745
+instructions for the same bytes); level 3 only on blocks below 512 literals without deltas, within 0.06
+bytes and 0.3%. The cleaned-up code with every 5th and the margin of 8: 981.73 bytes, 61 133 instructions
+at level 2, 889.99 and 96 434 at level 3:
+
+| | level 2 bytes | level 2 compress |
+| --- | ---: | ---: |
+| slots off | 981.22 | 61 745 |
+| slots, no exit | +0.12 | +6.8% |
+| slots, exit at a margin of 8 bytes | +0.51 | -1.0% |
+| margin 16 | +0.30 | -0.6% |
+| margin 32 | +0.19 | +0.5% |
+| margin 64 | +0.15 | +2.3% |
+
+The step, with the margin, on the cleaned-up code, against `main`:
+
+| step, margin | level 2 bytes | level 2 compress |
+| --- | ---: | ---: |
+| 5, 8 | +0.51 | -1.6% |
+| 7, 8, kept | +0.67 | -2.0% |
+| 11, 16 | +0.80 | -2.4% |
+| 11, 8 | +1.24 | -2.8% |
+| 11, 4 | +1.56 | -3.0% |
+| 13, 8 | +1.62 | -3.0% |
+
+From 5 to 7 and to 11 with the margin of 16, each step costs 0.13 to 0.16 bytes for 0.4% of the
+instructions, about 0.05 µs on the A76, worth 0.8 to 0.9 bytes by the hull's slopes; beyond that the
+coarser sample misjudges more blocks at the raw exit. 11 and 13 also leave fewer of the test suite's
+pages raw at level 3 than two tests expect; 7 passes them as they are.
+
+Level 3 from the counts (`LIT_HIST_COST`): 889.87 bytes, 99 747 instructions (+3.3%). Four counts
+(`LIT_HIST4`): 889.93 bytes, 97 269 (+0.75%).
+
+Where `code_literals()`' instructions go at level 2, perf on x86-64 with `-g`, by source line:
+`lit_sums()` 34%, `lit_put()` 36%, `lit_flush()` 13%; `code_literals()` is 15% of the compression,
+`compress_block()` 83%.
+
+**Kernel VM**, `tools/zram-vm/run.sh` on `5b0764a53235` with `LLVM=1`, clang 22.1.8, `MODE=swap`, 3 boots
+per sample, Ryzen 9 7950X, the VM's CPU at a fixed 4.5 GHz, boost off; `VARIANTS="main=<635ba8a>
+slots=.:-DLIT_SLOTS=1 slots2=.:-DLIT_SLOTS=1"` from `110fa61` with the margin at 8, `seqlz-N` that
+source with the slots off (`lit_streams()` reporting its ends, not `main`'s code), `slots2` a second copy
+of the slots. zram's `mem_used` per page / swap-out, one call per page / swap-in with the compressed data
+flushed, µs, the mean over the boots; the last column the means over the samples and `write + 0.73 *
+read`. The spread of a swap-out mean over the 3 boots is 0.10 to 0.15 µs at level 2:
+
+| | p3 | p5 | zram0 | zram0-2026-09-24 | mean, and per page written |
+| --- | --- | --- | --- | --- | --- |
+| `main`, level 2 | 1035.6 / 7.370 / 3.950 | 994.7 / 7.240 / 3.830 | 1030.1 / 7.730 / 3.950 | 1261.5 / 8.500 / 4.200 | 1080.5 / 7.710 / 3.982 / 10.620 |
+| slots off, level 2 | 1035.6 / 7.460 / 3.950 | 994.7 / 7.290 / 3.840 | 1030.1 / 7.770 / 3.970 | 1261.5 / 8.530 / 4.240 | 1080.5 / 7.762 / 4.000 / 10.685 |
+| slots, level 2 | 1037.5 / 7.330 / 3.990 | 993.2 / 7.180 / 3.840 | 1034.2 / 7.650 / 3.960 | 1265.0 / 8.390 / 4.240 | 1082.5 / 7.638 / 4.008 / 10.560 |
+| slots, second copy | 1037.5 / 7.290 / 3.980 | 993.2 / 7.140 / 3.820 | 1034.2 / 7.600 / 4.000 | 1265.0 / 8.320 / 4.230 | 1082.5 / 7.588 / 4.008 / 10.515 |
+| `main`, level 3 | 906.6 / 10.610 / 4.470 | 891.9 / 10.330 / 4.290 | 982.8 / 10.890 / 4.170 | 1191.5 / 12.190 / 4.460 | 993.2 / 11.005 / 4.348 / 14.183 |
+| slots, level 3 | 906.6 / 10.610 / 4.470 | 891.9 / 10.320 / 4.270 | 984.0 / 10.850 / 4.180 | 1191.9 / 12.170 / 4.460 | 993.6 / 10.988 / 4.345 / 14.160 |
+
+**The Mi 9T**, `tools/zram-phone/run.sh` with `BUS=1`, `COOL=45`, 4 rounds, the 19 775 pages of p3, NDK
+r21e's clang 9, the A55 at 1.80 GHz and the A76 at 2.21 GHz, two copies of each module, `main` from
+`635ba8a`. Write / warm read / cold read in µs, the mean of the two copies:
+
+| | A55 | A76 |
+| --- | --- | --- |
+| `main`, level 3 | 48.68 / 16.04 / 38.54 | 18.37 / 5.98 / 9.78 |
+| four counts, level 3 | 48.85 / 15.98 / 38.22 | 18.52 / 5.90 / 9.62 |
+| `main`, level 2 | 32.28 / 13.26 / 32.21 | 11.82 / 4.72 / 8.21 |
+| slots, margin 8, level 2 | 31.82 / 13.12 / 31.38 | 11.61 / 4.63 / 7.89 |
+| slots, margin 16, level 2 | 31.86 / 13.17 / 31.15 | 11.67 / 4.68 / 8.01 |
+
+The decoder is the same code in all three rows; its reads move by 0.1 to 0.8 µs with the module's layout.
+
+The two copies of the same code differ by up to 0.18 µs in writes and 0.6 in the A55's cold reads.
+
+Not measured: the slots on 16 KiB blocks, where they do not fit the state and are not built; gcc in the VM.
+
+```sh
+cmake -S . -B b -G Ninja -DSEQLZ_KERNEL_TREE=<tree> -DCMAKE_C_FLAGS="-DLIT_SLOTS=1 -DLIT_SLOTS_MARGIN=8U"
+b/seqlz-bench-seqlz-2 --no-timing --corpus ~/seqlz-corpus/phone-dump/p1-sample20000   # the ten samples
+b/seqlz-worst --level 2 count ~/seqlz-corpus/phone-dump/p1-sample20000.pages
+tools/zram-phone/build.sh m8 <src with the defines set> out/m8; ...
+BUS=1 COOL=45 ROUNDS=4 CODECS="seqlz-ma-2 seqlz-mb-2 seqlz-m8-2 seqlz-m8b-2 seqlz-m16-2 seqlz-m16b-2" \
+    tools/zram-phone/run.sh ~/seqlz-corpus/phone-dump/p3-sample20000.pages out/run out/ma/seqlz_ma.ko ...
+```
 
 ## A page's most frequent literals moved to a fixed table's shortest codes: 1.15% fewer bytes at level 2, writes 1.9 µs slower on the A76, not kept
 

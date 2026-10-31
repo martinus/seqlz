@@ -101,7 +101,8 @@ unsigned int seqlz_encode(struct seqlz_state *st,
  * used. A smaller @dst works too: a block that does not fit is an error, which
  * can happen up to 32 bytes before @dst_cap is full.
  * The block is written with raw literals first, so it has to fit that way; the
- * coded literals then go over the raw ones, which @st holds meanwhile. At
+ * coded literals then go over the raw ones. Meanwhile @st holds the coded ones
+ * below SEQLZ_LEVEL_OWN, and there the raw ones or their deltas. At
  * SEQLZ_LEVEL_OWN the encoder needs 6 bytes more per sequence with literals for
  * their deltas; without that room the block is written without them. The same
  * bytes as seqlz_encode() for the sequences of seqlz_find() and @src, at the
