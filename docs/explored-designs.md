@@ -301,6 +301,7 @@ One line per entry, by area, newest first: date measured, verdict, link, result,
 
 **Matcher**
 
+- 2026-10-31 **not kept** [One copy of the repeat offset](#one-copy-of-the-repeat-offset-in-the-matcher-and-the-encoder-2-to-3-faster-with-gcc-on-x86-64-14-slower-writes-on-the-mi-9t-not-kept): the matcher's `last` and `back` and the encoder's `e->last` hold one value. x86-64 gcc, ten samples: without `back` or without `last` +2.3% to +4.6% instructions at levels 1 and 2, no fewer cycles; the matcher reading `e->last` +2.7% to +3.2% instructions, -1.7% to -3.4% cycles. Mi 9T p2, two copies each: level 2 writes +0.17 µs A76 (+1.4%), +0.20 A55; level 3 and reads the same. Code: not committed, #292. Now: current. Untried: the kernel VM; the previous offset as an argument of `encode_seq()`.
 - 2026-10-28 **not kept** [Hash with a 40-bit mask and a 64-bit multiplier](#the-matchers-hash-with-a-40-bit-mask-and-a-64-bit-multiplier-better-avalanche-001-to-002-more-memory-not-kept): every input bit reaches every hash bit, mean bias of single bit flips 0.277 to 0.258; 0.01% to 0.02% more zsmalloc cost at every level on the ten samples, not timed. Code: `seqlz_hash5()` in src/seqlz_match.h, the variant not committed. Now: current.
 - 2026-10-15 **kept** [Matcher without its step back, levels 1 and 2](#the-matcher-without-its-step-back-writes-66-faster-on-the-a76-and-1-to-2-in-the-vm-kept): Mi 9T zram, p3: seqlz-2 writes 0.8 µs (6.6%) faster on A76, 3% on A55, reads same. Kernel VM writes 1.0% to 2.3% faster; pages 1.6 bytes smaller to 3.7 larger; seqlz-1 up to 15 bytes (1.3%) larger. Code: seqlz_match_page() in src/page_lz.h; PR #213 (commit 474c552). Now: current for levels 1 and 2; level 3 keeps the step back ("Level 3, a lazy matcher").
 - 2026-10-05 **kept** [Matcher hash: 5 bytes, 4096 slots stays](#5-the-matchers-hash-5-bytes-into-4096-slots-stays): 4-byte hash: seqlz-2 18 to 35 bytes per page larger, not timed. 2048 slots: 939.6 vs 936.9 bytes, no time saved. 8192 slots: A55 write 1.6 µs slower and 16 KiB per CPU. 5 bytes into 4096 slots stays. Code: src/page_lz.h, SEQLZ_HASH_BITS in src/seqlz.h (12 for 4 KiB pages). Now: current; the hash's mixing measured 2026-10-28, [a 64-bit multiplier](#the-matchers-hash-with-a-40-bit-mask-and-a-64-bit-multiplier-better-avalanche-001-to-002-more-memory-not-kept), not kept.
@@ -7581,6 +7582,54 @@ Per build the parse takes 83.6 steps: 46.9 decode two lengths with one lookup, 8
 
 Not measured: the phone; why the build costs 2.5 times as much in zram as warm, beyond the misses of
 `quad[]`.
+
+## One copy of the repeat offset in the matcher and the encoder: 2% to 3% faster with gcc on x86-64, 1.4% slower writes on the Mi 9T, not kept
+
+Status: not kept, 2026-10-31. Now: current.
+
+*`seqlz_match_block()` keeps the repeat offset as `last` and as `back` (= -`last`), and `encode_seq()`
+as `e->last`, which equals the matcher's `last` before each update. Can the matcher do with fewer? Without
+`back` or without its `last`, gcc on x86-64 runs 2.3% to 4.6% more instructions at levels 1 and 2 for no
+fewer cycles: it uses both, `back` saves the subtraction in the load of the repeat candidate, `last` the
+negation where the offset itself is needed. With the matcher reading `e->last` instead of a `last` of its
+own, the instructions grow by 2.7% to 3.2% and the cycles fall by 1.7% to 3.4% at levels 1 and 2, in
+three runs. On the Mi 9T, two copies of each side, level 2 writes 0.17 µs slower on the A76 (+1.4%),
+where the two copies of `main` differ by 0.02, and 0.20 µs on the A55, within its 0.28; level 3 and the
+reads the same. As with `cand = 0`, the phone's clang 9 got the matcher's registers otherwise than gcc
+on x86-64. Not kept, and the kernel VM not run for it.* Code: `seqlz_match_block()` in
+`src/seqlz_match.h`; for the last variant also `struct find_recorder` in `src/seqlz_harness.c`, which
+then keeps a `last` as the encoder does; not committed; issue #292.
+
+**x86-64**, user space, `seqlz-worst --level N count` on the ten samples of 20 000 pages, gcc 16.2.1,
+Ryzen 9 7950X, CPU 2 at a fixed 4.5 GHz, boost off, compression per page against `main` (`06be315`),
+the same bytes for all:
+
+| variant | level 1 instructions / cycles | level 2 | level 3 |
+| --- | --- | --- | --- |
+| `main` | 53 417 / 17 314 | 62 128 / 19 461 | 96 542 / 32 570 |
+| without `back` | +2.70% / +1.24% | +2.32% / +3.20% | +0.71% / +2.19% |
+| without the matcher's `last` | +4.57% / +0.26% | +3.93% / +1.97% | +0.80% / +3.19% |
+| the matcher reads `e->last` | +3.17% / -3.43% | +2.73% / -2.53% | +0.67% / +1.20% |
+
+Again on p3 and the desktop sample of 23rd September, twice: the last variant 2.6% and 2.8% fewer cycles
+at level 1, 2.8% and 1.7% at level 2.
+
+**The Mi 9T**, `tools/zram-phone/run.sh` with `BUS=1`, `COOL=45`, 4 rounds, 20 000 pages of the second
+phone dump, NDK r21e's clang 9, `main` as `a` and `a2`, the matcher reading `e->last` as `b` and `b2`;
+write / warm read / cold read in µs:
+
+| | A55, level 2 | A76, level 2 | A55, level 3 | A76, level 3 |
+| --- | --- | --- | --- | --- |
+| `a` | 31.93 / 13.30 / 32.32 | 11.80 / 4.68 / 7.97 | 48.30 / 15.70 / 38.70 | 18.36 / 5.70 / 9.62 |
+| `a2` | 31.65 / 13.09 / 32.56 | 11.78 / 4.67 / 7.71 | 48.52 / 15.58 / 37.73 | 18.47 / 5.78 / 9.43 |
+| `b` | 32.02 / 13.19 / 32.37 | 11.96 / 4.69 / 8.35 | 48.50 / 15.59 / 37.57 | 18.38 / 5.76 / 9.96 |
+| `b2` | 31.96 / 13.14 / 32.58 | 11.96 / 4.64 / 8.00 | 48.47 / 15.54 / 37.46 | 18.32 / 5.74 / 9.68 |
+
+`tools/samecode/samecode.sh` finds `compress_own()` and `seqlz_compress()` different on x86-64 with gcc
+and clang and on arm64.
+
+Not measured: the kernel VM; the encoder taking the previous offset as an argument instead of
+`e->last`, which changes `encode_seq()` for the harness and the book's step-through too.
 
 ## The matcher calls encode_seq() itself, as in the kernel copy: level 3 writes 0.6% faster in the VM with clang, levels 1 and 2 the same, kept
 
