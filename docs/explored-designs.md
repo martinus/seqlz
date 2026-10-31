@@ -316,6 +316,7 @@ One line per entry, by area, newest first: date measured, verdict, link, result,
 
 **Decoder**
 
+- 2026-10-31 **kept** [The own literal table's lookup tables prefetched](#the-own-literal-tables-lookup-tables-prefetched-before-its-parse-level-3s-cold-reads-055-µs-faster-on-the-a55-kept): `read_own_table()` is 2.91% of the A76's kernel cycles in a level-3 zram run, about 4.3 µs per build against 1.7 warm. Prefetching `seqlz_tables.own.quad[]` and `decode[]` first: Mi 9T p2, two runs, level 3 cold reads -0.55 µs on the A55 (both copies below both of `main`), A76 -0.24 µs within its copies' 0.47; same bytes. A prefetch for writing of the table's place in the output page: nothing more. Code: `read_lit_header()` in src/seqlz_decompress_literals.c; branch own-table-prefetch, #291. Now: current. Untried: the kernel VM; a faster parse.
 - 2026-10-19 **not kept** [Decoder with the page prefetched on the Mi 9T, byte tokens](#the-decoder-with-the-page-prefetched-on-the-mi-9t-seqlz-1-075-µs-slower-than-lz4-on-the-a55-not-41-byte-tokens-from-a-trained-table-not-kept): p3, kernel flags, µs per page A55 / A76 with each page prefetched as zram's glue does: seqlz-1 7.35 / 2.84, lz4 6.60 / 2.63; streamed without the prefetch seqlz-1 11.55 on the A55 (two input streams). Entropy coding of tokens and offsets buys 266 bytes per page for 1.4 / 0.4 µs. Byte tokens from a trained 255-entry table in lz4's decoder: 179 of the 266 bytes for 1.0 µs on the A55, slower than seqlz-1 on the A76; per-page fixed-width palettes, an own byte decoder and three streams slower. Code: offline, ~/seqlz-corpus/research/2026-10-17-tools/research/. Now: current. Untried: the byte formats in zram; why lz4 gains 0.9 µs from the prefetch on the A55.
 - 2026-10-16 **not kept** [Sequences in batches of 32, pages seen once](#the-sequences-in-batches-of-32-again-on-pages-seen-once-32-to-53-slower-not-kept): x86-64 userspace, tools/seqlz-branches: 32% to 53% more time per decode and 33 to 49 more branch misses per page than main; the length-value decision is made twice and both miss (40 misses where main has 25), the two loops' exits add 19. No VM run. Code: not committed. Now: current. Untried: the phones.
 - 2026-10-10 **kept** [copy_match() without its dead branch](#copy_match-without-its-dead-branch-within-what-the-codes-place-moves-kept): No back variable, loop only for offsets of 8 or more. x86-64 VM: gcc warm reads up to 0.04 µs faster on one dump, clang swap-ins 0.01 to 0.03 µs slower; unchanged encoder's swap-outs moved 0.04 to 0.05 µs: code placement. Kept for simpler code. Code: copy_match() in src/seqlz_decompress.c; #174. Now: current. Untried: Not measured on the Mi 9T: two same-source modules differ by 0.13 µs there.
@@ -7481,6 +7482,64 @@ r21e's clang 9, level 3, write / warm read / cold read in µs, `main` (`7cf4faa`
 
 The writes are outside the spread of `a` against `a2`, 0.13 and 0.05 µs; the cold reads within theirs,
 0.42 and 0.49 µs.
+
+## The own literal table's lookup tables prefetched before its parse: level 3's cold reads 0.55 µs faster on the A55, kept
+
+Status: kept, 2026-10-31. Now: current.
+
+*Every read of a page with a literal table of its own builds the decoder's table from the page's
+description, `read_own_table()`. In zram on the Mi 9T that takes about 4.3 µs per build on the A76, 2.5
+times the 1.7 µs measured warm in user space on 15 October, about 9% of level 3's read time there. Each
+step of the parse looks up `seqlz_tables.own.quad[]` and waits for it, so on a cold read the misses of
+its 16 lines come one after the other; the fixed literal tables were prefetched before the decode, the
+own one not. Prefetching `quad[]` and `decode[]` makes level 3's cold reads 0.55 µs faster on the A55, in
+two runs and with both copies below both of `main`; on the A76 0.24 µs, but its two copies differ by 0.47.
+The same bytes, the encoder does not change. Also writing the 2 KiB of the output page that take the
+table first, a prefetch for writing, gave nothing more.* Code: `read_lit_header()` in
+`src/seqlz_decompress_literals.c`; branch `own-table-prefetch`; issue #291, which keeps the parse itself.
+
+**Where the time goes.** `simpleperf record -e cpu-cycles:k` around one `zramphone` run, level 3, 20 000
+pages of the second phone dump, of which 17.6% have a table of their own (`main` of `7cf4faa`), each page
+written 3 times and read 6 times: `read_own_table()` is 2.91% of the A76's kernel cycles, 6.82 × 10⁹, and
+2.30% of the A55's, 18.43 × 10⁹. Per build, 3514 pages times 6 reads, that is about 9 400 cycles on the
+A76 and 20 000 on the A55, where the profile slowed the cold reads too, 51.6 instead of 37 µs. The other
+functions of the decoder show as `$x`, the arm64 mapping symbol, not by name. On x86-64 in user space,
+`perf record` of 5 warm decodes of p3 at level 3 puts 3.1% of the cycles in `read_own_table()`, 52.4% in
+the decoder as a whole; `own_fill()`, which writes the 1024 entries 8 bytes at a time, is a small part.
+
+**The Mi 9T**, `tools/zram-phone/run.sh` with `BUS=1`, `COOL=45`, 4 rounds, 20 000 pages of the second
+phone dump, NDK r21e's clang 9, level 3 only, `main` (`7cf4faa`) as `a` and `a2`; write / warm read /
+cold read in µs. First run, `p1` the prefetch of `quad[]` and `decode[]`, `p2` also the output page:
+
+| | A55 | A76 |
+| --- | --- | --- |
+| `a` | 48.32 / 15.29 / 36.70 | 18.36 / 5.57 / 9.74 |
+| `a2` | 48.33 / 15.36 / 37.93 | 18.40 / 5.52 / 9.68 |
+| `p1` | 48.40 / 15.20 / 36.65 | 18.44 / 5.59 / 9.30 |
+| `p2` | 48.25 / 15.31 / 38.52 | 18.37 / 5.58 / 9.75 |
+
+Second run, `p1` built twice:
+
+| | A55 | A76 |
+| --- | --- | --- |
+| `a` | 48.37 / 15.28 / 37.84 | 18.39 / 5.57 / 9.78 |
+| `a2` | 48.40 / 15.35 / 38.04 | 18.40 / 5.61 / 10.02 |
+| `p1` | 48.38 / 15.26 / 37.30 | 18.44 / 5.53 / 9.43 |
+| `p1b` | 48.50 / 15.27 / 37.49 | 18.46 / 5.65 / 9.90 |
+
+The writes do not run the changed code; their 0.1 µs is where the code lands.
+
+Not measured: the kernel VM; why the build costs 2.5 times as much in zram as warm, beyond the misses
+of `quad[]`; a faster parse.
+
+```sh
+# the profile: phone.sh with simpleperf record around zramphone, report while the module is loaded
+taskset 80 simpleperf record -e cpu-cycles:k -o perf.data ./zramphone pages 1 seqlz-a-3
+simpleperf report -i perf.data --sort symbol
+BUS=1 COOL=45 ROUNDS=4 CODECS="seqlz-a-3 seqlz-a2-3 seqlz-p1-3 seqlz-p1b-3" tools/zram-phone/run.sh \
+    ~/seqlz-corpus/phone-dump/p2-sample20000.pages out/run out/a/seqlz_a.ko out/a2/seqlz_a2.ko \
+    out/p1/seqlz_p1.ko out/p1b/seqlz_p1b.ko
+```
 
 ## The matcher calls encode_seq() itself, as in the kernel copy: level 3 writes 0.6% faster in the VM with clang, levels 1 and 2 the same, kept
 

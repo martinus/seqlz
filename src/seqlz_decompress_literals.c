@@ -296,6 +296,15 @@ read_lit_header(const u8 *s, unsigned int src_len, u8 *block, u8 *bucket,
 		 */
 		u16 *own = (u16 *)(block + ((unsigned long)block & 1U));
 
+		/*
+		 * The tables read_own_table() looks each step up in, as the
+		 * fixed tables below: each step waits for the lookup before,
+		 * so on a cold read their misses came one after the other.
+		 */
+		prefetch_lines(seqlz_tables.own.quad,
+			       sizeof(seqlz_tables.own.quad));
+		prefetch_lines(seqlz_tables.own.decode,
+			       sizeof(seqlz_tables.own.decode));
 		*q = read_own_table(&seqlz_tables.own, *q, s + src_len, own,
 				    bucket);
 		if (!*q)
