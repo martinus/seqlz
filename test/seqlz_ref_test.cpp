@@ -258,8 +258,10 @@ std::vector<unsigned char> with_bit_flipped(std::vector<unsigned char> c, std::s
 // Pages whose literals level 3 codes as deltas: fields of 4 bytes whose 3 high bytes every second field repeats from
 // the one before (SEQLZ_DELTA_4 or SEQLZ_DELTA_LAST); records of 16 bytes, each the one before with a bit flipped
 // here and there, which leaves literals next to matches 16 bytes back (SEQLZ_DELTA_LAST); or runs of a 3-byte
-// pattern, matches of offset 3, each followed by 8 bytes a little above the byte 6 before them (SEQLZ_DELTA_LAST
-// with the last offset 3, which counts as 6).
+// pattern, matches of offset 3, each followed by 9 bytes a little above the byte 6 before them (SEQLZ_DELTA_LAST
+// with the last offset 3, which counts as 6). That makes 12 literals per sequence, the 9 and the next pattern's 3:
+// a count that is a multiple of DELTA_STEP prices the delta on the same literal of every sequence (with 8 bytes,
+// 11 literals, every 11th literal was a random one).
 std::vector<unsigned char> delta_page(std::mt19937_64& rng, int kind) {
     auto p = std::vector<unsigned char>(SEQLZ_BLOCK_SIZE);
     if (kind % 3 == 2) {
@@ -269,7 +271,7 @@ std::vector<unsigned char> delta_page(std::mt19937_64& rng, int kind) {
             for (int i = 0; i < 12 && k < p.size(); ++i, ++k) {
                 p[k] = pattern[static_cast<std::size_t>(i % 3)];
             }
-            for (int i = 0; i < 8 && k < p.size(); ++i, ++k) {
+            for (int i = 0; i < 9 && k < p.size(); ++i, ++k) {
                 p[k] = static_cast<unsigned char>(p[k - 6] + 1 + rng() % 3);
             }
         }

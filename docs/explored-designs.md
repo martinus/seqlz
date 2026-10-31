@@ -209,6 +209,7 @@ One line per entry, by area, newest first: date measured, verdict, link, result,
 
 **Level 3 and a literal table of the page's own**
 
+- 2026-10-31 **kept** [The deltas priced on every 11th literal](#the-deltas-priced-on-every-11th-literal-instead-of-every-5th-008-more-bytes-level-3-writes-25-and-31-faster-on-the-mi-9t-kept): `DELTA_STEP` 5 to 11, the header byte at least 1 bit. Ten samples, level 3: +0.69 bytes per page (+0.08%), -3.5% instructions per write (step 7 +0.19 / -1.9%, 9 +0.58 / -2.8%, 13 +0.92 / -4.0%; every literal -0.48 / +21.5%). Mi 9T p2, 4 rounds: level 3 writes -1.26 µs A55 (-2.5%), -0.59 µs A76 (-3.1%), `main` twice within 0.14; step 13 -1.56 / -0.63. A sequence with a multiple of 11 literals gets its delta priced on one literal; a test page with 11 did, now 12. Code: `DELTA_STEP`, `DELTA_HDR_BITS`, `pick_delta()`; branch delta-step. Now: current. Untried: the kernel VM; a step that changes per sequence.
 - 2026-10-24 **kept** [Level 3 without its second try of the plain literals](#level-3-without-its-second-try-of-the-plain-literals-071-bytes-per-page-more-writes-18-and-20-faster-on-the-mi-9t-kept): where the deltas stayed raw, the plain literals were priced again; that ran on 13% to 34% of the pages and coded 0.8% to 3.4% of them. Without it: zsmalloc +0.71 bytes per page (+0.079%, ten samples), level 3 compress -1.6% instructions; Mi 9T p3 writes -0.93 µs A55, -0.39 µs A76, about 2 bytes per µs on the A76. Code: `seqlz_code_own()`; branch kernel-cleanup-2. Now: current. Untried: the kernel VM.
 - 2026-10-21 **not kept** [More transforms, a parse that knows them, Huffman's floor, near matches](#more-transforms-for-level-3s-literals-a-parse-that-knows-them-huffmans-floor-near-matches-at-most-06-on-phone-pages-not-kept): ten samples, level 3 with the XOR 881.05 bytes per page; the same three bytes subtracted 873.62 (kept as deltas); other distances, XOR or subtraction at 1 to 64: at most 1.6 more; words with carries worse than bytes; Paeth or the gradient as a fourth choice -3.5 (phone -4.9, 0.6%); XOR or subtraction per page 0.7 even with the best known; a parse that knows the XOR -2.1 on phone samples; Huffman's floor 0.5 to 1.2; near matches at most 3.2 to 7.4. Code: not committed, `r15/` in the research tools. Now: current. Untried: timing Paeth or the gradient.
 - 2026-10-21 **kept** [Level 3 stores its literals as deltas](#level-3-stores-its-literals-as-deltas-not-xors-084-fewer-bytes-than-the-xor-kept): the XOR's three choices as subtractions, modulo 256. Ten samples: level 3 873.6 bytes per page instead of 881.0 (-0.84%; phone -1.15%, desktop -0.30%). Mi 9T: reads +0.13 to +0.24 µs A76, +0.34 to +0.46 A55, writes +0.12 to +0.27 A76; about 22 bytes per µs with the phone's mix. Fast path in registers: inside the noise, not kept. Code: `sub_bytes()`, `delta_literals()`, `add4()`, `add8()`, `undelta_literals()`, `undelta_fast()`, PR #229. Now: current; [tables trained for deltas](#literal-tables-trained-for-deltas-at-most-30-bytes-per-page-at-level-3-with-12-tables-not-kept) 22 Oct, at most 0.35%. Untried: zram in the phone's kernel.
@@ -216,7 +217,7 @@ One line per entry, by area, newest first: date measured, verdict, link, result,
 - 2026-10-22 **kept** [One rule for which literals are deltas](#one-rule-for-which-literals-are-deltas-045-fewer-bytes-a-simpler-spec-kept): `p >= x` for all three deltas instead of the 5th / 9th literal of a sequence for the byte 4 / 8 before. Ten samples: level 3 869.7 bytes per page instead of 873.6 (-0.45%; phone -5.4, desktop -0.5). Mi 9T: writes 0.2 µs faster, reads within noise. Kernel VM, 4 dumps: 24.4% in 14.42 µs against 24.5% in 14.54 (zsmalloc -4.1 bytes). Code: `delta_literals()`, `undelta_literals()`, `undelta_fast()`, commit 689dad5, PR #229. Now: current.
 - 2026-10-22 **not kept** [Literal tables for deltas](#literal-tables-trained-for-deltas-at-most-30-bytes-per-page-at-level-3-with-12-tables-not-kept): 98% of the pages whose deltas a fixed table codes use table 1. Trained on train-mix-1012, ten samples, level 3: today's 8 + 1 / 2 / 4 tables for deltas -1.0 / -2.2 / -3.0 bytes per page (at most 0.35%); 7 plain + 1 for deltas -0.8 at level 3, +1.0 at level 2; 8 trained on both -2.4 at level 3, +4.2 at level 2. Code: not committed, `xt2/` in the research tools. Now: current.
 - 2026-10-21 **not kept** [Literal tables for XORed literals](#literal-tables-trained-for-xored-literals-at-most-28-bytes-per-page-at-level-3-with-12-tables-not-kept): 99% of XORed pages on a fixed table use table 1. Trained on train-mix-1012, ten samples, level 3: today's 8 + 1 / 2 / 4 tables for XORed literals -0.9 / -1.6 / -2.8 bytes per page (at most 0.3%); 7 plain + 1 XORed -0.4 at level 3, +1.4 at level 2; 8 to 10 trained on both at most -1.5 at level 3, up to +3.5 at level 2. Not worth more tables, a format change and level 2's pricing cost. Code: not committed; ~/seqlz-corpus/research/2026-10-21-tools/xt/. Now: again for deltas on 22 Oct, [at most 3.0 bytes](#literal-tables-trained-for-deltas-at-most-30-bytes-per-page-at-level-3-with-12-tables-not-kept).
-- 2026-10-21 **kept** [Level 3 XORs its literals](#level-3-xors-its-literals-with-an-earlier-byte-of-the-page-38-fewer-bytes-than-seqlz-3-of-15-october-kept): each literal XORed with the byte 4 or 8 before (inside its sequence) or at the last offset, one choice per page, priced with the fixed tables' sums of every 5th literal. Ten samples: level 3 881.0 bytes per page instead of 915.6 (-3.8%; phone -4.1% to -6.9%, desktop -0.7% to -1.2%), 20.5% of the pages XORed. Mi 9T userspace, p3 and 4 Oct: writes +3.5 to +3.8 µs on the A76 (+28%), +7.3 to +7.5 on the A55; reads +0.34 to +0.40 on the A76, +0.9 to +1.1 on the A55; levels 1 and 2 unchanged. Kernel VM, mean of four samples, same boots: 24.7% of a page in 14.54 µs per page written against 25.4% in 12.96 without the XOR; zstd 3 25.3% in 20.35 drops off the hull. Code: xor_literals(), compress_own(), code_own(), encode_seq() (src/seqlz_compress.c); unxor_literals(), unxor_fast(), decode_page() (src/seqlz_decompress.c); byte 2's bit 7 and the XOR byte in docs/format.md; branch seqlz-literal-xor. Now: became [deltas](#level-3-stores-its-literals-as-deltas-not-xors-084-fewer-bytes-than-the-xor-kept) the same day, before the merge. Untried: zram in the phone's kernel; level 2 with the XOR (-4.4% for 3.4 µs per write on the A76, prototype).
+- 2026-10-21 **kept** [Level 3 XORs its literals](#level-3-xors-its-literals-with-an-earlier-byte-of-the-page-38-fewer-bytes-than-seqlz-3-of-15-october-kept): each literal XORed with the byte 4 or 8 before (inside its sequence) or at the last offset, one choice per page, priced with the fixed tables' sums of every 5th literal. Ten samples: level 3 881.0 bytes per page instead of 915.6 (-3.8%; phone -4.1% to -6.9%, desktop -0.7% to -1.2%), 20.5% of the pages XORed. Mi 9T userspace, p3 and 4 Oct: writes +3.5 to +3.8 µs on the A76 (+28%), +7.3 to +7.5 on the A55; reads +0.34 to +0.40 on the A76, +0.9 to +1.1 on the A55; levels 1 and 2 unchanged. Kernel VM, mean of four samples, same boots: 24.7% of a page in 14.54 µs per page written against 25.4% in 12.96 without the XOR; zstd 3 25.3% in 20.35 drops off the hull. Code: xor_literals(), compress_own(), code_own(), encode_seq() (src/seqlz_compress.c); unxor_literals(), unxor_fast(), decode_page() (src/seqlz_decompress.c); byte 2's bit 7 and the XOR byte in docs/format.md; branch seqlz-literal-xor. Now: became [deltas](#level-3-stores-its-literals-as-deltas-not-xors-084-fewer-bytes-than-the-xor-kept) the same day, before the merge. Pricing on [every 11th literal](#the-deltas-priced-on-every-11th-literal-instead-of-every-5th-008-more-bytes-level-3-writes-25-and-31-faster-on-the-mi-9t-kept) since 31 Oct. Untried: zram in the phone's kernel; level 2 with the XOR (-4.4% for 3.4 µs per write on the A76, prototype).
 - 2026-10-16 **not kept** [Level 3 matcher, three small changes](#level-3s-matcher-three-small-changes-none-faster-at-the-same-bytes-not-kept): x86-64 userspace, level 3 26 459 against level 2 18 498 cycles per page on p3, about 3700 more in the matcher, 3200 in the own table, 700 in code_literals(); step back 8 bytes at a time +0.4% to +0.8% cycles, one branch for both lazy candidates +0.1% to +0.5%, SEQLZ_LAZY_LEN 12 -1.3% to -1.4% for 1.5 to 1.8 bytes per page more (20 bytes per µs, the rate of level 2 to level 3 itself). Code: not committed. Now: current. Untried: the phone.
 - 2026-10-16 **not built** [OWN chosen by the symbol before](#own-chosen-by-the-symbol-before-54-bytes-per-description-11-bytes-per-page-counted-offline-not-built): offline, level 3's descriptions on ten 20 000-page samples, codes trained on train-mix: 12 codes by the symbol before take 58.67 instead of 64.08 bytes per description (-9.1%), 6 codes by the length before 59.46; 1.11 and 0.94 bytes per page, 0.12% and 0.10% of the compressed bytes. Not worth 12 code tables in the format and a context in own_table(). Code: tools/seqlz-bound/owndump.c, own_context.py. Now: current. Untried: any time; more pages with a table of their own from a cheaper description.
 - 2026-10-15 **kept** [Own literal table described in byte order](#a-pages-own-literal-table-in-the-order-of-the-bytes-decoded-two-lengths-at-a-time-05-smaller-than-by-code-length-reads-29-slower-on-the-a76-kept): Byte order saves 4.9, 2.6, 2.7 bytes per page vs Exp-Golomb order 1 (p3, 23rd, 24th September). Table build V9 1689 to 1740 ns on A76 vs V1 2543 to 2677. Level 3 reads 2.9% slower on A76: 34 bytes per µs. Code: own_code() (src/seqlz_compress.c), own_table() (src/seqlz_decompress.c), build_own(), struct own_table; `own` line of bench/seqlz_counts_4k.txt. Now: current; a code by the symbol before counted 16 Oct, not built ([OWN chosen by the symbol before](#own-chosen-by-the-symbol-before-54-bytes-per-description-11-bytes-per-page-counted-offline-not-built)). Untried: V11 (10-bit lookup, 4 KiB table) 5% to 6% faster warm; its cold-read cost (64 more cache lines) not measured.
@@ -2569,7 +2570,7 @@ Commands: `xh.c tx|tx2|parse|ana <pages>`, `run.sh`, `agg.py`; research log
 ## Level 3 XORs its literals with an earlier byte of the page: 3.8% fewer bytes than `seqlz-3` of 15 October, kept
 
 Status: kept, 2026-10-21. Now: the same day, before it was merged, the XOR became a subtraction,
-0.84% fewer bytes ([deltas](#level-3-stores-its-literals-as-deltas-not-xors-084-fewer-bytes-than-the-xor-kept)); the names below are the XOR's.
+0.84% fewer bytes ([deltas](#level-3-stores-its-literals-as-deltas-not-xors-084-fewer-bytes-than-the-xor-kept)); the names below are the XOR's. The pricing's every 5th literal is every 11th since 31 October ([every 11th](#the-deltas-priced-on-every-11th-literal-instead-of-every-5th-008-more-bytes-level-3-writes-25-and-31-faster-on-the-mi-9t-kept)).
 
 *Level 3 now XORs each literal with an earlier byte of the page before the literal tables code it, one
 of three choices per page: the byte 4 before, the byte 8 before (both only inside the sequence's
@@ -7273,6 +7274,80 @@ stay raw, which read faster: where the code lands. The cold reads are within the
 tables of 13th October, none for 16 KiB. With the second try back, the test fails.
 
 Not measured: the kernel VM.
+
+## The deltas priced on every 11th literal instead of every 5th: 0.08% more bytes, level 3 writes 2.5% and 3.1% faster on the Mi 9T, kept
+
+Status: kept, 2026-10-31. Now: current.
+
+*`seqlz_delta_literals()` picks the delta of level 3's literals from the sums of every `DELTA_STEP`-th
+literal, 5 since the XOR of 21 October, where only steps 1, 3, 4 and 5 were compared. Larger steps were
+never tried, and the pricing is at least 40% of `seqlz_delta_literals()`. On the ten samples every 11th
+literal stores 0.69 bytes per page more (+0.08%) and takes 3.5% fewer instructions per level-3 write; on
+the Mi 9T level 3 writes 1.26 µs faster on the A55 (2.5%) and 0.59 µs on the A76 (3.1%), reads the same.
+That is about 1.2 bytes per µs on the A76, where the second try's removal of 24 October was kept at
+about 2. Kept with 11, a prime: a sequence whose literals are a multiple of the step gets its delta
+priced on the same literal every time, and 11 has that at 11, 22, 33 literals, 5 at 5, 10, 15, 20.
+Every 13th saves 0.3 µs more on the A55 and nothing on the A76, for 0.23 bytes more.* Code:
+`DELTA_STEP`, `DELTA_HDR_BITS` and `pick_delta()` in `src/seqlz_compress_literals.c`, the pick in
+`docs/format.md`; branch `delta-step`.
+
+**Bytes and instructions**, level 3, the ten samples of 20 000 pages: zsmalloc memory per page from
+`seqlz-bench-seqlz-3 --no-timing`, column `cost`, which also decodes every page; instructions per
+level-3 compression from `seqlz-worst --level 3 count`, gcc 16.2.1, x86-64, user space. Means of the
+ten samples. From step 9 on `8U / DELTA_STEP`, the price of the delta's byte in the header, is 0;
+`DELTA_HDR_BITS` keeps it at 1, which gives step 5 the same bytes and instructions as `main`:
+
+| `DELTA_STEP` | bytes per page | against `main` | instructions per page | against `main` |
+| --- | ---: | ---: | ---: | ---: |
+| 1 * | 893.69 | -0.48 | 121 440 | +21.5% |
+| 3 * | 893.95 | -0.22 | 104 576 | +4.6% |
+| 5, `main` | 894.17 | | 99 940 | |
+| 7 | 894.36 | +0.19 | 98 076 | -1.9% |
+| 9 | 894.75 | +0.58 | 97 105 | -2.8% |
+| 11 | 894.86 | +0.69 | 96 444 | -3.5% |
+| 13 | 895.08 | +0.92 | 95 969 | -4.0% |
+
+\* with the header byte priced exactly, the sums times the step plus 8 bits: at step 5 the same bytes
+as `main` and 488 instructions more, so the rows 1 and 3 have about 500 instructions too many. Step 11
+on the phone samples +0.87 bytes per page, on the desktop ones +0.26; p2 +0.72.
+
+**The Mi 9T**, `tools/zram-phone/run.sh` with `BUS=1`, `COOL=45`, 4 rounds, 20 000 pages of the second
+phone dump (19 844 not same-filled), NDK r21e's clang 9, functions aligned to 64 bytes, the A55 at 1.80
+GHz and the A76 at 2.21 GHz, level 3 only. Each codec alone in its process, in turns. `a` and `a2` are
+`main` (`5aa4194`) twice. Means in µs, the range over the rounds in brackets:
+
+| | write | warm read | cold read |
+| --- | --- | --- | --- |
+| A55, `a` | 49.85 (49.80 to 49.91) | 15.19 | 37.12 |
+| A55, `a2` | 49.71 (49.59 to 49.83) | 15.41 | 37.38 |
+| A55, step 11 | 48.52 (48.34 to 48.67) | 15.34 | 37.19 |
+| A55, step 13 | 48.22 (48.03 to 48.33) | 15.39 | 37.92 |
+| A76, `a` | 19.06 (18.98 to 19.15) | 5.64 | 9.44 |
+| A76, `a2` | 18.98 (18.95 to 19.05) | 5.64 | 9.25 |
+| A76, step 11 | 18.43 (18.23 to 18.53) | 5.55 | 9.49 |
+| A76, step 13 | 18.39 (18.35 to 18.43) | 5.59 | 9.40 |
+
+`a` and `a2` differ by 0.14 µs in the A55's writes and 0.08 in the A76's. The reads are within their
+noise, the decoder did not change.
+
+**A test found the weak spot.** `seqlz_ref_test.cpp`'s pages for `SEQLZ_DELTA_LAST` after an offset of
+3 had 11 literals per sequence, 8 bytes that take the delta and 3 random ones of the next pattern. With
+every 11th literal the pricing saw the same literal of every sequence, in 10 of 13 pages a random one,
+and those pages stayed without the delta: 2663 bytes instead of 1669. Steps 7 and 13 pass. The test
+now has 9 bytes, 12 literals per sequence, and checks the decoders again, not the sampling; with step
+12 it fails. Pages like that are in the ten samples' numbers above, whatever their share.
+
+Not measured: the kernel VM; a step that changes from sequence to sequence, which no fixed literal count
+would hit, for more code in the pricing loop.
+
+```sh
+# a copy of src/ per step, -DDELTA_STEP=<n>U with #ifndef around the define
+seqlz-bench-seqlz-3 --corpus ~/seqlz-corpus/phone-dump/p3-sample20000 --no-timing
+seqlz-worst --level 3 count ~/seqlz-corpus/phone-dump/p3-sample20000.pages
+BUS=1 COOL=45 ROUNDS=4 CODECS="seqlz-a-3 seqlz-a2-3 seqlz-s11-3 seqlz-s13-3" tools/zram-phone/run.sh \
+    ~/seqlz-corpus/phone-dump/p2-sample20000.pages out/run out/a/seqlz_a.ko out/a2/seqlz_a2.ko \
+    out/s11/seqlz_s11.ko out/s13/seqlz_s13.ko
+```
 
 ## The matcher calls encode_seq() itself, as in the kernel copy: level 3 writes 0.6% faster in the VM with clang, levels 1 and 2 the same, kept
 
