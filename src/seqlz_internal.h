@@ -34,12 +34,15 @@
 #define SEQLZ_LIT_ROUNDS (56U / SEQLZ_LIT_BITS)
 /*
  * The encoder codes a block's literals only where that saves more than 1/16 of
- * them plus this many bytes. Decoding coded literals has a cost that does not
- * depend on how many there are: the literal table has to be read from memory,
- * and the literals decoded into a buffer first. A smaller minimum made blocks a
- * few bytes smaller and writes slower, most on in-order cores.
+ * them plus this many bytes, at SEQLZ_LEVEL_CODED. Decoding coded literals has a
+ * cost that does not depend on how many there are: the literal table has to be
+ * read from memory, and the literals decoded into a buffer first. A smaller
+ * minimum made blocks a few bytes smaller and writes slower, most on in-order
+ * cores.
  */
-#define SEQLZ_LIT_CODED_MIN 51U
+#define SEQLZ_LIT_CODED_MIN 35U
+/* the same at SEQLZ_LEVEL_OWN, which trades more time for bytes */
+#define SEQLZ_LIT_CODED_MIN_OWN 19U
 /*
  * The buffer the decoder decodes coded literals into, one per CPU. 16 bytes
  * more than a block: the decoder copies literals 16 bytes at a time and may

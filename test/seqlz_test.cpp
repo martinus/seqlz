@@ -1259,13 +1259,13 @@ TEST_CASE("seqlz: the stream sizes take as many bits as the largest needs, 5 to 
         CHECK(largest < 1U << width);
         CHECK((width == SEQLZ_SIZE_BITS_MIN || largest >= 1U << (width - 1)));
         widths.insert(width);
-        // coded only where that saves 1/16 of the literals and 51 bytes, whatever the header takes
+        // coded only where that saves 1/16 of the literals and SEQLZ_LIT_CODED_MIN bytes, whatever the header takes
         auto coded = 0U;
         for (unsigned st = 0; st < 8; ++st) {
             coded += stream_size(c, st);
         }
         auto const n_lit = lits_count(c);
-        CHECK(coded + 51 < n_lit - n_lit / 16);
+        CHECK(coded + SEQLZ_LIT_CODED_MIN < n_lit - n_lit / 16);
         // a decoder takes any width from 5 to 12, and the literals' code at most SEQLZ_LIT_OWN
         for (unsigned w = width; w <= SEQLZ_SIZE_BITS_MAX; ++w) {
             auto const wider = with_size_width(c, w);
@@ -1280,6 +1280,36 @@ TEST_CASE("seqlz: the stream sizes take as many bits as the largest needs, 5 to 
         }
     }
     CHECK(widths.size() >= 4);
+}
+
+TEST_CASE("seqlz: level 3 codes literals from a smaller saving than level 2") {
+    // 64 to 511 literals drawn as a literal table codes them, then zeros: no table of the page's own, and a
+    // saving around both minimums
+    auto rng = std::mt19937_64(37);
+    auto state = std::make_unique<seqlz_state>();
+    auto only_level_3 = 0;
+    for (int round = 0; round < 400; ++round) {
+        CAPTURE(round);
+        auto const bytes = bytes_as_coded_by(rng, static_cast<unsigned>(round) % SEQLZ_LIT_SETS);
+        auto page = std::vector<unsigned char>(page_size);
+        std::copy_n(bytes.begin(), 64 + rng() % 448, page.begin());
+        auto c2 = std::vector<unsigned char>(2 * page_size);
+        c2.resize(seqlz_compress_block(state.get(), page.data(), c2.data(), 2 * page_size, 2));
+        auto c3 = std::vector<unsigned char>(2 * page_size);
+        c3.resize(seqlz_compress_block(state.get(), page.data(), c3.data(), 2 * page_size, 3));
+        REQUIRE(c3.size() > 0);
+        if (!lits_coded(c3)) {
+            continue;
+        }
+        auto coded = 0U;
+        for (unsigned st = 0; st < 8; ++st) {
+            coded += stream_size(c3, st);
+        }
+        auto const n_lit = lits_count(c3);
+        CHECK(coded + SEQLZ_LIT_CODED_MIN_OWN < n_lit - n_lit / 16);
+        only_level_3 += !lits_coded(c2);
+    }
+    CHECK(only_level_3 > 10);
 }
 
 TEST_CASE("seqlz: a literal stream without its last byte is rejected") {
@@ -1486,7 +1516,7 @@ TEST_CASE("seqlz: the compressor codes the literals of every page where that pay
     auto e = std::vector<unsigned char>(2 * page_size);
     for (int round = 0; round < 20; ++round) {
         CAPTURE(round);
-        // table 4 gives 00 2 bits: literals that save clearly more than the 1/16 and 51 bytes of the rule
+        // table 4 gives 00 2 bits: literals that save clearly more than the 1/16 and the minimum of the rule
         auto const skewed = bytes_as_coded_by(rng, 4);
         // a page of records of 4 skewed literals and 4 bytes that are the same in every record, one
         // sequence each: a page that takes long to compress, which the budget of before kept raw

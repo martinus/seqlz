@@ -426,7 +426,7 @@ static void lit_sizes(u8 *p, const unsigned int *sizes, unsigned int width)
 /* a block's own table only for blocks with this many literals or more */
 #define OWN_LITERALS_MIN 512U
 /* and only where it saves this many bytes against the best fixed table */
-#define OWN_SAVES_MIN 16U
+#define OWN_SAVES_MIN 32U
 
 struct own_work {
 	/* how often each byte is a literal, see lit_sums(); then the sum */
@@ -597,10 +597,11 @@ static unsigned int own_describe(struct own_work *w, unsigned int n)
  * description, or 0 if it does not pay: fewer than 2 different bytes, or the
  * literals' entropy, or their bits with the code and the description with the
  * smallest header, say it cannot save OWN_SAVES_MIN bytes against limit, the
- * bytes of the best fixed table with its header.
+ * bytes of the best fixed table with its header, or that the literals would
+ * stay raw with code_literals()' coded_min.
  */
 static unsigned int own_code(struct own_work *w, unsigned int n_literals,
-			     unsigned int limit)
+			     unsigned int limit, unsigned int coded_min)
 {
 	/* the low 15 bits of each lane */
 	const u64 low = 0x7fff7fff7fff7fffULL;
@@ -662,7 +663,7 @@ static unsigned int own_code(struct own_work *w, unsigned int n_literals,
 	est = h / 2048U + n * 115U / 256U;
 	if (est + SEQLZ_LIT_HEADER(SEQLZ_SIZE_BITS_MIN) + OWN_SAVES_MIN >
 		    limit ||
-	    est + SEQLZ_LIT_CODED_MIN >= n_literals - n_literals / 16U)
+	    est + coded_min >= n_literals - n_literals / 16U)
 		return 0;
 	own_lengths(w, n, n_literals);
 
@@ -746,10 +747,11 @@ static unsigned int size_width(const unsigned int *sizes)
 /*
  * Turns the block of len bytes in d, with raw literals as the encoder wrote it,
  * into one with Huffman coded literals, where that saves more than 1/16 of them
- * plus SEQLZ_LIT_CODED_MIN bytes, not counting the header of the coded
- * literals, 3 to 16 bytes. Decoding coded literals costs time for every
- * byte, and coding them wherever they save anything at all saved almost no
- * more memory. Returns the new length, or len if the literals stay raw.
+ * plus coded_min bytes, SEQLZ_LIT_CODED_MIN or SEQLZ_LIT_CODED_MIN_OWN, not
+ * counting the header of the coded literals, 3 to 16 bytes. Decoding coded
+ * literals costs time for every byte, and coding them wherever they save
+ * anything at all saved almost no more memory. Returns the new length, or len
+ * if the literals stay raw.
  *
  * The code is the fixed table that codes them in the fewest bits, or, with own
  * not NULL, a table of the block's own, where that and its description take at
@@ -766,10 +768,9 @@ static unsigned int size_width(const unsigned int *sizes)
  * which are coded instead, and the header says so; if they stay raw, d keeps
  * them as they are.
  */
-static __always_inline unsigned int code_literals(u8 *d, unsigned int len,
-						  const u8 *raw, u8 *spare,
-						  struct own_work *own,
-						  unsigned int delta)
+static __always_inline unsigned int
+code_literals(u8 *d, unsigned int len, const u8 *raw, u8 *spare,
+	      struct own_work *own, unsigned int delta, unsigned int coded_min)
 {
 	const unsigned int n_literals = get_unaligned_le16(d);
 	const unsigned int bitstream = len - SEQLZ_HEADER - n_literals;
@@ -809,7 +810,8 @@ static __always_inline unsigned int code_literals(u8 *d, unsigned int len,
 	header = SEQLZ_LIT_HEADER(width) + delta_byte;
 	enc = seqlz_tables.lit[set].enc;
 	if (own) {
-		unsigned int n = own_code(own, n_literals, header + coded);
+		unsigned int n =
+			own_code(own, n_literals, header + coded, coded_min);
 		unsigned int own_coded, own_width;
 
 		if (n) {
@@ -828,13 +830,12 @@ static __always_inline unsigned int code_literals(u8 *d, unsigned int len,
 			}
 		}
 	}
-	if (desc + coded + SEQLZ_LIT_CODED_MIN >= n_literals - n_literals / 16U)
+	if (desc + coded + coded_min >= n_literals - n_literals / 16U)
 		return len;
 	/*
 	 * The streams end at d + header + coded, which is before the
 	 * bitstream at d + SEQLZ_HEADER + n_literals: desc + coded is at least
-	 * SEQLZ_LIT_CODED_MIN bytes below n_literals, see the static_assert
-	 * below.
+	 * coded_min bytes below n_literals, see the static_assert below.
 	 */
 	if (spare)
 		literals = memcpy(spare, literals, n_literals);
@@ -864,7 +865,8 @@ static __always_inline unsigned int code_literals(u8 *d, unsigned int len,
 }
 
 static_assert(SEQLZ_LIT_HEADER(SEQLZ_SIZE_BITS_MAX) + 1U <=
-		      SEQLZ_HEADER + SEQLZ_LIT_CODED_MIN,
+			      SEQLZ_HEADER + SEQLZ_LIT_CODED_MIN_OWN &&
+		      SEQLZ_LIT_CODED_MIN_OWN <= SEQLZ_LIT_CODED_MIN,
 	      "the coded literals fit before the bitstream");
 static_assert(sizeof_field(struct seqlz_state, table) >= SEQLZ_BLOCK_SIZE,
 	      "the raw literals take no memory beyond the matcher's table");
@@ -893,7 +895,8 @@ unsigned int seqlz_code_own(u8 *d, unsigned int len, struct seqlz_state *st,
 			    unsigned int delta)
 {
 	return code_literals(d, len, delta ? st->literals : NULL,
-			     delta ? NULL : st->literals, own_work(st), delta);
+			     delta ? NULL : st->literals, own_work(st), delta,
+			     SEQLZ_LIT_CODED_MIN_OWN);
 }
 
 /*
@@ -903,7 +906,7 @@ unsigned int seqlz_code_own(u8 *d, unsigned int len, struct seqlz_state *st,
  */
 unsigned int seqlz_code_literals(u8 *d, unsigned int len, u8 *spare)
 {
-	return code_literals(d, len, NULL, spare, NULL, 0);
+	return code_literals(d, len, NULL, spare, NULL, 0, SEQLZ_LIT_CODED_MIN);
 }
 
 /*
@@ -912,5 +915,5 @@ unsigned int seqlz_code_literals(u8 *d, unsigned int len, u8 *spare)
  */
 unsigned int seqlz_code_raw_literals(u8 *d, unsigned int len, const u8 *raw)
 {
-	return code_literals(d, len, raw, NULL, NULL, 0);
+	return code_literals(d, len, raw, NULL, NULL, 0, SEQLZ_LIT_CODED_MIN);
 }

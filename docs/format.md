@@ -483,12 +483,12 @@ with lz4 or zstd. For reference, `seqlz_compress()` writes:
 - each offset with class 0 when it is the last one, else the class with the fewest offset bits that
   holds it;
 - the escape only for a token without a code;
-- at levels 2 and 3 coded literals only when `51 + d + s[0] + ... + s[7] < n - n div 16`, with the
-  literal table that codes them in the fewest bits, and the smallest `w` that holds every `s[j]`, at
-  least 5. The 51 is not the size of the header; with it, a block has to save enough to be worth decoding
-  its literals;
+- at levels 2 and 3 coded literals only when `m + d + s[0] + ... + s[7] < n - n div 16`, `m` 35 at
+  level 2 and 19 at level 3, with the literal table that codes them in the fewest bits, and the smallest
+  `w` that holds every `s[j]`, at least 5. `m` is not the size of the header; with it, a block has to
+  save enough to be worth decoding its literals;
 - at level 3, for blocks with 512 literals or more, a table of the block's own where that and its
-  description take at least 16 bytes less than the best fixed table. Its code lengths are close to a
+  description take at least 32 bytes less than the best fixed table. Its code lengths are close to a
   Huffman code's, at most 10 bits;
 - at level 3, literals as deltas, with the `dt` whose deltas take the fewest bits in the best fixed
   table, counted for every 11th literal of the block, with `dt`'s 8 bits scaled the same way, as 1, where
