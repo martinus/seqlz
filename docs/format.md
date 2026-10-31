@@ -485,7 +485,7 @@ with lz4 or zstd. For reference, `seqlz_compress()` writes:
 - the escape only for a token without a code;
 - at levels 2 and 3 coded literals only when `m + d + s[0] + ... + s[7] < n - n div 16`, `m` 35 at
   level 2 and 19 at level 3, with the literal table that codes them in the fewest bits, at level 2
-  counted on every 5th literal, which also says early where they clearly stay raw, and the smallest
+  counted on every 7th literal, which also says early where they clearly stay raw, and the smallest
   `w` that holds every `s[j]`, at least 5. `m` is not the size of the header; with it, a block has to
   save enough to be worth decoding its literals;
 - at level 3, for blocks with 512 literals or more, a table of the block's own where that and its

@@ -438,14 +438,15 @@ static void lit_sizes(u8 *p, const unsigned int *sizes, unsigned int width)
  * the matcher's state, LIT_SLOT bytes each, then moved into place once their
  * sizes are known. Without the slots every literal had to be priced first,
  * since the header needs each stream's size. A prime step: every 4th or 8th
- * literal is the same byte of each 4- or 8-byte field. Where the sample says
+ * literal is the same byte of each 4- or 8-byte field; a larger step saves
+ * less than its coarser sample costs in bytes. Where the sample says
  * the literals stay raw by LIT_SAMPLE_MARGIN bytes or more, they do, and the
  * streams are not written: most blocks that stay raw are far from the rule,
  * and a block the sample misjudges by more is rare. The slots fit the state
  * for blocks of 4 KiB; for larger blocks every literal is priced, as at
  * SEQLZ_LEVEL_OWN.
  */
-#define LIT_SAMPLE_STEP 5U
+#define LIT_SAMPLE_STEP 7U
 #define LIT_SAMPLE_MARGIN 8U
 /*
  * a stream's slot: the bytes of the longest stream of n literals, every 8th

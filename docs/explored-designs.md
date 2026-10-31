@@ -284,7 +284,7 @@ One line per entry, by area, newest first: date measured, verdict, link, result,
 
 **Literals**
 
-- 2026-10-31 **kept** [The literal table from a sample, the streams into slots](#the-literal-table-from-a-sample-the-streams-into-slots-level-2-writes-14-to-18-faster-on-the-mi-9t-for-05-bytes-per-page-kept-the-sample-before-the-pass-level-3-from-the-counts-and-four-counts-not-kept): below level 3, 4 KiB blocks: the fixed table from every 5th literal, the 8 streams written into slots in the matcher's state and moved into place once their sizes are known, raw without writing where the sample says so by 8 bytes; no pass over every literal. Ten samples: level 2 +0.51 bytes per page, -1.6% compress instructions. Mi 9T p3, two copies each: level 2 writes -0.46 µs A55 (1.4%), -0.21 µs A76 (1.8%), `main`'s copies within 0.08. Kernel VM, clang, four samples: -0.07 to -0.12 µs per page written for +2.0 bytes of `mem_used`, swap-ins the same. Not kept: a sample before the exact pass (+1.7% to +3.4%, every 4th +5.3 bytes), level 3's table bits from the counts (+3.3%), four counts (+0.75%, Mi 9T +0.15 / +0.17 µs). The pricing pass was 5% of level 2's compress instructions. Code: `LIT_SLOTS`, `code_literals()`, `lit_streams()`; branch `lit-slots`; experiments `47b0a78`, `110fa61` on `lit-pricing`; #301. Now: current. Untried: 16 KiB blocks (the slots do not fit); gcc in the VM.
+- 2026-10-31 **kept** [The literal table from a sample, the streams into slots](#the-literal-table-from-a-sample-the-streams-into-slots-level-2-writes-14-to-18-faster-on-the-mi-9t-for-05-bytes-per-page-kept-the-sample-before-the-pass-level-3-from-the-counts-and-four-counts-not-kept): below level 3, 4 KiB blocks: the fixed table from every 7th literal, the 8 streams written into slots in the matcher's state and moved into place once their sizes are known, raw without writing where the sample says so by 8 bytes; no pass over every literal. Ten samples: level 2 +0.67 bytes per page, -2.0% compress instructions with every 7th literal (every 5th +0.51, -1.6%; 11 and 13 cost more bytes per instruction). Mi 9T p3, two copies each, with every 5th: level 2 writes -0.46 µs A55 (1.4%), -0.21 µs A76 (1.8%), `main`'s copies within 0.08. Kernel VM, clang, four samples: -0.07 to -0.12 µs per page written for +2.0 bytes of `mem_used`, swap-ins the same. Not kept: a sample before the exact pass (+1.7% to +3.4%, every 4th +5.3 bytes), level 3's table bits from the counts (+3.3%), four counts (+0.75%, Mi 9T +0.15 / +0.17 µs). The pricing pass was 5% of level 2's compress instructions. Code: `LIT_SLOTS`, `code_literals()`, `lit_streams()`; branch `lit-slots`; experiments `47b0a78`, `110fa61` on `lit-pricing`; #301. Now: current. Untried: 16 KiB blocks (the slots do not fit); gcc in the VM.
 - 2026-10-31 **not kept** [A page's most frequent literals moved to a fixed table's shortest codes](#a-pages-most-frequent-literals-moved-to-a-fixed-tables-shortest-codes-115-fewer-bytes-at-level-2-writes-19-µs-slower-on-the-a76-not-kept): literal code 9, a fixed table with up to 3 of the page's most frequent bytes moved to its shortest codes, 2 to 4 header bytes. Ten samples: level 2 -11.28 bytes per page (-1.15%), level 3 -2.78; level 2 compress +11.5% instructions. Kernel VM, clang, four samples: level 2 -9.7 bytes for +0.69 µs per page written, 14 bytes per µs against the hull's 26. Mi 9T p3, two copies each: level 2 writes +1.92 µs A76, +6.40 µs A55, 6.9 and 2.0 bytes per µs against 17.9 and 6.1. The encoder would have to cost a third. Counting every 8th literal loses a third of the gain. Code: `swap_try()`, `read_swaps()`, `SEQLZ_LIT_SWAP`, commit `12b40bb`, branch `hot-swap`; #299. Now: current. Untried: tables trained with the moves; an encoder at a third of the cost.
 - 2026-10-31 **not built** [Level 2's literals coded without their copy](#level-2s-literals-coded-without-their-copy-into-the-matchers-table-at-most-03-of-a-write-not-built): the copy into the matcher's table before coding: x86-64 `memcpy`/`memmove` 0.15% of level 2's compression; Mi 9T all kernel `memcpy` 1.07% / 2.02% (A55 / A76), zram's own in it; by estimate at most 0.3% of a write. Coding in place overwrites raw literals not read yet (stream 7 starts at 7/8 of the coded size); coding into the table and copying the coded literals back saves a third of the copy. Code: `code_literals()`, #293. Now: current. The copy is gone since the same day's slots ([the slots](#the-literal-table-from-a-sample-the-streams-into-slots-level-2-writes-14-to-18-faster-on-the-mi-9t-for-05-bytes-per-page-kept-the-sample-before-the-pass-level-3-from-the-counts-and-four-counts-not-kept)).
 - 2026-10-31 **kept** [The literal coding thresholds per level](#the-literal-coding-thresholds-per-level-35-bytes-at-level-2-19-at-level-3-own-tables-from-32-33-and-49-bytes-per-page-less-kept): `SEQLZ_LIT_CODED_MIN` 35 at level 2, `SEQLZ_LIT_CODED_MIN_OWN` 19 at level 3 (both were 51), `OWN_SAVES_MIN` 32 (was 16). Ten samples: level 2 -3.27 bytes per page (-0.33%), level 3 -4.92 (-0.55%). Mi 9T p2, 4 rounds, two copies each: level 2 same on the A76, A55 writes +0.12 µs; level 3 writes -0.07 to -0.14 µs, warm reads +0.13 µs A76, +0.25 A55. Code: `code_literals()` and `own_code()` take the minimum; branch coding-thresholds. Now: current. Untried: the kernel VM for level 3; level 2 from 19 measured 31 Oct, -2.93 bytes against 35, not taken ([levels between 2 and 3](#levels-between-2-and-3-with-the-deltas-greedy-with-an-own-table-on-the-hull-in-the-vm-and-on-the-mi-9t-greedy-with-fixed-tables-2-to-8-bytes-above-it-not-built)).
@@ -6820,11 +6820,13 @@ literal before the pass, with an early exit where it says raw: the exact pass st
 block, since the header needs each stream's size, so k 2 to 3 add 1.7% to 3.4% instructions and k 4
 costs 5.3 bytes per page (every 4th literal is the same byte of each 4-byte field, as `pick_delta()`
 learned). The sample alone picks the table well: 0.06 to 0.14 bytes per page worse. So the kept form
-takes the table from every 5th literal, writes the 8 streams into slots in the matcher's state and
-takes the sizes from where they end, with no pass over every literal; a block the sample says stays
-raw by 8 bytes or more is left raw without writing them. That saves 1.6% of level 2's compress
-instructions for 0.51 bytes per page (a margin of 16: 0.6% for 0.30; without the exit it costs 6.8%,
-the streams of two thirds of the blocks written for nothing). On the Mi 9T, two copies each, level 2
+takes the table from a sample of the literals, writes the 8 streams into slots in the matcher's state
+and takes the sizes from where they end, with no pass over every literal; a block the sample says
+stays raw by 8 bytes or more is left raw without writing them. With every 5th literal that saves 1.6%
+of level 2's compress instructions for 0.51 bytes per page (a margin of 16: 0.6% for 0.30; without the
+exit it costs 6.8%, the streams of two thirds of the blocks written for nothing); the kept step is 7,
+2.0% for 0.67 bytes, and 11 or 13 cost more bytes per instruction saved. On the Mi 9T, two copies
+each, measured with every 5th, level 2
 writes 0.46 µs faster on the A55 (1.4%) and 0.21 µs on the A76 (1.8%), where two copies of `main`
 differ by 0.08 and 0.06; in the kernel VM 0.07 to 0.12 µs per page (1% to 1.6%) for 2.0 bytes of zram's
 memory, swap-ins the same. By the hull's slopes to the right of `seqlz-2`, 6.1 and 17.9 bytes per µs on
@@ -6833,7 +6835,7 @@ fixed-table bits from the counts, the exact stream sizes only where a fixed tabl
 instructions, the exact sizes are the same pass again. Four counts instead of two, as zstd's
 `HIST_count_parallel`: the same bytes, +0.75% instructions, and level 3 writes 0.15 µs slower on the
 A76 and 0.17 on the A55, reads the same. Kept: the slots, for 4 KiB blocks below level 3; the slots do
-not fit the state for 16 KiB blocks, and level 3 counts the bytes in the pass anyway.* Code:
+not fit the state for 16 KiB blocks, and level 3 counts the bytes in the pass anyway.* The phone cannot tell 5 from 7: 0.4% of the instructions is about 0.05 µs on the A76. Code:
 `LIT_SLOTS`, `LIT_SLOT()`, `LIT_SAMPLE_STEP`, `LIT_SAMPLE_MARGIN`, `code_literals()` and `lit_streams()`
 in `src/seqlz_compress_literals.c`, branch `lit-slots`; the forms not kept as `LIT_PRE_STEP`,
 `LIT_PRE_CHOICE`, `LIT_HIST_COST`, `LIT_HIST4` at `47b0a78` and the slots as a knob at `110fa61` on
@@ -6859,8 +6861,8 @@ no margin (`LIT_PRE_STEP`); the table from the sample with the exact pass kept (
 The streams into slots (`LIT_SLOTS`, the table from every 5th literal), against the same source with
 the slots off, whose `lit_streams()` reports its ends and so is not the same code as `main` (61 745
 instructions for the same bytes); level 3 only on blocks below 512 literals without deltas, within 0.06
-bytes and 0.3%. The kept code, margin 8, after its cleanup: 981.73 bytes, 61 133 instructions at
-level 2, 889.99 and 96 434 at level 3:
+bytes and 0.3%. The cleaned-up code with every 5th and the margin of 8: 981.73 bytes, 61 133 instructions
+at level 2, 889.99 and 96 434 at level 3:
 
 | | level 2 bytes | level 2 compress |
 | --- | ---: | ---: |
@@ -6870,6 +6872,22 @@ level 2, 889.99 and 96 434 at level 3:
 | margin 16 | +0.30 | -0.6% |
 | margin 32 | +0.19 | +0.5% |
 | margin 64 | +0.15 | +2.3% |
+
+The step, with the margin, on the cleaned-up code, against `main`:
+
+| step, margin | level 2 bytes | level 2 compress |
+| --- | ---: | ---: |
+| 5, 8 | +0.51 | -1.6% |
+| 7, 8, kept | +0.67 | -2.0% |
+| 11, 16 | +0.80 | -2.4% |
+| 11, 8 | +1.24 | -2.8% |
+| 11, 4 | +1.56 | -3.0% |
+| 13, 8 | +1.62 | -3.0% |
+
+From 5 to 7 and to 11 with the margin of 16, each step costs 0.13 to 0.16 bytes for 0.4% of the
+instructions, about 0.05 µs on the A76, worth 0.8 to 0.9 bytes by the hull's slopes; beyond that the
+coarser sample misjudges more blocks at the raw exit. 11 and 13 also leave fewer of the test suite's
+pages raw at level 3 than two tests expect; 7 passes them as they are.
 
 Level 3 from the counts (`LIT_HIST_COST`): 889.87 bytes, 99 747 instructions (+3.3%). Four counts
 (`LIT_HIST4`): 889.93 bytes, 97 269 (+0.75%).
