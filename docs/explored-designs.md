@@ -305,6 +305,7 @@ One line per entry, by area, newest first: date measured, verdict, link, result,
 
 **Matcher**
 
+- 2026-10-31 **kept** [Fewer instructions per sequence in encode_seq()](#fewer-instructions-per-sequence-in-encode_seq-14-to-59-fewer-instructions-per-write-the-a55-writes-025-to-042-µs-faster-the-same-bytes-kept): the literal copy with one test of the block's end, the escape's code in a branch, class 0's offset shifted by 15 instead of masked, raw bits and shift from one 8-entry table. Same bytes. Level 1 compress instructions: clang 9 arm64 -3.8%, clang 21 arm64 -2.8%, gcc x86-64 -2.9%, clang 22 x86-64 -5.9%, 6 to 16 per sequence; level 3 -1.4% to -3.0%. Mi 9T p3, two copies each: A55 writes -0.42 / -0.29 / -0.25 µs at levels 1 / 2 / 3 (`main`'s copies within 0.01 / 0.23 / 0.13), A76 -0.03 / -0.02 / -0.12. The copy alone: clang 9 -1.7%, gcc +0.3%, clang 22 +1.0%. Code: `encode_seq()`, `enc_class[]`, `ENC_SHIFT()` in `src/seqlz_encoder.h`; #304. Now: current. Untried: the kernel VM; the token index from one table (issue's idea); the flush.
 - 2026-10-31 **not kept** [One copy of the repeat offset](#one-copy-of-the-repeat-offset-in-the-matcher-and-the-encoder-2-to-3-faster-with-gcc-on-x86-64-14-slower-writes-on-the-mi-9t-not-kept): the matcher's `last` and `back` and the encoder's `e->last` hold one value. x86-64 gcc, ten samples: without `back` or without `last` +2.3% to +4.6% instructions at levels 1 and 2, no fewer cycles; the matcher reading `e->last` +2.7% to +3.2% instructions, -1.7% to -3.4% cycles. Mi 9T p2, two copies each: level 2 writes +0.17 µs A76 (+1.4%), +0.20 A55; level 3 and reads the same. Code: not committed, #292. Now: current. Untried: the kernel VM; the previous offset as an argument of `encode_seq()`.
 - 2026-10-28 **not kept** [Hash with a 40-bit mask and a 64-bit multiplier](#the-matchers-hash-with-a-40-bit-mask-and-a-64-bit-multiplier-better-avalanche-001-to-002-more-memory-not-kept): every input bit reaches every hash bit, mean bias of single bit flips 0.277 to 0.258; 0.01% to 0.02% more zsmalloc cost at every level on the ten samples, not timed. Code: `seqlz_hash5()` in src/seqlz_match.h, the variant not committed. Now: current.
 - 2026-10-15 **kept** [Matcher without its step back, levels 1 and 2](#the-matcher-without-its-step-back-writes-66-faster-on-the-a76-and-1-to-2-in-the-vm-kept): Mi 9T zram, p3: seqlz-2 writes 0.8 µs (6.6%) faster on A76, 3% on A55, reads same. Kernel VM writes 1.0% to 2.3% faster; pages 1.6 bytes smaller to 3.7 larger; seqlz-1 up to 15 bytes (1.3%) larger. Code: seqlz_match_page() in src/page_lz.h; PR #213 (commit 474c552). Now: current for levels 1 and 2; level 3 keeps the step back ("Level 3, a lazy matcher").
@@ -3093,7 +3094,7 @@ whether the glue's prefetch comes early enough in the phone's kernel.
 
 ## Write time on the Mi 9T by part, and where zram runs there: level 1's gap to `lz4` is the encoder's arithmetic, 96% of the writes on the A76
 
-Status: measurement, 2026-10-19. Now: current.
+Status: measurement, 2026-10-19. Now: current. The encoder's arithmetic got 6 to 16 instructions shorter per sequence on 31 Oct, [fewer instructions in encode_seq()](#fewer-instructions-per-sequence-in-encode_seq-14-to-59-fewer-instructions-per-write-the-a55-writes-025-to-042-µs-faster-the-same-bytes-kept): the A55 writes 0.25 to 0.42 µs faster, the A76 within its spread.
 
 *Where do the levels lose write time against `lz4` on the Mi 9T, and on which cores does zram run?
 Harness, p3, µs per page written, A55 / A76: `lz4` 16.9 / 7.63, `seqlz-1` 23.4 / 8.21, `seqlz-2` 27.2 /
@@ -8035,6 +8036,76 @@ VARIANTS="pre=<a checkout of 96a63d7> same=." LLVM=1 BOOTS=3 MODE=swap \
     ALGOS=seqlz-1,seqlz-2,seqlz-3,pre-1,pre-2,pre-3,same-2,same-3 \
     tools/zram-vm/run.sh <linux tree> ~/seqlz-corpus/phone-dump/p3-sample20000 >p3.log
 tools/zram-vm/variants.py p3.log
+```
+
+## Fewer instructions per sequence in encode_seq(): 1.4% to 5.9% fewer instructions per write, the A55 writes 0.25 to 0.42 µs faster, the same bytes, kept
+
+Status: kept, 2026-10-31. Now: current.
+
+*Level 1's write on the A76 was 8.2 µs against `lz4`'s 7.6, and the encoder about 65 to 74 instructions
+per sequence against a floor of 25 to 30 (#304). Read in clang 9's arm64 code, the common sequence,
+without length values and with at most 16 literals, took 78: the fit check 4, the literals 18, class,
+token, code, offset bits and the put 47, the flush and the repeat offset 9. Four changes, all with
+the same bytes. The literal copy tests once whether the block has 16 bytes after the literals, and
+copies in chunks of 16, instead of three tests around the first chunk: 18 instructions down to 11. The
+escape's code is built in a branch of its own, not selected on every sequence; gcc keeps the branch,
+both clangs make it selects again. Class 0's offset is shifted by 15 instead of masked with a test of
+the class: an offset is below 1 << 15. And the class's raw bits and shift come from one 8-entry table
+instead of two constants of nibbles, which every compiler built again for each sequence. Level 1
+compresses with 3.8% fewer instructions with clang 9 for arm64, 2.8% with clang 21, 2.9% with gcc 16 for
+x86-64 and 5.9% with clang 22, 6 to 16 per sequence; level 3 with 1.4% to 3.0% fewer. On the Mi 9T,
+two copies of each, the in-order A55 writes 0.42 µs faster at level 1 (1.5%), 0.29 at level 2 and 0.25
+at level 3, where two copies of `main` differ by 0.01, 0.23 and 0.13; the A76 hides them at levels 1 and
+2, 0.12 µs at level 3. Reads are the same code. Kept: the same bytes in less time, and nowhere more
+instructions. The literal copy alone is compiler-dependent: -1.7% with clang 9, -0.2% with clang 21,
++0.3% with gcc and +1.0% with clang 22 at level 1; with the other three, every compiler is below `main`.*
+Code: `encode_seq()`, `token_escape()`, `ENC_SHIFT()`, `enc_class[]` in `src/seqlz_encoder.h`; branch
+`encode-seq`; #304.
+
+**Instructions per page**, compress, `seqlz-worst --level N count`. arm64: the codec built with NDK r21e's
+clang 9 at `-O3`, the phone module's compiler, and with NDK r30's clang 21, the harness with r30, run on
+the Mi 9T's A76 on the 20 000 pages of p3. x86-64: gcc 16.2.1 (the CMake build) and clang 22.1.8, the ten
+samples. `main` is `fbbb396`; each row adds a change to the one before:
+
+| | arm64 clang 9, L1 | arm64 clang 21, L1 | x86-64 gcc, L1 | x86-64 clang, L1 |
+| --- | ---: | ---: | ---: | ---: |
+| `main` | 38 930 | 37 795 | 53 417 | 45 664 |
+| the literal copy | 38 280 | 37 720 | 53 598 | 46 106 |
+| the escape in a branch | 38 280 | 37 720 | 52 557 | 46 106 |
+| class 0 shifted by 15 | 37 952 | 37 392 | 51 865 | 45 420 |
+| the class table, kept | 37 460 (-3.8%) | 36 737 (-2.8%) | 51 878 (-2.9%) | 42 973 (-5.9%) |
+| `main`, level 3 | 78 963 | 78 742 | 96 420 | 94 384 |
+| kept, level 3 | 77 384 (-2.0%) | 77 603 (-1.4%) | 93 572 (-3.0%) | 92 982 (-1.5%) |
+
+Level 2 with clang 9: 44 528 to 43 058 (-3.3%). The bytes are the same as `main`'s at every level: the
+same sizes on the ten samples, and `test/seqlz_endian.c`'s hash `9cbb428df30dbfbc` over its 600 pages,
+64- and 32-bit. Sequences per page at level 1 on p3: 166.8.
+
+**The Mi 9T**, zram in its kernel, `tools/zram-phone/run.sh` with `BUS=1`, `COOL=45`, 4 rounds, the 19 775
+pages of p3, NDK r21e's clang 9, the A55 at 1.80 GHz and the A76 at 2.21 GHz, two copies of each module.
+Write / warm read / cold read in µs, the mean of the two copies:
+
+| | A55, `main` | A55, kept | A76, `main` | A76, kept |
+| --- | --- | --- | --- | --- |
+| level 1 | 28.08 / 11.51 / 29.57 | 27.66 / 11.53 / 28.98 | 10.45 / 4.04 / 7.38 | 10.43 / 3.94 / 7.66 |
+| level 2 | 31.11 / 13.15 / 33.48 | 30.82 / 13.17 / 32.99 | 11.43 / 4.74 / 8.52 | 11.42 / 4.61 / 8.58 |
+| level 3 | 48.58 / 15.99 / 39.40 | 48.33 / 15.96 / 38.74 | 18.30 / 5.99 / 10.18 | 18.18 / 5.89 / 9.94 |
+
+The two copies of `main` differ in writes by 0.01 / 0.23 / 0.13 µs on the A55 and 0.08 / 0.10 / 0.07 on
+the A76, levels 1 / 2 / 3; cold reads move by up to 0.66 µs between two copies of the same code.
+
+Not measured: the kernel VM; the Pixel 9a. Tried before and not built again: a second pass, a byte format
+and three offset classes (research log of 19 Oct, R19, R22).
+
+```sh
+# arm64 instructions: the codec with clang 9, the harness with r30, static, on the phone as root
+for f in src/seqlz_*.c t.c; do $NDK21/.../aarch64-linux-android30-clang -O3 -std=gnu11 -Isrc -c $f; done
+$NDK30/.../aarch64-linux-android30-clang -O2 -std=gnu11 -Isrc -c tools/seqlz-worst/worst.c
+$NDK30/.../aarch64-linux-android30-clang -static -o worst *.o -lm
+adb shell su -c 'taskset 80 ./worst --level 1 count p3.pages'
+tools/zram-phone/build.sh ea <src/> out/ea; ...
+BUS=1 COOL=45 ROUNDS=4 CODECS="seqlz-m2a-1 seqlz-m2b-1 seqlz-ea-1 seqlz-eb-1 ..." tools/zram-phone/run.sh \
+    ~/seqlz-corpus/phone-dump/p3-sample20000.pages out/run out/m2a/seqlz_m2a.ko ...
 ```
 
 ## The matcher's first candidate as a constant instead of a load from the cleared table: levels 1 and 2 write 2% slower with clang, not kept

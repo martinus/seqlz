@@ -66,6 +66,27 @@ static_assert(SEQLZ_HEADER + SEQLZ_BLOCK_SIZE + ENC_BITSTREAM_MAX + ENC_ROOM <=
 		      SEQLZ_COMPRESS_BOUND,
 	      "two blocks are always room enough");
 
+/*
+ * SEQLZ_OFF_SHIFT(), but 15 for class 0: an offset is below 1 << 15, so its
+ * shifted bits are 0 there, as class 0 sends none, without a test of the class
+ */
+#define ENC_SHIFT(cls) (((SEQLZ_SHIFT_NIBBLES | 15U) >> (4U * (cls))) & 15U)
+static_assert(SEQLZ_BLOCK_SIZE <= 1U << 15 && SEQLZ_OFF_SHIFT(0) == 0U,
+	      "class 0's offset shifted by 15 is 0");
+/*
+ * Per offset class its SEQLZ_RAW_BITS() in the low nibble and its ENC_SHIFT()
+ * in the high one: one load. From the two constants of SEQLZ_RAW_NIBBLES and
+ * SEQLZ_SHIFT_NIBBLES the compiler built both for every sequence.
+ */
+static const u8 enc_class[8] = {
+	SEQLZ_RAW_BITS(0) | ENC_SHIFT(0) << 4,
+	SEQLZ_RAW_BITS(1) | ENC_SHIFT(1) << 4,
+	SEQLZ_RAW_BITS(2) | ENC_SHIFT(2) << 4,
+	SEQLZ_RAW_BITS(3) | ENC_SHIFT(3) << 4,
+	SEQLZ_RAW_BITS(4) | ENC_SHIFT(4) << 4,
+	SEQLZ_RAW_BITS(5) | ENC_SHIFT(5) << 4,
+};
+
 struct seqlz_encoder {
 	u64 acc; /* the bits not yet written, the newest in the low bits */
 	unsigned int cnt; /* how many bits of acc count */
@@ -131,18 +152,13 @@ static __always_inline void put_len_value(struct seqlz_encoder *e,
 }
 
 /*
- * The code of a token and its length. A token without a code, whose enc[] entry
- * is 0, is the escape's code followed by the token in SEQLZ_ESCAPE_BITS bits.
+ * The code of a token without a code of its own, whose enc[] entry is 0: the
+ * escape's code followed by the token in SEQLZ_ESCAPE_BITS bits, and its length
  */
-static __always_inline u32 token_code(unsigned int tok, unsigned int *len)
+static __always_inline u32 token_escape(unsigned int tok, unsigned int *len)
 {
-	u32 te = seqlz_tables.token.enc[tok], ee;
+	u32 ee = seqlz_tables.token.enc[SEQLZ_ESCAPE];
 
-	if (te != 0) {
-		*len = te >> TOK_ENC_LEN_AT;
-		return te & TOK_ENC_CODE_MASK;
-	}
-	ee = seqlz_tables.token.enc[SEQLZ_ESCAPE];
 	*len = (ee >> TOK_ENC_LEN_AT) + SEQLZ_ESCAPE_BITS;
 	return (ee & TOK_ENC_CODE_MASK) << SEQLZ_ESCAPE_BITS | tok;
 }
@@ -158,7 +174,7 @@ static __always_inline void encode_seq(struct seqlz_encoder *e, const u8 *in,
 				       unsigned int ll, unsigned int ml,
 				       unsigned int off, bool rec)
 {
-	unsigned int k = 0, tlen, raw_bits, cls;
+	unsigned int k = 0, tlen, raw_bits, cls, tok, te, cinfo;
 	unsigned int n_rec = rec && e->rec && ll ? LIT_REC : 0;
 	u32 code;
 
@@ -179,18 +195,23 @@ static __always_inline void encode_seq(struct seqlz_encoder *e, const u8 *in,
 	if (rec)
 		e->pos += ll + ml;
 	/*
-	 * The literals, 16 bytes at a time as long as the input has 16 bytes
-	 * more; dst has room for what goes past ll. The first 16 bytes without
-	 * a loop, which could mispredict.
+	 * The literals, 16 bytes at a time; dst has room for what goes past
+	 * ll. Where the block has 16 bytes more after them, which is almost
+	 * always, one test, and the first 16 bytes before it, which could
+	 * mispredict as a loop. Near the block's end only whole chunks of 16
+	 * inside the literals, then the rest byte by byte.
 	 */
-	if ((unsigned int)(e->src_end - in) >= 16U) {
-		__builtin_memcpy(e->lit, in, 16);
-		k = 16;
+	if ((unsigned int)(e->src_end - in) >= ll + 16U) {
+		do {
+			__builtin_memcpy(e->lit + k, in + k, 16);
+			k += 16;
+		} while (k < ll);
+	} else {
+		for (; k + 16U <= ll; k += 16)
+			__builtin_memcpy(e->lit + k, in + k, 16);
+		for (; k < ll; k++)
+			e->lit[k] = in[k];
 	}
-	for (; k < ll && (unsigned int)(e->src_end - in) >= k + 16U; k += 16)
-		__builtin_memcpy(e->lit + k, in + k, 16);
-	for (; k < ll; k++)
-		e->lit[k] = in[k];
 	e->lit += ll;
 
 	/*
@@ -201,15 +222,25 @@ static __always_inline void encode_seq(struct seqlz_encoder *e, const u8 *in,
 		return;
 	/* token and offset in one put, the length values after them */
 	cls = seqlz_off_class(off, e->last, &raw_bits);
-	code = token_code(seqlz_token(ll, ml, cls), &tlen);
+	cinfo = enc_class[cls & 7U];
+	/* the same bits, from enc_class[]: its constant is then not built */
+	raw_bits = cinfo & 15U;
+	tok = seqlz_token(ll, ml, cls);
+	te = seqlz_tables.token.enc[tok];
+	/* gcc keeps this a branch, which predicts: 6% of the tokens escape */
+	if (te) {
+		code = te & TOK_ENC_CODE_MASK;
+		tlen = te >> TOK_ENC_LEN_AT;
+	} else {
+		code = token_escape(tok, &tlen);
+	}
 	/*
 	 * The offset's bits right after the token's code: classes 1 to 5 send
-	 * off >> SEQLZ_OFF_SHIFT(cls) in raw_bits bits. Class 0 sends none, so
-	 * there off is masked to 0.
+	 * off >> SEQLZ_OFF_SHIFT(cls), which is below 1 << raw_bits, in
+	 * raw_bits bits. Class 0 sends none, ENC_SHIFT() shifts its offset to
+	 * 0.
 	 */
-	enc_put(e,
-		(u64)code << raw_bits |
-			((off >> SEQLZ_OFF_SHIFT(cls)) & (0U - (cls != 0))),
+	enc_put(e, (u64)code << raw_bits | off >> (cinfo >> 4),
 		tlen + raw_bits);
 	if (ll >= SEQLZ_LL_CAP) {
 		put_len_value(e, &seqlz_tables.ll, ll - SEQLZ_LL_CAP);
