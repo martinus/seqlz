@@ -322,7 +322,8 @@ One line per entry, by area, newest first: date measured, verdict, link, result,
 
 **Decoder**
 
-- 2026-10-31 **measurement** [Branch misses per read on the Mi 9T](#branch-misses-per-read-on-the-mi-9t-levels-1-and-2-miss-4-to-15-more-than-lz4-per-page-level-3-33-to-79-more-half-of-it-the-deltas): one decode per page seen once, the same 18 863 pages of p3, misses more than `lz4` (85.6 A76, 100.1 A55, 104.1 Ryzen): `seqlz-1` +4.0 / +7.0 / +3.0, `seqlz-2` +4.4 / +14.8 / +3.5, `seqlz-3` +32.6 / +79.4 / +31.3. The decoder variants killed on x86-64 need not run on the phone: levels 1 and 2 are below #303's 30. Level 3's excess is half the deltas: without them -50.6 / -92.2 misses on the 36% of pages that get them, in `undelta_literals()`' loops on the slow path, any `dt` alike. Code: `misses.c` in the research tools, on `bench/kernel_codecs/`; #303. Now: current. Untried: `undelta_literals()` in whole words past the literals or chunks of 16 (up to 0.1 µs per read at level 3 on the A76), #312.
+- 2026-10-31 **kept** [The deltas undone 16 bytes at a time, their distance once per block](#the-deltas-undone-16-bytes-at-a-time-their-distance-picked-once-per-block-22-to-30-fewer-branch-misses-per-page-with-deltas-level-3s-warm-reads-006-to-010-µs-faster-on-the-mi-9t-kept): `undelta16()` up to 15 bytes past the literals where the block has room, the distance of `dt` 1 and 2 picked once per block. Mi 9T p3, NDK r30 clang 21, misses per page with deltas more than without: 49.5 to 27.2 on the A76, 91.6 to 61.4 on the A55, -277 instructions per page; zramphone, clang 9, two copies: level 3 warm reads -0.06 to -0.10 µs A76, -0.08 A55, cold reads and writes within the copies. Always 4 bytes at a time: +1 000 instructions, not kept. Code: `undelta16()`, `undelta_literals()`, `delta_fixed`, `src/seqlz_decompress.c`; #312. Now: current. Untried: the kernel VM; the rest of the excess, 27 misses per page on the A76 and 61 on the A55.
+- 2026-10-31 **measurement** [Branch misses per read on the Mi 9T](#branch-misses-per-read-on-the-mi-9t-levels-1-and-2-miss-4-to-15-more-than-lz4-per-page-level-3-33-to-79-more-half-of-it-the-deltas): one decode per page seen once, the same 18 863 pages of p3, misses more than `lz4` (85.6 A76, 100.1 A55, 104.1 Ryzen): `seqlz-1` +4.0 / +7.0 / +3.0, `seqlz-2` +4.4 / +14.8 / +3.5, `seqlz-3` +32.6 / +79.4 / +31.3. The decoder variants killed on x86-64 need not run on the phone: levels 1 and 2 are below #303's 30. Level 3's excess is half the deltas: without them -50.6 / -92.2 misses on the 36% of pages that get them, in `undelta_literals()`' loops on the slow path, any `dt` alike. Code: `misses.c` in the research tools, on `bench/kernel_codecs/`; #303. Now: 'The deltas undone 16 bytes at a time' takes 22 of the 50.6 on the A76 and 30 of the 92.2 on the A55 (#312).
 - 2026-10-31 **not kept** [The own literal table's parse and fill made faster](#the-own-literal-tables-parse-and-fill-made-faster-little-left-without-a-format-change-the-fill-8-of-a-build-with-gcc-and-1-with-clang-not-kept): x86-64 warm, a build 2 227 cycles, the parse 1 587 of them, 84 serial steps, misses at runs alone; `count[]` out of memory -45 cycles. `own_fill()` with a constant store count per length, same tables: gcc -O3 -8% cycles, clang -O3 -1% and +3.7 misses; the phone builds with clang. Code: harness and variants not committed, #291. Now: current. Untried: the phone; a format with a cheaper description.
 - 2026-10-31 **kept** [The own literal table's lookup tables prefetched](#the-own-literal-tables-lookup-tables-prefetched-before-its-parse-level-3s-cold-reads-055-µs-faster-on-the-a55-kept): `read_own_table()` is 2.91% of the A76's kernel cycles in a level-3 zram run, about 4.3 µs per build against 1.7 warm. Prefetching `seqlz_tables.own.quad[]` and `decode[]` first: Mi 9T p2, two runs, level 3 cold reads -0.55 µs on the A55 (both copies below both of `main`), A76 -0.24 µs within its copies' 0.47; same bytes. A prefetch for writing of the table's place in the output page: nothing more. Code: `read_lit_header()` in src/seqlz_decompress_literals.c; branch own-table-prefetch, #291. Now: current; a faster parse and fill [not kept](#the-own-literal-tables-parse-and-fill-made-faster-little-left-without-a-format-change-the-fill-8-of-a-build-with-gcc-and-1-with-clang-not-kept). Untried: the kernel VM.
 - 2026-10-19 **not kept** [Decoder with the page prefetched on the Mi 9T, byte tokens](#the-decoder-with-the-page-prefetched-on-the-mi-9t-seqlz-1-075-µs-slower-than-lz4-on-the-a55-not-41-byte-tokens-from-a-trained-table-not-kept): p3, kernel flags, µs per page A55 / A76 with each page prefetched as zram's glue does: seqlz-1 7.35 / 2.84, lz4 6.60 / 2.63; streamed without the prefetch seqlz-1 11.55 on the A55 (two input streams). Entropy coding of tokens and offsets buys 266 bytes per page for 1.4 / 0.4 µs. Byte tokens from a trained 255-entry table in lz4's decoder: 179 of the 266 bytes for 1.0 µs on the A55, slower than seqlz-1 on the A76; per-page fixed-width palettes, an own byte decoder and three streams slower. Code: offline, ~/seqlz-corpus/research/2026-10-17-tools/research/. Now: current. Untried: the byte formats in zram; why lz4 gains 0.9 µs from the prefetch on the A55.
@@ -1183,7 +1184,7 @@ tools/seqlz-branches/run.sh <build dir with SEQLZ_KERNEL_TREE> <pages file>
 
 ## Branch misses per read on the Mi 9T: levels 1 and 2 miss 4 to 15 more than lz4 per page, level 3 33 to 79 more, half of it the deltas
 
-Status: measurement, 2026-10-31. Now: current.
+Status: measurement, 2026-10-31. Now: 'The deltas undone 16 bytes at a time' (#312) takes 22 of the deltas' 49.5 misses per page with deltas on the A76 and 30 of 91.6 on the A55.
 
 *On x86-64 a page decoded once mispredicted 130 branches (7 Oct), and the decoder variants against it
 were measured on x86-64 and in the VM only, each entry ending with the phones untried (#303). Counted now
@@ -1198,7 +1199,7 @@ them on the A76 and 92.2 less on the A55, the same on the others. A profile of t
 puts the deltas' share in `undelta_literals()` on the slow path, the exits of its word loops and its
 byte loop, whose trip counts are each sequence's literals; `dt` 3, whose distance changes per
 sequence, misses no more than 1 and 2: whole words past the literals, as `undelta_fast()` writes them,
-or chunks of 16, could save up to 0.1 µs per read at level 3 on the A76, not built (#312).* Code: the counter `misses.c` in
+or chunks of 16, could save up to 0.1 µs per read at level 3 on the A76 (#312).* Code: the counter `misses.c` in
 `~/seqlz-corpus/research/2026-10-31-tools/`, on the kernel codecs of `bench/kernel_codecs/`; level 3
 without deltas a patch of `compress_own()`, not committed; #303.
 
@@ -1245,6 +1246,61 @@ cmake --build build-android --target seqlz_kernel_lz4 seqlz_kernel_seqlz seqlz_k
 $NDK/.../aarch64-linux-android30-clang -O2 -Isrc -Ibench/kernel_codecs misses.c build-android/*.a -static
 adb shell su -c 'taskset 80 ./misses p3.pages'                      # PERPAGE=1 for every page
 ```
+
+## The deltas undone 16 bytes at a time, their distance picked once per block: 22 to 30 fewer branch misses per page with deltas, level 3's warm reads 0.06 to 0.10 µs faster on the Mi 9T, kept
+
+Status: kept, 2026-10-31. Now: current.
+
+*Level 3 mispredicted 49.5 branches more on the A76 and 91.6 more on the A55 on each page with deltas
+than on the same page without them ([Branch misses per read on the Mi 9T](#branch-misses-per-read-on-the-mi-9t-levels-1-and-2-miss-4-to-15-more-than-lz4-per-page-level-3-33-to-79-more-half-of-it-the-deltas), #312).
+`undelta_literals()` undid the deltas in a loop of words and then a loop of bytes, both with trip
+counts that change from sequence to sequence, and `delta_dist()` picked the distance from the block's
+delta field in every sequence. Now the deltas go 16 bytes at a time, `undelta16()`, as
+`copy_literals()` copies them: where the block has room, the last step goes up to 15 bytes past the
+literals, which the match and the sequences after them write again, so a run of up to 16 literals is
+one step and has no tail; without the room, the tail goes byte by byte. The distance of `dt` 1 and 2
+is picked once per block. On the 7 406 pages of p3 with deltas that leaves 27.2 misses more than
+without deltas on the A76 and 61.4 on the A55, 22 and 30 fewer, and 277 fewer instructions per page.
+In the phone's kernel, level 3's warm reads are 0.06 to 0.10 µs faster on the A76 and 0.08 µs on the
+A55, against 0.01 to 0.03 µs between the two copies of `main`; cold reads, writes and level 2 move
+within the copies. Kept by Martin, as the misses fall on both cores and the code is 9 lines longer,
+328 bytes of text with clang 9. Always 4 bytes at a time, without the branch between 4 and 8, costs
+1 000 instructions per page and 1.5% to 3% of the decode cycles: not kept. Half the excess on the A76
+and two thirds on the A55 are still there.* Code: `undelta16()`, `undelta_literals()`, `delta_fixed`
+in `decode_block()`, `src/seqlz_decompress.c`; test "the deltas of literals that end near the page's
+end are undone, and no byte past it is written"; branch undelta-misses; #312.
+
+**Setup.** Branch misses: `misses.c` of the [entry above](#branch-misses-per-read-on-the-mi-9t-levels-1-and-2-miss-4-to-15-more-than-lz4-per-page-level-3-33-to-79-more-half-of-it-the-deltas),
+p3, one decompression per page, the kernel codecs built with NDK r30's clang 21, the Mi 9T's A76 (cpu7)
+and A55 (cpu2). Two runs per build agree within 0.7 misses. Without deltas: level 3 with the deltas
+switched off in `compress_own()`, not committed. Reads and writes: `tools/zram-phone/run.sh` with
+`BUS=1 COOL=45 ROUNDS=4`, p3, modules of NDK r21e's clang 9 at -O3, two copies of each build. x86-64:
+gcc 16.2.1, Ryzen 9 7950X.
+
+| misses per page with deltas, more than without | A76 | A55 |
+| --- | ---: | ---: |
+| `main` | 49.5 | 91.6 |
+| 16 bytes at a time | 31.1 | 71.2 |
+| and the distance once per block (kept) | 27.2 | 61.4 |
+
+These are from a run that prints every page, which adds misses to every row alike. Without printing,
+over the 19 549 pages of p3 that level 3 compresses below 3625 bytes: misses 120.5 to 112.8 on the
+A76, 179.3 to 164.9 on the A55; instructions 22 969 to 22 692; A76 cycles 9 504 to 9 389, the A55's
+within their spread. Always 4 bytes at a time: 111.7 and 163.0 misses, 23 706 instructions, A76 cycles
+9 635. On the Ryzen, with level 2's pages too: level 3 136.6 to 128.7 misses, 30 221 to 30 461
+instructions, 9 352 to 9 281 cycles; level 2 106.2 to 106.4.
+
+Mi 9T, µs per page, the two copies of each build:
+
+| level 3 | A76 write | A76 warm | A76 cold | A55 write | A55 warm | A55 cold |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| `main` | 18.32 / 18.24 | 5.91 / 5.90 | 10.04 / 10.09 | 48.54 / 48.45 | 15.95 / 15.92 | 39.31 / 38.94 |
+| 16 bytes at a time | 18.30 / 18.34 | 5.86 / 5.84 | 10.08 / 10.18 | 48.47 / 48.56 | 15.92 / 15.87 | 39.48 / 39.48 |
+| kept | 18.27 / 18.32 | 5.78 / 5.84 | 10.08 / 10.21 | 48.42 / 48.70 | 15.84 / 15.86 | 39.43 / 38.77 |
+
+Level 2, A76 warm: `main` 4.66 / 4.56, kept 4.66 / 4.65; A55 warm 13.14 / 13.15 and 13.16 / 13.16.
+
+Not measured: the kernel VM, other dumps on the phone, where the rest of the excess goes.
 
 ## The refill without its branch, every second fast sequence: 63 ns less per swap-in on x86-64 and the A76, kept
 
