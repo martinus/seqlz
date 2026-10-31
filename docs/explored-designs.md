@@ -283,6 +283,7 @@ One line per entry, by area, newest first: date measured, verdict, link, result,
 
 **Literals**
 
+- 2026-10-31 **not built** [Level 2's literals coded without their copy](#level-2s-literals-coded-without-their-copy-into-the-matchers-table-at-most-03-of-a-write-not-built): the copy into the matcher's table before coding: x86-64 `memcpy`/`memmove` 0.15% of level 2's compression; Mi 9T all kernel `memcpy` 1.07% / 2.02% (A55 / A76), zram's own in it; by estimate at most 0.3% of a write. Coding in place overwrites raw literals not read yet (stream 7 starts at 7/8 of the coded size); coding into the table and copying the coded literals back saves a third of the copy. Code: `code_literals()`, #293. Now: current.
 - 2026-10-31 **kept** [The literal coding thresholds per level](#the-literal-coding-thresholds-per-level-35-bytes-at-level-2-19-at-level-3-own-tables-from-32-33-and-49-bytes-per-page-less-kept): `SEQLZ_LIT_CODED_MIN` 35 at level 2, `SEQLZ_LIT_CODED_MIN_OWN` 19 at level 3 (both were 51), `OWN_SAVES_MIN` 32 (was 16). Ten samples: level 2 -3.27 bytes per page (-0.33%), level 3 -4.92 (-0.55%). Mi 9T p2, 4 rounds, two copies each: level 2 same on the A76, A55 writes +0.12 µs; level 3 writes -0.07 to -0.14 µs, warm reads +0.13 µs A76, +0.25 A55. Code: `code_literals()` and `own_code()` take the minimum; branch coding-thresholds. Now: current. Untried: the kernel VM; level 2 from 19 on the phone (-6.20 bytes offline).
 - 2026-10-21 **not kept** [Literals by byte lane, formats 1 to 4](#literals-by-byte-lane-formats-1-to-4-40-to-61-fewer-bytes-than-seqlz-3-on-phone-pages-reads-27-to-77-slower-on-the-a76-not-kept): level 3's parse; bound on the phone: one trained table by the byte 8 before -74 bytes per page (8.9% of seqlz-3), mixes -121 to -157 (14.7% to 18.9%); the high bytes of 4-byte fields, a distribution per page and lane. Formats by lane with the fixed tables, a XOR and swapped bytes per lane: phone -4.0% to -6.1%, desktop -1.2% to -2.0%; reads +27% to +77% on the A76, +34% to +100% on the A55. As zram's second codec (format 3): 896.3 / 816.9 bytes per page against zstd 3's 911.4 / 820.9 in 24.5 / 22.0 µs against 25.8 / 24.5 (A76, p3 / 4 Oct). Without its XORs format 3 is seqlz-3's size. Code: not committed; ~/seqlz-corpus/research/2026-10-21-tools/. Now: its XOR without lanes is level 3 ([the XOR](#level-3-xors-its-literals-with-an-earlier-byte-of-the-page-38-fewer-bytes-than-seqlz-3-of-15-october-kept)). Untried: 16 KiB pages; recompression from the compressed page (needs zram).
 - 2026-10-19 **measurement** [Where the bytes of a phone page go](#where-the-bytes-of-a-phone-page-go-literals-are-two-thirds-of-seqlz-2s-a-context-modelling-coder-14-under-zstd-3-measured-offline): seqlz-2's parse, p3: 906.6 bytes per page, literals 69% (coded 316, raw 310), tokens 18%, offset bits 11%. Ten samples, zsmalloc cost: lz4 1368, seqlz-1 1074, seqlz-2 984, seqlz-3 940, zstd 3 936, zstd 19 851, LZMA with a 4 KiB dictionary 807 (14% under zstd 3). Literals about 6 bits per byte order 0 per page, short gaps and long runs alike; fixed-width palettes per page +5% on tokens, +2.5% on literals; a zero mask is worse. Code: offline, ~/seqlz-corpus/research/2026-10-17-tools/. Now: current; lane, order 1 and pointer models of the literals measured 21 Oct ([literals by byte lane](#literals-by-byte-lane-formats-1-to-4-40-to-61-fewer-bytes-than-seqlz-3-on-phone-pages-reads-27-to-77-slower-on-the-a76-not-kept)). Untried: 16 KiB pages.
@@ -6780,6 +6781,29 @@ into, which breaks 10 test cases. The doctest of #129, every buffer size from 0 
 under ASan, and the roundtrip fuzz target, which compresses into one page, pass as they are.
 The book draws dst at every step of chapter 16's page, with both ends and the room check
 ([chapter 10, "Literals from the front, bits from the back"](https://martin.ankerl.com/seqlz/#ch-encoder--layout)).
+
+## Level 2's literals coded without their copy into the matcher's table: at most 0.3% of a write, not built
+
+Status: not built, 2026-10-31. Now: current.
+
+*At level 2 `code_literals()` copies the raw literals into the matcher's table, `spare`, once it is
+clear they get coded, and writes the coded ones from there over the raw ones in dst. Could the copy go?
+It is small: on x86-64 the calls to `memcpy()` and `memmove()`, this copy and the bitstream's move down
+behind the coded literals, are 0.15% of level 2's compression; on the Mi 9T every `memcpy()` of the
+kernel is 1.07% of the A55's cycles and 2.02% of the A76's at level 2, with zram's copy of each
+compressed page into zsmalloc in it, so this copy of a few hundred bytes on the pages with coded
+literals is a part of that, by estimate 0.3% of a write at most. And it is needed: the 8 streams start
+at their offsets in dst, stream 7 at about 7/8 of the coded literals' size, which is ahead of raw
+literals not read yet, so coding in place overwrites them. Coding into the matcher's table and copying
+the coded literals back, shorter than the raw ones, would save about a third of the copy. Not built.*
+Code: `code_literals()` in `src/seqlz_compress_literals.c`; issue #293.
+
+**Measured**: `perf record -e cycles:u` of `seqlz-bench-seqlz-2 --decode-loop 5 --compress` on p3,
+gcc 16.2.1 with the kernel's flags, Ryzen 9 7950X at 4.5 GHz: `compress_block` 82.0%, `seqlz_code_literals`
+13.2%, `__memmove_avx512_unaligned_erms`, which both calls reach, 0.15%. Mi 9T, `simpleperf record -e
+cpu-cycles:k` around one `zramphone` run at level 2, 20 000 pages of p2, each written 3 times and read 6
+times: `memcpy` 1.07% (A55) and 2.02% (A76) of the kernel's cycles, `seqlz_code_literals` 2.34% and
+2.92%; the other functions of the codec show as `$x`.
 
 ## The bitstream copied once, behind the literals raw or coded: writes up to 0.3 µs slower in the VM and 0.8 µs on the A55, not kept
 
