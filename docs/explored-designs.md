@@ -209,6 +209,7 @@ One line per entry, by area, newest first: date measured, verdict, link, result,
 
 **Level 3 and a literal table of the page's own**
 
+- 2026-10-31 **not kept** [Six more encoder changes for level 3](#six-more-encoder-changes-for-level-3-a-gate-before-the-pricing-more-inserts-a-second-lazy-step-seqlz_lazy_len-the-own-tables-estimate-8192-hash-slots-none-kept): ten samples against `7cf4faa`: an exact gate before the pricing 0 bytes, level 3 +0.32% instructions; more inserts after a match +0.25 to +4.89 bytes per page; a second lazy step -0.40 bytes, -0.25% instructions, but Mi 9T writes +0.15 µs A76, +0.36 A55; `SEQLZ_LAZY_LEN` 12 / 16 / 28 and the own table's estimate 0.8 to 1.7 bytes per 1% of instructions; 8192 hash slots -1.22 bytes at level 2 for 8 KiB per CPU. Code: patches of `seqlz_match.h`, `seqlz_compress_literals.c`, `SEQLZ_HASH_BITS`, not committed. Now: current.
 - 2026-10-31 **kept** [The deltas priced on every 11th literal](#the-deltas-priced-on-every-11th-literal-instead-of-every-5th-008-more-bytes-level-3-writes-25-and-31-faster-on-the-mi-9t-kept): `DELTA_STEP` 5 to 11, the header byte at least 1 bit. Ten samples, level 3: +0.69 bytes per page (+0.08%), -3.5% instructions per write (step 7 +0.19 / -1.9%, 9 +0.58 / -2.8%, 13 +0.92 / -4.0%; every literal -0.48 / +21.5%). Mi 9T p2, 4 rounds: level 3 writes -1.26 µs A55 (-2.5%), -0.59 µs A76 (-3.1%), `main` twice within 0.14; step 13 -1.56 / -0.63. A sequence with a multiple of 11 literals gets its delta priced on one literal; a test page with 11 did, now 12. Code: `DELTA_STEP`, `DELTA_HDR_BITS`, `pick_delta()`; branch delta-step. Now: current. Untried: the kernel VM; a step that changes per sequence.
 - 2026-10-24 **kept** [Level 3 without its second try of the plain literals](#level-3-without-its-second-try-of-the-plain-literals-071-bytes-per-page-more-writes-18-and-20-faster-on-the-mi-9t-kept): where the deltas stayed raw, the plain literals were priced again; that ran on 13% to 34% of the pages and coded 0.8% to 3.4% of them. Without it: zsmalloc +0.71 bytes per page (+0.079%, ten samples), level 3 compress -1.6% instructions; Mi 9T p3 writes -0.93 µs A55, -0.39 µs A76, about 2 bytes per µs on the A76. Code: `seqlz_code_own()`; branch kernel-cleanup-2. Now: current. Untried: the kernel VM.
 - 2026-10-21 **not kept** [More transforms, a parse that knows them, Huffman's floor, near matches](#more-transforms-for-level-3s-literals-a-parse-that-knows-them-huffmans-floor-near-matches-at-most-06-on-phone-pages-not-kept): ten samples, level 3 with the XOR 881.05 bytes per page; the same three bytes subtracted 873.62 (kept as deltas); other distances, XOR or subtraction at 1 to 64: at most 1.6 more; words with carries worse than bytes; Paeth or the gradient as a fourth choice -3.5 (phone -4.9, 0.6%); XOR or subtraction per page 0.7 even with the best known; a parse that knows the XOR -2.1 on phone samples; Huffman's floor 0.5 to 1.2; near matches at most 3.2 to 7.4. Code: not committed, `r15/` in the research tools. Now: current. Untried: timing Paeth or the gradient.
@@ -221,7 +222,7 @@ One line per entry, by area, newest first: date measured, verdict, link, result,
 - 2026-10-16 **not kept** [Level 3 matcher, three small changes](#level-3s-matcher-three-small-changes-none-faster-at-the-same-bytes-not-kept): x86-64 userspace, level 3 26 459 against level 2 18 498 cycles per page on p3, about 3700 more in the matcher, 3200 in the own table, 700 in code_literals(); step back 8 bytes at a time +0.4% to +0.8% cycles, one branch for both lazy candidates +0.1% to +0.5%, SEQLZ_LAZY_LEN 12 -1.3% to -1.4% for 1.5 to 1.8 bytes per page more (20 bytes per µs, the rate of level 2 to level 3 itself). Code: not committed. Now: current. Untried: the phone.
 - 2026-10-16 **not built** [OWN chosen by the symbol before](#own-chosen-by-the-symbol-before-54-bytes-per-description-11-bytes-per-page-counted-offline-not-built): offline, level 3's descriptions on ten 20 000-page samples, codes trained on train-mix: 12 codes by the symbol before take 58.67 instead of 64.08 bytes per description (-9.1%), 6 codes by the length before 59.46; 1.11 and 0.94 bytes per page, 0.12% and 0.10% of the compressed bytes. Not worth 12 code tables in the format and a context in own_table(). Code: tools/seqlz-bound/owndump.c, own_context.py. Now: current. Untried: any time; more pages with a table of their own from a cheaper description.
 - 2026-10-15 **kept** [Own literal table described in byte order](#a-pages-own-literal-table-in-the-order-of-the-bytes-decoded-two-lengths-at-a-time-05-smaller-than-by-code-length-reads-29-slower-on-the-a76-kept): Byte order saves 4.9, 2.6, 2.7 bytes per page vs Exp-Golomb order 1 (p3, 23rd, 24th September). Table build V9 1689 to 1740 ns on A76 vs V1 2543 to 2677. Level 3 reads 2.9% slower on A76: 34 bytes per µs. Code: own_code() (src/seqlz_compress.c), own_table() (src/seqlz_decompress.c), build_own(), struct own_table; `own` line of bench/seqlz_counts_4k.txt. Now: current; a code by the symbol before counted 16 Oct, not built ([OWN chosen by the symbol before](#own-chosen-by-the-symbol-before-54-bytes-per-description-11-bytes-per-page-counted-offline-not-built)). Untried: V11 (10-bit lookup, 4 KiB table) 5% to 6% faster warm; its cold-read cost (64 more cache lines) not measured.
-- 2026-10-15 **kept** [Level 3: lazy matcher plus page's own literal table](#level-3-a-lazy-matcher-and-a-literal-table-of-the-pages-own-zstd-3s-memory-in-less-than-half-its-time-on-the-phone-kept): Ten 20 000-page samples: 0.30% more than zstd 3 on average, 4.5% less than level 2. Mi 9T zram, p3, write + 0.34 × cold read: A76 19.00 µs vs zstd 3 43.68, level 2 14.58; A55 54.14 vs 137.70. Kept on Martin's request. Code: seqlz_lazy(), lazy branch of seqlz_match_page() (src/page_lz.h); own_code(), own_lengths(), code_literals() (src/seqlz_compress.c); own_table() (src/seqlz_decompress.c); build_own() (src/seqlz_codes.c); PR #214. Now: current, its literals XORed since 21 Oct ([the XOR](#level-3-xors-its-literals-with-an-earlier-byte-of-the-page-38-fewer-bytes-than-seqlz-3-of-15-october-kept)); three small changes to its matcher 16 Oct, none faster ([level 3 matcher](#level-3s-matcher-three-small-changes-none-faster-at-the-same-bytes-not-kept)); recompression with it ([recompression with level 3](#recompression-with-level-3-78-to-101-µs-per-page-level-3s-memory-at-level-1s-write-time-on-the-hull-where-idle-time-weighs-less-than-03)). Untried: Own table in level 2 from 2048 literals not built.
+- 2026-10-15 **kept** [Level 3: lazy matcher plus page's own literal table](#level-3-a-lazy-matcher-and-a-literal-table-of-the-pages-own-zstd-3s-memory-in-less-than-half-its-time-on-the-phone-kept): Ten 20 000-page samples: 0.30% more than zstd 3 on average, 4.5% less than level 2. Mi 9T zram, p3, write + 0.34 × cold read: A76 19.00 µs vs zstd 3 43.68, level 2 14.58; A55 54.14 vs 137.70. Kept on Martin's request. Code: seqlz_lazy(), lazy branch of seqlz_match_page() (src/page_lz.h); own_code(), own_lengths(), code_literals() (src/seqlz_compress.c); own_table() (src/seqlz_decompress.c); build_own() (src/seqlz_codes.c); PR #214. Now: current, its literals XORed since 21 Oct ([the XOR](#level-3-xors-its-literals-with-an-earlier-byte-of-the-page-38-fewer-bytes-than-seqlz-3-of-15-october-kept)); three small changes to its matcher 16 Oct, none faster ([level 3 matcher](#level-3s-matcher-three-small-changes-none-faster-at-the-same-bytes-not-kept)); recompression with it ([recompression with level 3](#recompression-with-level-3-78-to-101-µs-per-page-level-3s-memory-at-level-1s-write-time-on-the-hull-where-idle-time-weighs-less-than-03)); own table from 32 bytes since 31 Oct ([thresholds per level](#the-literal-coding-thresholds-per-level-35-bytes-at-level-2-19-at-level-3-own-tables-from-32-33-and-49-bytes-per-page-less-kept)). Untried: Own table in level 2 from 2048 literals not built.
 - 2026-10-09 **not kept** [Own literal table per page at hash-chain levels](#a-literal-table-of-the-pages-own-at-levels-3-and-4-25-to-34-less-a-second-literal-path-in-the-format-not-kept): Kernel VM: hash-chain level 3 with a Huffman table of the page's own stores 2.5% to 3.4% less, below zstd 3 on two dumps, equal on one; 2.4 to 2.6 µs more per swap-out. Not kept: second literal path, untrusted-input parser, about 900 lines. Code: branch seqlz-own-lit: own_code(), own_lengths(), code_literals(), own_table() in its src/seqlz.c; issue #139. Now: Taken on 15 Oct for seqlz-3 in 'Level 3, a lazy matcher and a literal table'; description now in byte order ('A page's own literal table in the order of the bytes'). Untried: The encoder with the entropy check measured on the PC only; level 2 with own tables not run in the VM or on the phone.
 - 2026-10-09 **not kept** [Levels 3 and 4: hash chain priced by tables](#levels-3-and-4-a-hash-chain-priced-by-the-tables-as-small-as-zstd-3-on-two-of-four-dumps-and-faster-to-write-and-read-not-kept): Level 3 2.7% to 4.3% below level 2, writes 1.8 to 1.9 times its time, 23% to 31% under zstd 3. Kernel VM: on the hull at 4.2 and 8.3 bytes per µs on two of four dumps. Pays below 4 to 8; 850 lines. Code: branch seqlz-hc, #143 closed unmerged: seqlz_compress_hc(), hc_match_page(); issue #139. Now: Today's seqlz-3 (kept 15 Oct) is another design: lazy step on the level 1-2 matcher plus own literal table, no hash chain; see 'Level 3, a lazy matcher'. Tables changed since. Untried: Level 3 with 16 KiB pages (chain needs 48 KiB per CPU); three repeated offsets as in zstd, estimated only.
 
@@ -282,14 +283,15 @@ One line per entry, by area, newest first: date measured, verdict, link, result,
 
 **Literals**
 
+- 2026-10-31 **kept** [The literal coding thresholds per level](#the-literal-coding-thresholds-per-level-35-bytes-at-level-2-19-at-level-3-own-tables-from-32-33-and-49-bytes-per-page-less-kept): `SEQLZ_LIT_CODED_MIN` 35 at level 2, `SEQLZ_LIT_CODED_MIN_OWN` 19 at level 3 (both were 51), `OWN_SAVES_MIN` 32 (was 16). Ten samples: level 2 -3.27 bytes per page (-0.33%), level 3 -4.92 (-0.55%). Mi 9T p2, 4 rounds, two copies each: level 2 same on the A76, A55 writes +0.12 µs; level 3 writes -0.07 to -0.14 µs, warm reads +0.13 µs A76, +0.25 A55. Code: `code_literals()` and `own_code()` take the minimum; branch coding-thresholds. Now: current. Untried: the kernel VM; level 2 from 19 on the phone (-6.20 bytes offline).
 - 2026-10-21 **not kept** [Literals by byte lane, formats 1 to 4](#literals-by-byte-lane-formats-1-to-4-40-to-61-fewer-bytes-than-seqlz-3-on-phone-pages-reads-27-to-77-slower-on-the-a76-not-kept): level 3's parse; bound on the phone: one trained table by the byte 8 before -74 bytes per page (8.9% of seqlz-3), mixes -121 to -157 (14.7% to 18.9%); the high bytes of 4-byte fields, a distribution per page and lane. Formats by lane with the fixed tables, a XOR and swapped bytes per lane: phone -4.0% to -6.1%, desktop -1.2% to -2.0%; reads +27% to +77% on the A76, +34% to +100% on the A55. As zram's second codec (format 3): 896.3 / 816.9 bytes per page against zstd 3's 911.4 / 820.9 in 24.5 / 22.0 µs against 25.8 / 24.5 (A76, p3 / 4 Oct). Without its XORs format 3 is seqlz-3's size. Code: not committed; ~/seqlz-corpus/research/2026-10-21-tools/. Now: its XOR without lanes is level 3 ([the XOR](#level-3-xors-its-literals-with-an-earlier-byte-of-the-page-38-fewer-bytes-than-seqlz-3-of-15-october-kept)). Untried: 16 KiB pages; recompression from the compressed page (needs zram).
 - 2026-10-19 **measurement** [Where the bytes of a phone page go](#where-the-bytes-of-a-phone-page-go-literals-are-two-thirds-of-seqlz-2s-a-context-modelling-coder-14-under-zstd-3-measured-offline): seqlz-2's parse, p3: 906.6 bytes per page, literals 69% (coded 316, raw 310), tokens 18%, offset bits 11%. Ten samples, zsmalloc cost: lz4 1368, seqlz-1 1074, seqlz-2 984, seqlz-3 940, zstd 3 936, zstd 19 851, LZMA with a 4 KiB dictionary 807 (14% under zstd 3). Literals about 6 bits per byte order 0 per page, short gaps and long runs alike; fixed-width palettes per page +5% on tokens, +2.5% on literals; a zero mask is worse. Code: offline, ~/seqlz-corpus/research/2026-10-17-tools/. Now: current; lane, order 1 and pointer models of the literals measured 21 Oct ([literals by byte lane](#literals-by-byte-lane-formats-1-to-4-40-to-61-fewer-bytes-than-seqlz-3-on-phone-pages-reads-27-to-77-slower-on-the-a76-not-kept)). Untried: 16 KiB pages.
 - 2026-10-14 **not kept** [Literal codes of up to 11 bits](#literal-codes-of-up-to-11-bits-003-to-006-smaller-on-the-phone-not-kept): seqlz-2, literal tables retrained on the pages of the tables of 13th October: -0.03% to -0.06% on the phone dumps, -0.70% on desktop 24th September, +0.04% Android 17 emulator. Decode tables double to 4 KiB each, 32 KiB for 8. Now: current.
 - 2026-10-09 **not kept** [Bitstream copied once behind coded literals](#the-bitstream-copied-once-behind-the-literals-raw-or-coded-writes-up-to-03-µs-slower-in-the-vm-and-08-µs-on-the-a55-not-kept): Same bytes, estimated 0.01 to 0.02 µs saved per page on the PC. Measured slower, seqlz-1 too: x86-64 VM writes up to 0.3 µs, Mi 9T writes 0.8 µs on A55, 0.2 µs on A76. gcc gave the matcher's loop other registers and padding. Code: branch seqlz-bitstream-once. Now: current. Untried: Not built: code literals into the matcher's table and copy them back (215 to 392 bytes less copied per coded page).
 - 2026-10-09 **kept** [Coded literals staged in the matcher's table](#coded-literals-from-the-matchers-table-a-buffer-of-one-page-costs-01-to-05-instead-of-16-to-29-kept): Raw literals copied into the free matcher table, coded ones written over their place. One-page buffer costs 0.1% to 0.5% instead of 1.6% to 2.9% (seqlz-2, four dumps); same bytes in two pages; x86-64 VM writes 0.08 to 0.18 µs faster; Mi 9T same. Code: code_literals(), seqlz_compress() in src/seqlz.c (now src/seqlz_compress.c); #142. Now: Code in src/seqlz_compress.c since "seqlz.c split in three". Verdict current. Untried: 28 to 123 pages per 20 000 still fail in one page: raw form written first; the matcher would need another literal buffer.
-- 2026-10-06 **kept** [The 51-byte minimum again with new prefetches](#9-the-51-bytes-of-coded-literals-only-where-they-save-51-bytes-again-with-item-4s-and-7s-prefetches): With compressed data prefetched and token prefetch on in-order cores only: 51 vs 19 saves 0.4 µs per page written (A76) and 0.8 (A55), was 1.1 and 2.7, within noise. 83 no faster. 51 stays. Code: SEQLZ_LIT_CODED_MIN in src/seqlz.h. Now: Measured with the per-core token prefetch, replaced by prefetch on every core since #152. src/seqlz.h still sets 51.
+- 2026-10-06 **kept** [The 51-byte minimum again with new prefetches](#9-the-51-bytes-of-coded-literals-only-where-they-save-51-bytes-again-with-item-4s-and-7s-prefetches): With compressed data prefetched and token prefetch on in-order cores only: 51 vs 19 saves 0.4 µs per page written (A76) and 0.8 (A55), was 1.1 and 2.7, within noise. 83 no faster. 51 stays. Code: SEQLZ_LIT_CODED_MIN in src/seqlz.h. Now: Measured with the per-core token prefetch, replaced by prefetch on every core since #152. 35 at level 2 and 19 at level 3 since 31 Oct ([thresholds per level](#the-literal-coding-thresholds-per-level-35-bytes-at-level-2-19-at-level-3-own-tables-from-32-33-and-49-bytes-per-page-less-kept)).
 - 2026-10-06 **not kept** [Coded literals' cost on the A55](#8-coded-literals-on-the-a55-78-instructions-per-literal-at-one-per-cycle): A55 userspace: seqlz-2 decodes in 15 987 cycles per page, seqlz-1 13 877; 8 cycles per literal, no hot spot. Loads before uses: 2.8% fewer cycles, not built. Counting every 8th literal first: same bytes, 1150 more instructions per page; not kept. Code: decode_literals(), code_literals(); seqlz-bench-interleaved built with NDK r30, simpleperf. Now: code_literals() rewritten in "Coded literals from the matcher's table" (9 Oct); decode_literals() streams as arrays in "Five simplifications" (10 Oct). Cycle numbers predate both. Untried: Loads-first order in decode_literals(): 2.8% fewer A55 cycles in userspace, not built into the kernel module.
-- 2026-10-05 **kept** [Coded literals only if they save 51 bytes](#coded-literals-only-where-they-save-51-bytes-27-µs-per-page-written-less-on-the-a55-kept): Minimum 19 to 51 bytes. Mi 9T kernel, second phone dump: 929.0 to 936.9 bytes per page, 2.7 µs per page written less on the A55, 1.1 on the A76. Kernel VM: 0.1 µs for 20 bytes, no gain; kept for the phone. Code: SEQLZ_LIT_CODED_MIN (51) in src/seqlz.h, used in src/seqlz_compress.c. Now: "Six choices" item 9 (6 Oct), with the new prefetches: 51 saves only 0.4 µs (A76) and 0.8 µs (A55), within noise; 51 stays. src/seqlz.h still has 51. Untried: Only 19, 51, 115 timed, 43 might save as much; per-device minimum through zram's level parameter not done.
+- 2026-10-05 **kept** [Coded literals only if they save 51 bytes](#coded-literals-only-where-they-save-51-bytes-27-µs-per-page-written-less-on-the-a55-kept): Minimum 19 to 51 bytes. Mi 9T kernel, second phone dump: 929.0 to 936.9 bytes per page, 2.7 µs per page written less on the A55, 1.1 on the A76. Kernel VM: 0.1 µs for 20 bytes, no gain; kept for the phone. Code: SEQLZ_LIT_CODED_MIN (51) in src/seqlz.h, used in src/seqlz_compress.c. Now: "Six choices" item 9 (6 Oct), with the new prefetches: 51 saves only 0.4 µs (A76) and 0.8 µs (A55), within noise; 51 stays. 35 at level 2 and 19 at level 3 since 31 Oct ([thresholds per level](#the-literal-coding-thresholds-per-level-35-bytes-at-level-2-19-at-level-3-own-tables-from-32-33-and-49-bytes-per-page-less-kept)). Untried: Only 19, 51, 115 timed, 43 might save as much; per-device minimum through zram's level parameter not done.
 - 2026-09-30 **not built** [Two or four literal tables per page](#a-literal-table-per-half-or-quarter-of-the-literals-002-to-005-points-not-built): Offline model of seqlz-2's encoder, 20 000 pages per dump: 967.3 / 1257.9 bytes per page with one table, best packed variant 965.2 / 1256.8, 0.02 to 0.05 points. Table number in the first u16: 0.08% and 0.06%, not for 16 KiB pages. Now: A page's own literal table kept as level 3 ("Level 3, a lazy matcher and a literal table of the page's own"); #57 handled in "The tables trained again: 4% less on one desktop dump". Untried: Tables trained on half pages.
 - 2026-09-25 **not kept** [seqlz-opt with a literal table per page](#seqlz-opt-with-a-literal-table-per-page-less-memory-than-zstd-slower-reads-not-kept): Kernel VM after recompression: own table where it saves 16 bytes gives 1.4% and 4.1% less memory, below zstd 3; cold read p99 4809 to 5849 and 5180 to 6020 ns, above lz4's 4870, 5080. Cost: about 300 lines, untrusted Huffman header, 3.3 KB scratch. Code: branch feat/page-tables (#37), SEQLZ_LIT_OWN. Now: Own table kept at level 3, 15 Oct: "Level 3, a lazy matcher and a literal table of the page's own" and "A page's own literal table in the order of the bytes".
 - 2026-09-25 **not kept** [Per page own literal table and 4 token tables](#per-page-its-own-literal-table-and-one-of-4-token-tables-measured-not-kept): Kernel VM, desktop dumps 1/2: both (#43) 2.6% and 6.6% less memory for 3.0 and 3.4 us more per page written; own table with check (#44) writes 13% and 15% slower for 0.3% and 4.6%. Writes too slow; page kind not known in advance. Code: #43, #44 (closed unmerged), reverted in #45; token tables were explore/seqlz_token_sets.c. Now: Own table kept at level 3, 15 Oct: "Level 3, a lazy matcher"; earlier "A literal table of the page's own at levels 3 and 4" (9 Oct) not kept. C5 priced since #203. Untried: Token tables chosen without a second pass (own stream, second bit reader); 8 token tables (32 KiB decode tables).
@@ -1957,7 +1959,7 @@ bit multiply, 2.3% fewer cycles for 1.9% more memory.
 
 ## Level 3, a lazy matcher and a literal table of the page's own: zstd 3's memory in less than half its time on the phone, kept
 
-Status: kept, 2026-10-15. Now: current, its literals XORed since 21 Oct ([the XOR](#level-3-xors-its-literals-with-an-earlier-byte-of-the-page-38-fewer-bytes-than-seqlz-3-of-15-october-kept)); three small changes to its matcher 16 Oct, none faster ([level 3 matcher](#level-3s-matcher-three-small-changes-none-faster-at-the-same-bytes-not-kept)); recompression with it ([recompression with level 3](#recompression-with-level-3-78-to-101-µs-per-page-level-3s-memory-at-level-1s-write-time-on-the-hull-where-idle-time-weighs-less-than-03)); its chart levels-phone.svg is drawn with r = 0.73 since 16 Oct, the table below has the times for either.
+Status: kept, 2026-10-15. Now: current, its literals XORed since 21 Oct ([the XOR](#level-3-xors-its-literals-with-an-earlier-byte-of-the-page-38-fewer-bytes-than-seqlz-3-of-15-october-kept)); three small changes to its matcher 16 Oct, none faster ([level 3 matcher](#level-3s-matcher-three-small-changes-none-faster-at-the-same-bytes-not-kept)); recompression with it ([recompression with level 3](#recompression-with-level-3-78-to-101-µs-per-page-level-3s-memory-at-level-1s-write-time-on-the-hull-where-idle-time-weighs-less-than-03)); its chart levels-phone.svg is drawn with r = 0.73 since 16 Oct, the table below has the times for either; its own table has to save 32 bytes, not 16, and its literals are coded from 19 bytes since 31 Oct ([thresholds per level](#the-literal-coding-thresholds-per-level-35-bytes-at-level-2-19-at-level-3-own-tables-from-32-33-and-49-bytes-per-page-less-kept)).
 
 *`seqlz_compress()` at level 3, `seqlz-3` in the harness: the matcher of levels 1 and 2 with one lazy
 step and the step back, and the literals coded with a table of the page's own where that saves 16 bytes
@@ -3993,7 +3995,7 @@ to 76 on the big core and from 0.2 to 15 on the little core, with `seqlz-fast` a
 
 ## Coded literals only where they save 51 bytes: 2.7 µs per page written less on the A55, kept
 
-Status: kept, 2026-10-05. Now: "Six choices" item 9 (6 Oct), with the new prefetches: 51 saves only 0.4 µs (A76) and 0.8 µs (A55), within noise; 51 stays. src/seqlz.h still has 51.
+Status: kept, 2026-10-05. Now: "Six choices" item 9 (6 Oct), with the new prefetches: 51 saves only 0.4 µs (A76) and 0.8 µs (A55), within noise; 51 stays. Since 31 Oct 35 at level 2 and 19 at level 3 ([thresholds per level](#the-literal-coding-thresholds-per-level-35-bytes-at-level-2-19-at-level-3-own-tables-from-32-33-and-49-bytes-per-page-less-kept)).
 
 *The encoder codes a page's literals where that saves 1/16 of them and 19 bytes. On the phone's
 little core, `seqlz-fast-lit` was the best choice only up to 15 bytes per µs: decoding the literals
@@ -4358,7 +4360,7 @@ pages come close to paying. Not kept.
 
 ### 9. The 51 bytes of "Coded literals only where they save 51 bytes" again, with item 4's and 7's prefetches
 
-Status: kept, 2026-10-06. Now: Measured with the per-core token prefetch, replaced by prefetch on every core since #152. src/seqlz.h still sets 51.
+Status: kept, 2026-10-06. Now: Measured with the per-core token prefetch, replaced by prefetch on every core since #152. 35 at level 2 and 19 at level 3 since 31 Oct ([thresholds per level](#the-literal-coding-thresholds-per-level-35-bytes-at-level-2-19-at-level-3-own-tables-from-32-33-and-49-bytes-per-page-less-kept)).
 
 The minimum for coding literals was chosen with the decoder as it was, without the compressed data
 prefetched and with all tables prefetched on both cores. Again with both changes, 3 rounds:
@@ -7348,6 +7350,137 @@ BUS=1 COOL=45 ROUNDS=4 CODECS="seqlz-a-3 seqlz-a2-3 seqlz-s11-3 seqlz-s13-3" too
     ~/seqlz-corpus/phone-dump/p2-sample20000.pages out/run out/a/seqlz_a.ko out/a2/seqlz_a2.ko \
     out/s11/seqlz_s11.ko out/s13/seqlz_s13.ko
 ```
+
+## The literal coding thresholds per level, 35 bytes at level 2, 19 at level 3, own tables from 32: 3.3 and 4.9 bytes per page less, kept
+
+Status: kept, 2026-10-31. Now: current.
+
+*The encoder codes a block's literals only where that saves 1/16 of them plus `SEQLZ_LIT_CODED_MIN`
+bytes, 51 since 5 October, chosen for level 2's reads on the A55 from 19, 51 and 115, and level 3 took it
+as it was; level 3's own table had to save 16 bytes, from before level 3. Now level 2 takes 35, level 3
+19 (`SEQLZ_LIT_CODED_MIN_OWN`), and an own table has to save 32 (`OWN_SAVES_MIN`). On the ten samples
+level 2 stores 3.27 bytes per page less (-0.33%), level 3 4.92 less (-0.55%). On the Mi 9T, two copies
+each against two of `main`: level 2 the same time on the A76, writes 0.12 µs slower on the A55; level 3
+writes 0.07 to 0.14 µs faster, warm reads 0.13 µs slower on the A76 and 0.25 µs on the A55. That is
+about 9 bytes per µs on the A55 with cold reads, more on the A76, where earlier choices for level 3 bought bytes at 22
+and gave them up at 1.2 to 1.8 bytes per µs. The own table's 32 alone gives up 1.07 bytes per page and
+makes level 3's writes 0.19 µs faster on the A76 and 0.47 µs on the A55, 5.8 bytes per µs: with one rate
+between those, both changes pay.* Code: `SEQLZ_LIT_CODED_MIN`, `SEQLZ_LIT_CODED_MIN_OWN` in
+`src/seqlz_internal.h`, `OWN_SAVES_MIN`, `code_literals()` and `own_code()` in
+`src/seqlz_compress_literals.c`, which take the minimum as an argument; the rule in `docs/format.md`;
+branch `coding-thresholds`.
+
+**Offline**, the ten samples of 20 000 pages, zsmalloc memory per page from `seqlz-bench-seqlz-N
+--no-timing`, instructions per page from `seqlz-worst --level N count`, gcc 16.2.1, x86-64, user space,
+against `7cf4faa` (`DELTA_STEP` 11); each change alone, then all three. The other changes of this round,
+none kept, are in [six more encoder changes](#six-more-encoder-changes-for-level-3-a-gate-before-the-pricing-more-inserts-a-second-lazy-step-seqlz_lazy_len-the-own-tables-estimate-8192-hash-slots-none-kept):
+
+| change | level 2 bytes | level 2 compress / decode | level 3 bytes | level 3 compress / decode |
+| --- | ---: | ---: | ---: | ---: |
+| `7cf4faa` | 984.48 | 61 752 / 22 019 | 894.86 | 96 444 / 26 570 |
+| level 2 from 43 | -1.73 | +0.30% / +0.68% | | |
+| level 2 from 35 | -3.27 | +0.61% / +1.37% | | |
+| level 2 from 19 | -6.20 * | | | |
+| level 3 from 35 | | | -3.18 | +0.44% / +1.91% |
+| level 3 from 19 | | | -5.96 | +0.90% / +4.08% |
+| own table from 8 | | | -0.29 | +0.36% / +0.59% |
+| own table from 32 | | | +1.07 | -0.75% / -1.10% |
+| 35, 19 and 32, kept | -3.27 | +0.61% / +1.37% | -4.92 | +0.10% / +2.96% |
+
+\* on `main` before `DELTA_STEP` 11, level 2 is the same there. The kept change saves 3.28 bytes per page
+on the phone samples and 3.24 on the desktop ones at level 2, 5.36 and 3.90 at level 3.
+
+**The Mi 9T**, `tools/zram-phone/run.sh` with `BUS=1`, `COOL=45`, 4 rounds, 20 000 pages of the second
+phone dump, NDK r21e's clang 9, the A55 at 1.80 GHz and the A76 at 2.21 GHz, each codec alone in its
+process, in turns. First the choices, `main` (`7cf4faa`) as `a` and `a2`, `x` level 2 from 35 and level 3
+from 19, `y` 43 and 35, `z` the own table from 32; write / warm read / cold read in µs:
+
+| | A55, level 2 | A76, level 2 | A55, level 3 | A76, level 3 |
+| --- | --- | --- | --- | --- |
+| `a` | 31.59 / 13.00 / 32.13 | 11.75 / 4.57 / 8.24 | 48.51 / 15.25 / 37.08 | 18.45 / 5.53 / 9.88 |
+| `a2` | 31.66 / 13.10 / 32.84 | 11.68 / 4.59 / 8.40 | 48.38 / 15.35 / 37.50 | 18.40 / 5.56 / 9.39 |
+| `x` | 31.84 / 13.10 / 32.76 | 11.75 / 4.62 / 8.06 | 48.87 / 15.66 / 38.42 | 18.60 / 5.76 / 9.63 |
+| `y` | 31.66 / 13.07 / 32.20 | 11.75 / 4.63 / 8.16 | 48.81 / 15.44 / 37.67 | 18.55 / 5.65 / 9.68 |
+| `z` | | | 47.98 / 15.26 / 38.16 | 18.24 / 5.54 / 9.74 |
+
+Then the kept change twice, `f` and `f2`, against `main` twice, a new session of the same setup:
+
+| | A55, level 2 | A76, level 2 | A55, level 3 | A76, level 3 |
+| --- | --- | --- | --- | --- |
+| `a` | 31.64 / 13.07 / 32.04 | 11.78 / 4.60 / 8.47 | 48.37 / 15.37 / 37.53 | 18.48 / 5.61 / 9.78 |
+| `a2` | 31.58 / 13.04 / 31.74 | 11.79 / 4.61 / 8.16 | 48.56 / 15.17 / 36.78 | 18.47 / 5.59 / 9.71 |
+| `f` | 31.78 / 13.08 / 32.21 | 11.69 / 4.65 / 8.40 | 48.33 / 15.57 / 38.29 | 18.34 / 5.75 / 9.87 |
+| `f2` | 31.67 / 13.11 / 32.71 | 11.75 / 4.62 / 8.19 | 48.32 / 15.47 / 37.84 | 18.48 / 5.71 / 9.67 |
+
+The means of `f` and `f2` against those of `a` and `a2`: level 2 +0.12 / +0.04 / +0.57 µs on the A55,
+-0.07 / +0.03 / -0.02 on the A76; level 3 -0.14 / +0.25 / +0.91 on the A55, -0.07 / +0.13 / +0.02 on
+the A76. Two copies of the same code differ by up to 0.19 µs in writes, 0.20 in warm reads and 0.75 in the
+A55's cold reads, so of these only level 3's warm reads are clearly outside, the A55's level 2 writes at the edge.
+
+Not measured: the kernel VM; level 2 from 19 on the phone; a minimum per device through zram's level
+parameter.
+
+```sh
+tools/zram-phone/build.sh a <main's src/> out/a; ...   # x, y, z: the constants changed in a copy
+BUS=1 COOL=45 ROUNDS=4 CODECS="seqlz-a-2 seqlz-a2-2 seqlz-x-2 seqlz-y-2 seqlz-a-3 seqlz-a2-3 seqlz-x-3 \
+    seqlz-y-3 seqlz-z-3 seqlz-w-3" tools/zram-phone/run.sh ~/seqlz-corpus/phone-dump/p2-sample20000.pages \
+    out/run out/a/seqlz_a.ko out/a2/seqlz_a2.ko out/x/seqlz_x.ko out/y/seqlz_y.ko out/z/seqlz_z.ko out/w/seqlz_w.ko
+```
+
+## Six more encoder changes for level 3: a gate before the pricing, more inserts, a second lazy step, SEQLZ_LAZY_LEN, the own table's estimate, 8192 hash slots, none kept
+
+Status: not kept, 2026-10-31. Now: current.
+
+*A round through the encoder's constants after `DELTA_STEP` 11, offline on the ten samples, the second
+lazy step also on the Mi 9T. None pays. A gate that skips the pricing where no table can code the
+literals saves nothing: those pages are cheap already. More positions inserted into the hash table after
+a match make level 3 larger, up to 4.89 bytes per page: with one slot per hash, each insert pushes out
+an older position that would have matched. A second lazy step saves 0.40 bytes and 0.25% of the
+instructions, but on the phone writes 0.15 µs slower on the A76 and 0.36 µs on the A55, where the matcher
+got other registers. `SEQLZ_LAZY_LEN` and the own table's estimate trade about 0.8 to 1.7 bytes per 1%
+of level 3's instructions, worse than `DELTA_STEP`'s 0.2. 8192 hash slots save 1.22 bytes per page at
+level 2 for 8 KiB more work memory per CPU, which with 8 CPUs and 64 MiB in zram costs 4 bytes per
+page.* Code: the variants are patches of `src/` of `7cf4faa`, not committed: `seqlz_match_block()`,
+`seqlz_lazy()`, `SEQLZ_LAZY_LEN` in `src/seqlz_match.h`; `code_literals()`, `seqlz_delta_literals()`,
+`own_code()` in `src/seqlz_compress_literals.c`; `SEQLZ_HASH_BITS` in `src/seqlz_internal.h`.
+
+**Offline**, the ten samples of 20 000 pages: zsmalloc memory per page from `seqlz-bench-seqlz-N
+--no-timing`, which also decodes every page; instructions per page from `seqlz-worst --level N count`,
+gcc 16.2.1, x86-64, user space; means of the ten samples, against `7cf4faa` (level 2 984.48 bytes, 61 752
+compress instructions; level 3 894.86 bytes, 96 444 compress, 26 570 decode instructions):
+
+| change | level 2 bytes | level 3 bytes | level 3 compress | level 3 decode |
+| --- | ---: | ---: | ---: | ---: |
+| no pricing where 1 bit per literal cannot save the minimum, in `code_literals()` and before `pick_delta()` | 0 (-0.08% instructions) | 0 | +0.32% | 0 |
+| also insert the match's start + 1 | | +0.25 | +1.69% | +0.43% |
+| also insert the position 1 before the match's end | | +4.89 | +1.20% | 0 |
+| insert every position of the match | | +2.53 | +23.0% | +1.02% |
+| a second lazy step, from the new position where the first moved | | -0.40 | -0.25% | -0.04% |
+| `SEQLZ_LAZY_LEN` 12 | | +1.75 | -1.33% | +0.23% |
+| `SEQLZ_LAZY_LEN` 16 | | +0.69 | -0.40% | +0.11% |
+| `SEQLZ_LAZY_LEN` 28 | | -0.62 | +0.47% | -0.08% |
+| own table's estimate with 64 / 256 bytes per byte of description instead of 115 | | -0.11 | +1.80% | +0.13% |
+| the same with 160 / 256 | | +0.83 | -1.07% | -0.76% |
+| no estimate before the own table is built | | -0.03 | +1.57% | +0.04% |
+| 8192 hash slots, 16 KiB of work memory | -1.22 (+0.23% instructions) | -0.38 | +0.15% | -0.12% |
+
+The gate is exact, the same bytes: a literal takes at least 1 bit in every table, so a block with 62
+literals or fewer cannot save 1/16 of them plus 51 bytes. Level 3 still takes 0.32% more instructions
+with it; why was not looked into.
+
+**The Mi 9T**, the second lazy step, with the session of [the coding thresholds per
+level](#the-literal-coding-thresholds-per-level-35-bytes-at-level-2-19-at-level-3-own-tables-from-32-33-and-49-bytes-per-page-less-kept):
+`tools/zram-phone/run.sh` with `BUS=1`, `COOL=45`, 4 rounds, 20 000 pages of the second phone dump, NDK
+r21e's clang 9, level 3, write / warm read / cold read in µs, `main` (`7cf4faa`) twice:
+
+| | A55 | A76 |
+| --- | --- | --- |
+| `a` | 48.51 / 15.25 / 37.08 | 18.45 / 5.53 / 9.88 |
+| `a2` | 48.38 / 15.35 / 37.50 | 18.40 / 5.56 / 9.39 |
+| a second lazy step | 48.80 / 15.17 / 36.66 | 18.57 / 5.55 / 9.32 |
+
+The writes are outside the spread of `a` against `a2`, 0.13 and 0.05 µs; the cold reads within theirs,
+0.42 and 0.49 µs.
 
 ## The matcher calls encode_seq() itself, as in the kernel copy: level 3 writes 0.6% faster in the VM with clang, levels 1 and 2 the same, kept
 
