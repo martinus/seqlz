@@ -316,7 +316,8 @@ One line per entry, by area, newest first: date measured, verdict, link, result,
 
 **Decoder**
 
-- 2026-10-31 **kept** [The own literal table's lookup tables prefetched](#the-own-literal-tables-lookup-tables-prefetched-before-its-parse-level-3s-cold-reads-055-µs-faster-on-the-a55-kept): `read_own_table()` is 2.91% of the A76's kernel cycles in a level-3 zram run, about 4.3 µs per build against 1.7 warm. Prefetching `seqlz_tables.own.quad[]` and `decode[]` first: Mi 9T p2, two runs, level 3 cold reads -0.55 µs on the A55 (both copies below both of `main`), A76 -0.24 µs within its copies' 0.47; same bytes. A prefetch for writing of the table's place in the output page: nothing more. Code: `read_lit_header()` in src/seqlz_decompress_literals.c; branch own-table-prefetch, #291. Now: current. Untried: the kernel VM; a faster parse.
+- 2026-10-31 **not kept** [The own literal table's parse and fill made faster](#the-own-literal-tables-parse-and-fill-made-faster-little-left-without-a-format-change-the-fill-8-of-a-build-with-gcc-and-1-with-clang-not-kept): x86-64 warm, a build 2 227 cycles, the parse 1 587 of them, 84 serial steps, misses at runs alone; `count[]` out of memory -45 cycles. `own_fill()` with a constant store count per length, same tables: gcc -O3 -8% cycles, clang -O3 -1% and +3.7 misses; the phone builds with clang. Code: harness and variants not committed, #291. Now: current. Untried: the phone; a format with a cheaper description.
+- 2026-10-31 **kept** [The own literal table's lookup tables prefetched](#the-own-literal-tables-lookup-tables-prefetched-before-its-parse-level-3s-cold-reads-055-µs-faster-on-the-a55-kept): `read_own_table()` is 2.91% of the A76's kernel cycles in a level-3 zram run, about 4.3 µs per build against 1.7 warm. Prefetching `seqlz_tables.own.quad[]` and `decode[]` first: Mi 9T p2, two runs, level 3 cold reads -0.55 µs on the A55 (both copies below both of `main`), A76 -0.24 µs within its copies' 0.47; same bytes. A prefetch for writing of the table's place in the output page: nothing more. Code: `read_lit_header()` in src/seqlz_decompress_literals.c; branch own-table-prefetch, #291. Now: current; a faster parse and fill [not kept](#the-own-literal-tables-parse-and-fill-made-faster-little-left-without-a-format-change-the-fill-8-of-a-build-with-gcc-and-1-with-clang-not-kept). Untried: the kernel VM.
 - 2026-10-19 **not kept** [Decoder with the page prefetched on the Mi 9T, byte tokens](#the-decoder-with-the-page-prefetched-on-the-mi-9t-seqlz-1-075-µs-slower-than-lz4-on-the-a55-not-41-byte-tokens-from-a-trained-table-not-kept): p3, kernel flags, µs per page A55 / A76 with each page prefetched as zram's glue does: seqlz-1 7.35 / 2.84, lz4 6.60 / 2.63; streamed without the prefetch seqlz-1 11.55 on the A55 (two input streams). Entropy coding of tokens and offsets buys 266 bytes per page for 1.4 / 0.4 µs. Byte tokens from a trained 255-entry table in lz4's decoder: 179 of the 266 bytes for 1.0 µs on the A55, slower than seqlz-1 on the A76; per-page fixed-width palettes, an own byte decoder and three streams slower. Code: offline, ~/seqlz-corpus/research/2026-10-17-tools/research/. Now: current. Untried: the byte formats in zram; why lz4 gains 0.9 µs from the prefetch on the A55.
 - 2026-10-16 **not kept** [Sequences in batches of 32, pages seen once](#the-sequences-in-batches-of-32-again-on-pages-seen-once-32-to-53-slower-not-kept): x86-64 userspace, tools/seqlz-branches: 32% to 53% more time per decode and 33 to 49 more branch misses per page than main; the length-value decision is made twice and both miss (40 misses where main has 25), the two loops' exits add 19. No VM run. Code: not committed. Now: current. Untried: the phones.
 - 2026-10-10 **kept** [copy_match() without its dead branch](#copy_match-without-its-dead-branch-within-what-the-codes-place-moves-kept): No back variable, loop only for offsets of 8 or more. x86-64 VM: gcc warm reads up to 0.04 µs faster on one dump, clang swap-ins 0.01 to 0.03 µs slower; unchanged encoder's swap-outs moved 0.04 to 0.05 µs: code placement. Kept for simpler code. Code: copy_match() in src/seqlz_decompress.c; #174. Now: current. Untried: Not measured on the Mi 9T: two same-source modules differ by 0.13 µs there.
@@ -7485,7 +7486,7 @@ The writes are outside the spread of `a` against `a2`, 0.13 and 0.05 µs; the co
 
 ## The own literal table's lookup tables prefetched before its parse: level 3's cold reads 0.55 µs faster on the A55, kept
 
-Status: kept, 2026-10-31. Now: current.
+Status: kept, 2026-10-31. Now: current; the parse and the fill [made faster](#the-own-literal-tables-parse-and-fill-made-faster-little-left-without-a-format-change-the-fill-8-of-a-build-with-gcc-and-1-with-clang-not-kept), not kept.
 
 *Every read of a page with a literal table of its own builds the decoder's table from the page's
 description, `read_own_table()`. In zram on the Mi 9T that takes about 4.3 µs per build on the A76, 2.5
@@ -7496,7 +7497,7 @@ own one not. Prefetching `quad[]` and `decode[]` makes level 3's cold reads 0.55
 two runs and with both copies below both of `main`; on the A76 0.24 µs, but its two copies differ by 0.47.
 The same bytes, the encoder does not change. Also writing the 2 KiB of the output page that take the
 table first, a prefetch for writing, gave nothing more.* Code: `read_lit_header()` in
-`src/seqlz_decompress_literals.c`; branch `own-table-prefetch`; issue #291, which keeps the parse itself.
+`src/seqlz_decompress_literals.c`; branch `own-table-prefetch`; issue #291.
 
 **Where the time goes.** `simpleperf record -e cpu-cycles:k` around one `zramphone` run, level 3, 20 000
 pages of the second phone dump, of which 17.6% have a table of their own (`main` of `7cf4faa`), each page
@@ -7540,6 +7541,46 @@ BUS=1 COOL=45 ROUNDS=4 CODECS="seqlz-a-3 seqlz-a2-3 seqlz-p1-3 seqlz-p1b-3" tool
     ~/seqlz-corpus/phone-dump/p2-sample20000.pages out/run out/a/seqlz_a.ko out/a2/seqlz_a2.ko \
     out/p1/seqlz_p1.ko out/p1b/seqlz_p1b.ko
 ```
+
+## The own literal table's parse and fill made faster: little left without a format change, the fill 8% of a build with gcc and 1% with clang, not kept
+
+Status: not kept, 2026-10-31. Now: current.
+
+*After [the prefetch of its lookup tables](#the-own-literal-tables-lookup-tables-prefetched-before-its-parse-level-3s-cold-reads-055-µs-faster-on-the-a55-kept),
+how much faster can `read_own_table()` get? On x86-64, warm, a build takes 2 227 cycles, 7 708
+instructions and 24.3 branch misses; the parse is 1 587 cycles of it, 84 steps of about 19 cycles each,
+`own_fill()` the rest. The parse is a serial chain, each step waits for the lookup before, and its
+misses are where a run comes alone, in 9 of the 84 steps. Breaking the chain of `count[]` in memory saves
+45 cycles; doing the runs without a branch, decoding two lengths always and undoing the second at the
+end, or a wider `quad[]` cost more instructions, more cache in zram or save about 2 instructions per
+step, and were not built. `own_fill()` with a constant number of 8-byte stores per byte for each length
+gives the same tables: 8% fewer cycles per build with gcc 16.2.1 at `-O3`, 1% with clang 22.1.8, which
+also misses 3.7 branches more. The phone's module is built with clang; not kept, not timed on the phone.*
+Code: `read_own_table()`, `own_fill()` in `src/seqlz_decompress_literals.c`; the variants and the harness
+not committed; issue #291.
+
+**The harness.** The 9 083 pages of p2, p3 and the desktop sample of 23rd September whose block at level
+3 has a table of its own (`89553c6`), their descriptions copied out, `read_own_table()` on all of them
+21 and 1 times, `perf stat -e cycles:u,instructions:u,branch-misses:u`, the difference per build; Ryzen
+9 7950X, CPU 2 at a fixed 4.5 GHz, boost off. The tables and ends of each variant, of the valid
+descriptions and of 64 copies of each with one bit flipped, compared by hash against `main`'s.
+
+| variant | cycles | instructions | branch misses |
+| --- | ---: | ---: | ---: |
+| `main`, gcc `-O2` | 2 227 | 7 708 | 24.3 |
+| without `own_fill()`, the parse alone | 1 587 | 4 958 | 16.5 |
+| the parse with `count[]` in a register (wrong tables, timing only) | 1 557 | 4 658 | 16.8 |
+| `own_fill()` with a constant store count per length, gcc `-O2` | 2 086 | 6 783 | 24.4 |
+| `main`, gcc `-O3` | 2 284 | 7 333 | 24.4 |
+| the same fill, gcc `-O3` | 2 097 | 6 443 | 24.2 |
+| `main`, clang `-O3` | 2 372 | 6 504 | 24.2 |
+| the same fill, clang `-O3` | 2 352 | 6 178 | 27.9 |
+
+Per build the parse takes 83.6 steps: 46.9 decode two lengths with one lookup, 8.6 are runs alone, and
+10.5 refill the bits; 121.9 bytes get a code, from 60.1 bytes of description.
+
+Not measured: the phone; why the build costs 2.5 times as much in zram as warm, beyond the misses of
+`quad[]`.
 
 ## The matcher calls encode_seq() itself, as in the kernel copy: level 3 writes 0.6% faster in the VM with clang, levels 1 and 2 the same, kept
 
