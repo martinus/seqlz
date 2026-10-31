@@ -1767,6 +1767,64 @@ TEST_CASE("seqlz: level 3 codes the literals as deltas to the bytes that make th
     }
 }
 
+TEST_CASE("seqlz: the deltas of literals that end near the page's end are undone, and no byte past it is written") {
+    // The decoder undoes deltas 16 bytes at a time and goes up to 15 bytes past a sequence's literals where
+    // the page has room for that, byte by byte where it has not. A page of deltas with a run of literals
+    // and a match of 8, then a run of literals up to a match of m bytes and tail literals after it, for
+    // every m + tail around 15: the runs take the decoder's slow path, and the last ones end with and
+    // without that room. The page comes back, and the bytes after it stay as they were.
+    auto st = std::make_unique<seqlz_state>();
+    auto rng = std::mt19937_64(97);
+    auto scratch = std::vector<unsigned char>(SEQLZ_SCRATCH);
+    constexpr unsigned char canary = 0x5a;
+    constexpr unsigned off = 64;
+    auto deltas = 0;
+    auto rounds = 0;
+    for (unsigned m = SEQLZ_MIN_MATCH; m <= 20; ++m) {
+        for (unsigned tail = 0; tail <= 20; ++tail) {
+            CAPTURE(m);
+            CAPTURE(tail);
+            auto page = delta_page(rng, SEQLZ_DELTA_4);
+            auto const first = off + 15 + static_cast<unsigned>(rng() % 48);
+            auto const copy = [&](unsigned at, unsigned len) {
+                for (unsigned k = at; k < at + len; ++k) {
+                    page[k] = page[k - off];
+                }
+            };
+            auto const at = page_size - m - tail;
+            copy(first, 8);
+            copy(at, m);
+            auto const seq = std::vector<seqlz_sequence>{
+                {static_cast<u16>(first), 8, off},
+                {static_cast<u16>(at - first - 8), static_cast<u16>(m), off},
+                {static_cast<u16>(tail), 0, 0},
+            };
+            auto const lits = literals_of(page, seq.data(), static_cast<unsigned>(seq.size()));
+            auto c = std::vector<unsigned char>(2 * page_size);
+            auto const len = seqlz_encode(st.get(),
+                                          seq.data(),
+                                          static_cast<unsigned>(seq.size()),
+                                          lits.data(),
+                                          static_cast<unsigned>(lits.size()),
+                                          page.data(),
+                                          c.data(),
+                                          2 * page_size,
+                                          3);
+            REQUIRE(len > 0);
+            c.resize(len);
+            deltas += lit_delta(c) != 0;
+            ++rounds;
+            auto out = std::vector<unsigned char>(page_size + 16, canary);
+            REQUIRE(seqlz_decompress(c.data(), len, out.data(), scratch.data()) == 0);
+            CHECK(std::equal(page.begin(), page.end(), out.begin()));
+            CHECK(std::all_of(out.begin() + page_size, out.end(), [](unsigned char b) {
+                return b == canary;
+            }));
+        }
+    }
+    CHECK(deltas == rounds);
+}
+
 TEST_CASE("seqlz: level 3 without room for the delta's records writes the page without deltas") {
     // The records take 6 bytes per sequence with literals: a dst with room for the page with raw literals and
     // 32 bytes, but not for them, gets a page without deltas, which comes back; from seqlz_encode() with the

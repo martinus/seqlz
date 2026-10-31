@@ -240,14 +240,31 @@ static __always_inline void add8(u8 *p, unsigned int dist)
 
 /*
  * How far before a literal the byte is that its delta is to, see
- * SEQLZ_LIT_DELTA_AT; last is the offset of the sequence before
+ * SEQLZ_LIT_DELTA_AT: delta_fixed for SEQLZ_DELTA_4 and SEQLZ_DELTA_8, else
+ * from last, the offset of the sequence before
  */
-static __always_inline unsigned int delta_dist(unsigned int delta,
+static __always_inline unsigned int delta_dist(unsigned int delta_fixed,
 					       unsigned int last)
 {
-	return delta == SEQLZ_DELTA_4 ? 4U :
-	       delta == SEQLZ_DELTA_8 ? 8U :
-					seqlz_delta_last(last);
+	return delta_fixed ? delta_fixed : seqlz_delta_last(last);
+}
+
+/*
+ * Undoes the deltas of the 16 bytes at p, see undelta_literals(): in words, as
+ * the byte referred to is at least 4 (8) bytes before each byte of a word, so
+ * all of them are done when it is read
+ */
+static __always_inline void undelta16(u8 *p, unsigned int dist)
+{
+	if (dist >= 8U) {
+		add8(p, dist);
+		add8(p + 8, dist);
+	} else {
+		add4(p, dist);
+		add4(p + 4, dist);
+		add4(p + 8, dist);
+		add4(p + 12, dist);
+	}
 }
 
 /*
@@ -255,53 +272,45 @@ static __always_inline unsigned int delta_dist(unsigned int delta,
  * SEQLZ_LIT_DELTA_AT, in the block's order: the byte a delta is to is before
  * it, so it is the block's own again by then. last is the offset of the
  * sequence before.
- * Whole words while a word fits before the literals' end: as the byte
- * referred to is at least 4 (8) bytes before each byte of the word, all of
- * them are done when it is read.
+ * In 16 bytes at a time, so that a run of up to 16 literals is one step and
+ * has no tail, whose length would change from sequence to sequence: where the
+ * block has room, the last step goes up to 15 bytes past nl. What it writes
+ * there is written again before it is read: by the match after the literals
+ * and the sequences after it, which read only bytes before the ones they
+ * write. Without the room, the tail byte by byte.
  */
-static __always_inline void undelta_literals(unsigned int delta, u8 *d,
-					     const u8 *dst, unsigned int nl,
-					     unsigned int last)
+static __always_inline void undelta_literals(unsigned int delta_fixed, u8 *d,
+					     const u8 *dst, const u8 *d_end,
+					     unsigned int nl, unsigned int last)
 {
 	const unsigned int at = (unsigned int)(d - dst);
-	const unsigned int dist = delta_dist(delta, last);
+	const unsigned int dist = delta_dist(delta_fixed, last);
+	const unsigned int end =
+		(unsigned int)(d_end - d) >= nl + 15U ? nl + 15U : nl;
 	/* the first delta: the first literal dist bytes or more into dst */
 	unsigned int k = at >= dist ? 0 : dist - at;
 
-	if (dist >= 8U) {
-		for (; k + 8 <= nl; k += 8)
-			add8(d + k, dist);
-	} else {
-		for (; k + 4 <= nl; k += 4)
-			add4(d + k, dist);
-	}
+	for (; k + 16U <= end; k += 16)
+		undelta16(d + k, dist);
 	for (; k < nl; k++)
 		d[k] = (u8)(d[k] + *(d + k - dist));
 }
 
 /*
  * undelta_literals() for the fast path, which copied 16 bytes to d, of which nl
- * are literals: all 16 bytes, without a loop. What it writes past nl, the match
- * after the literals overwrites, and that match reads only bytes before them.
- * Near the block's start, the loops above.
+ * are literals: all 16 bytes, without a loop. Near the block's start, the loop
+ * above.
  */
-static __always_inline void undelta_fast(unsigned int delta, u8 *d,
-					 const u8 *dst, unsigned int nl,
-					 unsigned int last)
+static __always_inline void undelta_fast(unsigned int delta_fixed, u8 *d,
+					 const u8 *dst, const u8 *d_end,
+					 unsigned int nl, unsigned int last)
 {
-	const unsigned int dist = delta_dist(delta, last);
+	const unsigned int dist = delta_dist(delta_fixed, last);
 
-	if ((unsigned long)(d - dst) < dist) {
-		undelta_literals(delta, d, dst, nl, last);
-	} else if (dist >= 8U) {
-		add8(d, dist);
-		add8(d + 8, dist);
-	} else {
-		add4(d, dist);
-		add4(d + 4, dist);
-		add4(d + 8, dist);
-		add4(d + 12, dist);
-	}
+	if ((unsigned long)(d - dst) < dist)
+		undelta_literals(delta_fixed, d, dst, d_end, nl, last);
+	else
+		undelta16(d, dist);
 }
 
 /*
@@ -424,7 +433,7 @@ static __always_inline int decode_block(const void *src, unsigned int src_len,
 	u8 *d_fast;
 	unsigned long lit_fast, in_fast, end_gap;
 	struct seqlz_bit_reader br;
-	unsigned int n_lit, last = 1, tok, skip = 0, delta = 0;
+	unsigned int n_lit, last = 1, tok, skip = 0, delta = 0, delta_fixed = 0;
 
 	if (src_len < SEQLZ_HEADER)
 		return -EINVAL;
@@ -449,6 +458,14 @@ static __always_inline int decode_block(const void *src, unsigned int src_len,
 					  &delta);
 		if (!q)
 			return -EINVAL;
+		/*
+		 * The distance of SEQLZ_DELTA_4 and SEQLZ_DELTA_8, picked once
+		 * here and not per sequence, where it would be two more
+		 * branches; 0 for SEQLZ_DELTA_LAST, whose distance changes
+		 */
+		delta_fixed = delta == SEQLZ_DELTA_4 ? 4U :
+			      delta == SEQLZ_DELTA_8 ? 8U :
+						       0U;
 		br = (struct seqlz_bit_reader){ .p = q, .end = s_end };
 		lit = scratch;
 		lit_end = lit + n_lit;
@@ -539,7 +556,8 @@ static __always_inline int decode_block(const void *src, unsigned int src_len,
 			 */
 			copy16(d, lit);
 			if (deltas)
-				undelta_fast(delta, d, dst, nl, last);
+				undelta_fast(delta_fixed, d, dst, d_end, nl,
+					     last);
 			d += nl;
 			lit += nl;
 			last = off;
@@ -559,7 +577,7 @@ static __always_inline int decode_block(const void *src, unsigned int src_len,
 			return -EINVAL;
 		copy_literals(d, d_end, lit, lit_bound, nl);
 		if (deltas)
-			undelta_literals(delta, d, dst, nl, last);
+			undelta_literals(delta_fixed, d, dst, d_end, nl, last);
 		d += nl;
 		lit += nl;
 		if (len == SEQLZ_ML_CAP + SEQLZ_MIN_MATCH) {
@@ -589,8 +607,8 @@ last_literals:
 	 */
 	copy_literals(d, d_end, lit, lit_bound, (unsigned int)(lit_end - lit));
 	if (deltas)
-		undelta_literals(delta, d, dst, (unsigned int)(lit_end - lit),
-				 last);
+		undelta_literals(delta_fixed, d, dst, d_end,
+				 (unsigned int)(lit_end - lit), last);
 	/*
 	 * The block must end where its bits end: every byte read, fewer than 8
 	 * bits left in the last one, and those 0, as the compressor writes
