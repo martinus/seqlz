@@ -42,6 +42,10 @@ follows these rules; open gaps in existing code: issues #151 to #157 (review of 
   64-bit). It prints the three deepest and fails at 1024; deepest are `seqlz_decode_literals()` and
   `seqlz_code_literals()`, near 1000 with KASAN+UBSan as `stress.sh` sets them; `read_own_table()` is `noinline`
   to keep its locals out of `seqlz_decode_literals()`.
+- `check.sh` builds only what `port.py` keeps; the VM's and the phone's backends build all of `src/`,
+  the harness-only functions (`HARNESS_ONLY`) too, with the kernel's frame limit. Keep their locals
+  small: a 3.6 KB struct on the stack of `seqlz_code_raw_literals()` passed `check.sh` and failed the VM
+  build (31 Oct).
 - The copy never names this repo, our machines, phones or dumps. `port.py` fails on names
   (`FORBIDDEN`), not on wording like "on pages of a phone"; also on a `REWRITES` entry that matches no
   comment any more (change or remove it with its comment).
