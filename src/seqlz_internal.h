@@ -40,7 +40,14 @@
  * minimum made blocks a few bytes smaller and writes slower, most on in-order
  * cores.
  */
-#define SEQLZ_LIT_CODED_MIN 35U
+/*
+ * EXPERIMENT (#300), not for main: bit 0 level 3 without the lazy step and
+ * the step back, bit 1 level 3 without its own table, bit 2 level 2 from 19
+ */
+#ifndef SEQLZ_X
+#define SEQLZ_X 0
+#endif
+#define SEQLZ_LIT_CODED_MIN (SEQLZ_X & 4 ? 19U : 35U)
 /* the same at SEQLZ_LEVEL_OWN, which trades more time for bytes */
 #define SEQLZ_LIT_CODED_MIN_OWN 19U
 /*

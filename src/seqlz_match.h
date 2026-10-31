@@ -212,7 +212,7 @@ seqlz_match_block(u16 *table, const u8 *src, bool lazy, struct seqlz_encoder *e)
 		 * every match for the few it makes longer.
 		 */
 		len = 4U + seqlz_match_len(src + pos + 4, src + m + 4, end);
-		if (lazy) {
+		if (lazy && !(SEQLZ_X & 1)) {
 			if (len < SEQLZ_LAZY_LEN)
 				len = seqlz_lazy(table, src, &pos, &m, len,
 						 last, v_next, h_next);

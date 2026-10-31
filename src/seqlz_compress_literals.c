@@ -895,7 +895,8 @@ unsigned int seqlz_code_own(u8 *d, unsigned int len, struct seqlz_state *st,
 			    unsigned int delta)
 {
 	return code_literals(d, len, delta ? st->literals : NULL,
-			     delta ? NULL : st->literals, own_work(st), delta,
+			     delta ? NULL : st->literals,
+			     SEQLZ_X & 2 ? NULL : own_work(st), delta,
 			     SEQLZ_LIT_CODED_MIN_OWN);
 }
 
