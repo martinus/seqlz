@@ -355,6 +355,52 @@ TEST_CASE("seqlz_ref: pages' own literal tables with one bit flipped are valid o
     CHECK(pages == 30);
 }
 
+TEST_CASE("seqlz_ref: pages with moved byte values decode the same, also with every value of their byte") {
+    // The byte u after the sizes, all 256 values: other tables, h of 1 to 4, bits 5 to 7; and each moved
+    // byte value set to others, also to one of the other moved ones.
+    // Pages whose literals are 60% 3 bytes that table 0 codes longest, the rest any byte: at level 2 the
+    // whole page, at level 3 400 literals and zeros, too few for a table of their own, and with deltas
+    // on some.
+    auto const r = make_ref();
+    auto rng = std::mt19937_64(71);
+    auto by_length = std::vector<unsigned>(256);
+    for (unsigned b = 0; b < 256; ++b) {
+        by_length[b] = b;
+    }
+    std::stable_sort(by_length.begin(), by_length.end(), [](unsigned a, unsigned b) {
+        return seqlz_lit_sets[0][a] < seqlz_lit_sets[0][b];
+    });
+    auto pages = 0;
+    for (int round = 0; pages < 10 && round < 400; ++round) {
+        auto const level = 2U + static_cast<unsigned>(round) % 2U;
+        auto page = std::vector<unsigned char>(SEQLZ_BLOCK_SIZE);
+        for (std::size_t k = 0; k < (level == 2 ? page.size() : 400); ++k) {
+            page[k] = static_cast<unsigned char>(rng() % 5 < 3 ? by_length[255 - rng() % 3] : rng());
+        }
+        auto const c = compress(page, level);
+        if (!(c[1] & 0x80) || (c[2] & SEQLZ_LIT_CODE_MASK) != SEQLZ_LIT_SWAP) {
+            continue;
+        }
+        ++pages;
+        REQUIRE(!check_same(r.get(), c).empty());
+        auto const at = SEQLZ_LIT_HEADER(size_width(c)) + (c[2] >> SEQLZ_LIT_DELTA_AT);
+        auto const h = (c[at] >> SEQLZ_SWAP_H_AT) + 1U;
+        for (unsigned u = 0; u < 256; ++u) {
+            auto bad = c;
+            bad[at] = static_cast<unsigned char>(u);
+            check_same(r.get(), bad);
+        }
+        for (unsigned i = 0; i < h; ++i) {
+            for (unsigned k = 0; k < 16; ++k) {
+                auto bad = c;
+                bad[at + 1 + i] = static_cast<unsigned char>(k < h ? c[at + 1 + k] : rng());
+                check_same(r.get(), bad);
+            }
+        }
+    }
+    CHECK(pages == 10);
+}
+
 TEST_CASE("seqlz_ref: damaged pages are valid or invalid for both decoders alike") {
     auto const r = make_ref();
     auto rng = std::mt19937_64(43);
@@ -634,7 +680,7 @@ TEST_CASE("seqlz_ref: literal streams that end at every place of a byte, their p
     }
 }
 
-TEST_CASE("seqlz_ref: coded literals need a delta byte of 1 to 3, a code up to 8 and every code inside its stream") {
+TEST_CASE("seqlz_ref: coded literals need a delta byte of 1 to 3, a code up to 9 and every code inside its stream") {
     auto const r = make_ref();
     auto rng = std::mt19937_64(47);
     auto out = std::vector<unsigned char>(SEQLZ_BLOCK_SIZE);
@@ -643,8 +689,8 @@ TEST_CASE("seqlz_ref: coded literals need a delta byte of 1 to 3, a code up to 8
         CAPTURE(round);
         auto const c = compress(make_page(rng, 5), 2);
         REQUIRE((c[1] & 0x80) != 0);
-        // deltas, with a delta byte of 0 or 4 after byte 2, or a code of the literals above the page's own
-        // table, 9 to 15
+        // deltas, with a delta byte of 0 or 4 after byte 2, or a code of the literals above the moved byte
+        // values', 10 to 15
         for (unsigned int dt : {0U, 4U}) {
             auto bad = c;
             bad[2] = static_cast<unsigned char>(bad[2] | 1U << SEQLZ_LIT_DELTA_AT);
@@ -652,7 +698,7 @@ TEST_CASE("seqlz_ref: coded literals need a delta byte of 1 to 3, a code up to 8
             CHECK(seqlz_ref_decode(r.get(), bad.data(), bad.size(), out.data()) == -1);
             check_same(r.get(), bad);
         }
-        for (unsigned int b2 : {(c[2] & ~15U) | 9U, (c[2] & ~15U) | 15U}) {
+        for (unsigned int b2 : {(c[2] & ~15U) | 10U, (c[2] & ~15U) | 15U}) {
             auto bad = c;
             bad[2] = static_cast<unsigned char>(b2);
             CHECK(seqlz_ref_decode(r.get(), bad.data(), bad.size(), out.data()) == -1);

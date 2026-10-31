@@ -125,6 +125,23 @@ def own_table(block, at, own_codes):
     return canonical(lengths, 10), d
 
 
+def moved_table(block, at, lit_codes):
+    """docs/format.md's "A fixed table with moved byte values", from byte at: its codes, and its bytes d"""
+    if at >= len(block):
+        raise Invalid
+    k, h = block[at] & 7, (block[at] >> 3) + 1
+    v = block[at + 1 : at + 1 + h]
+    if h > 3 or len(v) < h or len(set(v)) != h:
+        raise Invalid
+    codes = dict(lit_codes[k])
+    # c[0], c[1], ...: shorter codes first, among codes of the same length by byte value
+    c = sorted(codes, key=lambda lc: (lc[0], codes[lc]))
+    for i in range(h):
+        had = next(lc for lc, s in codes.items() if s == v[i])
+        codes[had], codes[c[i]] = codes[c[i]], v[i]
+    return codes, 1 + h
+
+
 def decode(block, tables, block_bits):
     tok_codes, ll_codes, ml_codes, lit_codes, own_codes = tables
     size = 1 << block_bits
@@ -138,13 +155,18 @@ def decode(block, tables, block_bits):
     if h & 0x8000:
         t = block[2] if len(block) > 2 else 0
         w, code, e = 5 + (t >> 4 & 7), t & 15, t >> 7
-        if len(block) < 3 + w + e or code > 8 or n > size:
+        if len(block) < 3 + w + e or code > 9 or n > size:
             raise Invalid
         if e:
             dt = block[3]
             if dt not in (1, 2, 3):
                 raise Invalid
-        codes, d = own_table(block, 3 + w + e, own_codes) if code == 8 else (lit_codes[code], 0)
+        if code == 8:
+            codes, d = own_table(block, 3 + w + e, own_codes)
+        elif code == 9:
+            codes, d = moved_table(block, 3 + w + e, lit_codes)
+        else:
+            codes, d = lit_codes[code], 0
         sizes = int.from_bytes(block[3 + e : 3 + e + w], "little")
         start = [3 + w + e + d]
         for j in range(8):

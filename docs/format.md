@@ -37,7 +37,7 @@ decoder decodes all of them.
 ## Status
 
 > [!IMPORTANT]
-> This is the format of 21st October 2026 for 4 KiB pages, and nobody uses it yet. Until seqlz has users
+> This is the format of 31st October 2026 for 4 KiB pages, and nobody uses it yet. Until seqlz has users
 > it may still change, the tables included, and such a change updates this file: its rules, the hashes
 > of the tables and the example. Once seqlz is in a kernel, zram's pages still live only as long as the
 > kernel that wrote them, so a change needs no new name in zram, see
@@ -124,18 +124,18 @@ layouts.
 | 2 | 1 | `t`: `code = t & 15` is how the literals are coded, `w = 5 + ((t >> 4) & 7)` the bits of each stream size, `e = t >> 7` whether they are deltas |
 | 3 | `e` | with `e = 1` the byte `dt`, which delta the literals are, see [Literals as deltas](#literals-as-deltas), else nothing |
 | `3 + e` | `w` | `s[0]` to `s[7]`, the size of each literal stream, `w` bits each |
-| `3 + w + e` | `d` | with `code = 8` the block's own literal table, see [A block's own literal table](#a-blocks-own-literal-table), else nothing, `d = 0` |
+| `3 + w + e` | `d` | with `code = 8` the block's own literal table, see [A block's own literal table](#a-blocks-own-literal-table), with `code = 9` the bytes of a fixed table with moved byte values, see [A fixed table with moved byte values](#a-fixed-table-with-moved-byte-values), else nothing, `d = 0` |
 | `3 + w + e + d` | `s[0] + ... + s[7]` | the 8 literal streams, one after the other |
 | `3 + w + e + d + s[0] + ... + s[7]` | up to `len` | `B`, the bitstream of the sequences |
 
-`code` 0 to 7 is one of the 8 fixed literal tables, `code` 8 a table of the block's own, and 9 to 15
-are invalid.
+`code` 0 to 7 is one of the 8 fixed literal tables, `code` 8 a table of the block's own, `code` 9 a
+fixed table with moved byte values, and 10 to 15 are invalid.
 
 The `w` bytes from byte `3 + e` on are one number `S` of `8 * w` bits, little endian, and
 `s[j] = (S >> (j * w)) & ((1 << w) - 1)`: 8 sizes of `w` bits fill exactly `w` bytes; `w` is 5 to 12.
 *Why:* a stream holds at most every 8th literal, of at most 10 bits, so at most `BLOCK * 10 / 64`
 bytes, 640 in a 4 KiB block; the largest stream of most blocks is below 128 bytes, so 7 bits each
-do, and 2 bytes each made blocks about 5 bytes larger on average. The codes 9 to 15 are kept for later.
+do, and 2 bytes each made blocks about 5 bytes larger on average. The codes 10 to 15 are kept for later.
 
 The coded literals are split into 8 **streams**: literal 0 goes to stream 0, literal 1 to stream 1, ...,
 literal 8 to stream 0 again. Stream `j` starts at byte `start[j] = 3 + w + e + d + s[0] + ... + s[j-1]`,
@@ -146,8 +146,8 @@ A block is invalid if
 
 - `len < 2`, or `n > BLOCK`;
 - with raw literals `2 + n > len`;
-- with coded literals `len < 3 + w + e`, `dt` is not 1, 2 or 3, `code > 8`, the block's own table is
-  invalid, or `3 + w + e + d + s[0] + ... + s[7] > len`.
+- with coded literals `len < 3 + w + e`, `dt` is not 1, 2 or 3, `code > 9`, the block's own table or
+  the moved byte values are invalid, or `3 + w + e + d + s[0] + ... + s[7] > len`.
 
 ## Prefix codes
 
@@ -453,6 +453,25 @@ byte values, so a byte value takes no bits of its own, and the long lengths, whi
 block's own table have, get the shortest codes in `OWN`. A table takes 0.4 to 0.5 bytes per byte value
 with a code, 40 to 100 bytes on most blocks that have one.
 
+## A fixed table with moved byte values
+
+With `code = 9` the literals are coded with one of the fixed tables, with up to 3 byte values moved to
+its shortest codes. Byte `3 + w + e`, right after `dt` and the sizes, is `u`: `k = u & 7` is the fixed
+table, `h = (u >> 3) + 1` the number of moved byte values. The `h` bytes after `u` are the byte values
+`v[0]` to `v[h-1]`, and `d = 1 + h`.
+
+The table starts as fixed table `k`. Its codes in the order of [Prefix codes](#prefix-codes), shorter
+codes first and among codes of the same length by byte value, are `c[0]`, `c[1]`, ... Then, for `i` from
+0 to `h - 1` in turn, `v[i]` takes the code `c[i]`, and the byte value that had `c[i]` takes the code
+that `v[i]` had before this step; where `v[i]` has `c[i]` already, nothing changes. So the codes stay
+as they are, only which byte value each one stands for changes.
+
+The block is invalid if `h` is above 3, which bits 5 to 7 of `u` not 0 also make it, two of the `v[i]`
+are the same, or `3 + w + e + d > len`. *Why:* most of what a table of the block's own saves over a fixed
+one is its 1 to 3 most frequent byte values. Moving them takes 2 to 4 bytes instead of the 40 to 100 of
+a table of its own, and a decoder builds the table from the fixed one by writing again the entries of at
+most 6 codes.
+
 ## Example
 
 The 9 bytes `02 00 61 62 23 f2 ff fb 60` are a 4 KiB block of `ab` 2048 times, with the 4 KiB tables:
@@ -490,6 +509,9 @@ with lz4 or zstd. For reference, `seqlz_compress()` writes:
 - at level 3, for blocks with 512 literals or more, a table of the block's own where that and its
   description take at least 32 bytes less than the best fixed table. Its code lengths are close to a
   Huffman code's, at most 10 bits;
+- at levels 2 and 3, where a block has no table of its own, its most frequent byte values moved to
+  the shortest codes of that fixed table, as many of the 3 most frequent as take the fewest bytes
+  with their `1 + h`, counted from all literals, where that makes the block smaller;
 - at level 3, literals as deltas, with the `dt` whose deltas take the fewest bits in the best fixed
   table, counted for every 11th literal of the block, with `dt`'s 8 bits scaled the same way, as 1, where
   that is not `e = 0` and the deltas get coded; else the literals as they are.
@@ -506,7 +528,7 @@ code, also the ones it wrote back to a backing device, and no page meets a newer
 the format needs a new kernel, not a new algorithm name in zram, which would be visible to users in
 `comp_algorithm` and in the Kconfig default. Two things would change that: another user of the codec
 that keeps pages longer, or zram's pages kept across a kexec by live update (`kernel/liveupdate/`),
-which zram does not do in 2026. The values of byte 2 with a code above 8, and the values of `dt` other
+which zram does not do in 2026. The values of byte 2 with a code above 9, and the values of `dt` other
 than 1 to 3, are invalid now and free for a format that has to tell itself apart.
 
 <!-- not in the kernel's copy -->
@@ -527,7 +549,7 @@ found none either. Both runs were before literals as deltas; for those, the CI's
 blocks in all, and agreed on every one.
 `test/seqlz_ref_test.cpp` checks the example above, the compressor's blocks at every level, damaged
 blocks, blocks whose literals are deltas of each kind, and blocks made by hand for the rules that damage rarely
-reaches: the codes above 8 and the values of `dt` other than 1 to 3, a literal code outside its stream, a block of literals only, a last sequence with a token, which
+reaches: the codes above 9 and the values of `dt` other than 1 to 3, a literal code outside its stream, a block of literals only, a last sequence with a token, which
 is invalid, and blocks' own tables that overfill the code space, name a byte value above 255 or have
 bits after their end.
 <!-- end -->

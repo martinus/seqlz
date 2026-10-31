@@ -14,6 +14,7 @@ extern "C" {
 #include <cstdint>
 #include <cstring>
 #include <memory>
+#include <numeric>
 #include <random>
 #include <set>
 #include <string_view>
@@ -1120,6 +1121,8 @@ std::vector<unsigned char> encode_coded(seqlz_page const& p) {
     return c;
 }
 
+unsigned fixed_table(std::vector<unsigned char> const& c);
+
 TEST_CASE("seqlz: coded literals use the literal table with the fewest bits for them") {
     auto rng = std::mt19937_64(5);
     auto chosen = std::array<int, SEQLZ_LIT_SETS>{};
@@ -1160,8 +1163,8 @@ TEST_CASE("seqlz: coded literals use the literal table with the fewest bits for 
                 best_bits = bits;
             }
         }
-        CHECK((c[2] & 7U) == best);
-        ++chosen[c[2] & 7U];
+        CHECK(fixed_table(c) == best);
+        ++chosen[fixed_table(c)];
     }
     // not always the same table
     CHECK(std::count_if(chosen.begin(), chosen.end(), [](int n) {
@@ -1186,8 +1189,9 @@ std::vector<std::vector<std::pair<unsigned, unsigned char>>> canonical_codes(uns
 }
 
 // In a page with coded literals (docs/format.md): the width of its stream sizes, the bytes that say which
-// delta its literals are (1 with deltas, in byte 3), the length of its header, and the size of literal stream
-// st, width bits from bit st * width of the bytes behind those.
+// delta its literals are (1 with deltas, in byte 3), the bytes of a swapped fixed table (SEQLZ_LIT_SWAP), the
+// length of its header with them, and the size of literal stream st, width bits from bit st * width of the
+// bytes behind the delta's.
 unsigned size_width(std::vector<unsigned char> const& c) {
     return SEQLZ_SIZE_BITS_MIN + ((c[2] >> SEQLZ_LIT_WIDTH_AT) & 7U);
 }
@@ -1196,8 +1200,23 @@ unsigned delta_bytes(std::vector<unsigned char> const& c) {
     return c[2] >> SEQLZ_LIT_DELTA_AT;
 }
 
+unsigned swap_bytes(std::vector<unsigned char> const& c) {
+    if ((c[2] & SEQLZ_LIT_CODE_MASK) != SEQLZ_LIT_SWAP) {
+        return 0;
+    }
+    return 2U + (c[SEQLZ_LIT_HEADER(size_width(c)) + delta_bytes(c)] >> SEQLZ_SWAP_H_AT);
+}
+
+// the fixed table of a page whose literals one codes, swapped or not
+unsigned fixed_table(std::vector<unsigned char> const& c) {
+    if ((c[2] & SEQLZ_LIT_CODE_MASK) == SEQLZ_LIT_SWAP) {
+        return c[SEQLZ_LIT_HEADER(size_width(c)) + delta_bytes(c)] & (SEQLZ_LIT_SETS - 1U);
+    }
+    return c[2] & SEQLZ_LIT_CODE_MASK;
+}
+
 std::size_t lit_header(std::vector<unsigned char> const& c) {
-    return SEQLZ_LIT_HEADER(size_width(c)) + delta_bytes(c);
+    return SEQLZ_LIT_HEADER(size_width(c)) + delta_bytes(c) + swap_bytes(c);
 }
 
 unsigned stream_size(std::vector<unsigned char> const& c, unsigned st) {
@@ -1266,13 +1285,13 @@ TEST_CASE("seqlz: the stream sizes take as many bits as the largest needs, 5 to 
         }
         auto const n_lit = lits_count(c);
         CHECK(coded + SEQLZ_LIT_CODED_MIN < n_lit - n_lit / 16);
-        // a decoder takes any width from 5 to 12, and the literals' code at most SEQLZ_LIT_OWN
+        // a decoder takes any width from 5 to 12, and the literals' code at most SEQLZ_LIT_SWAP
         for (unsigned w = width; w <= SEQLZ_SIZE_BITS_MAX; ++w) {
             auto const wider = with_size_width(c, w);
             REQUIRE(seqlz_decompress(wider.data(), static_cast<unsigned>(wider.size()), out.data(), scratch.data()) == 0);
             CHECK(out == page);
         }
-        for (unsigned code = SEQLZ_LIT_OWN + 1; code <= SEQLZ_LIT_CODE_MASK; ++code) {
+        for (unsigned code = SEQLZ_LIT_SWAP + 1; code <= SEQLZ_LIT_CODE_MASK; ++code) {
             auto reserved = c;
             reserved[2] = static_cast<unsigned char>((c[2] & ~SEQLZ_LIT_CODE_MASK) | code);
             CHECK(seqlz_decompress(reserved.data(), static_cast<unsigned>(reserved.size()), out.data(), scratch.data()) ==
@@ -1587,6 +1606,79 @@ TEST_CASE("seqlz: level 3 gives a page a literal table of its own where that sav
         CHECK(sizes[3] < sizes[2]);
     }
     CHECK(own == 20);
+}
+
+// A page of literals, 60% of them the 3 bytes literal table 0 codes longest, 20% each, the rest as table 0
+// codes them: the 3 bytes are its most frequent literals, which table 0 codes long. The page's
+// first 3 bytes are those 3, the longest first.
+std::vector<unsigned char> page_with_moved_bytes(std::mt19937_64& rng) {
+    auto by_length = std::vector<unsigned>(256);
+    std::iota(by_length.begin(), by_length.end(), 0U);
+    std::stable_sort(by_length.begin(), by_length.end(), [](unsigned a, unsigned b) {
+        return seqlz_lit_sets[0][a] < seqlz_lit_sets[0][b];
+    });
+    auto page = bytes_as_coded_by(rng, 0);
+    for (std::size_t k = 0; k < page.size(); ++k) {
+        if (k < 3 || rng() % 5 < 3) {
+            page[k] = static_cast<unsigned char>(by_length[255 - (k < 3 ? k : rng() % 3)]);
+        }
+    }
+    return page;
+}
+
+TEST_CASE("seqlz: a page's most frequent literals move to the shortest codes of a fixed table") {
+    // Literals only, 60% of them the 3 bytes table 0 codes longest, 20% each, the rest as table 0 codes
+    // them: the encoder moves the 3 to the shortest codes, which the decoder has to undo exactly, at
+    // levels 2 and 3, also for a page at an odd address, where the table is built at the next even one.
+    auto st = std::make_unique<seqlz_state>();
+    auto rng = std::mt19937_64(67);
+    auto scratch = std::vector<unsigned char>(SEQLZ_SCRATCH);
+    auto out = std::vector<unsigned char>(page_size);
+    auto c = std::vector<unsigned char>(2 * page_size);
+    auto const hot = page_with_moved_bytes(rng); // its first 3 bytes are the 3
+    auto swapped = 0;
+    for (int round = 0; round < 20; ++round) {
+        CAPTURE(round);
+        auto const page = page_with_moved_bytes(rng);
+        for (unsigned level = 2; level <= SEQLZ_LEVELS; ++level) {
+            CAPTURE(level);
+            auto const len = seqlz_compress_block(st.get(), page.data(), c.data(), 2 * page_size, level);
+            REQUIRE(len > 0);
+            auto const block = std::vector<unsigned char>(c.begin(), c.begin() + len);
+            REQUIRE(seqlz_decompress(block.data(), len, out.data(), scratch.data()) == 0);
+            CHECK(out == page);
+            auto odd = std::vector<unsigned char>(page_size + 1);
+            REQUIRE(seqlz_decompress(block.data(), len, odd.data() + 1, scratch.data()) == 0);
+            CHECK(std::equal(page.begin(), page.end(), odd.begin() + 1));
+            REQUIRE(lits_coded(block));
+            if (level != 2) {
+                continue;
+            }
+            REQUIRE((block[2] & SEQLZ_LIT_CODE_MASK) == SEQLZ_LIT_SWAP);
+            ++swapped;
+            auto const at = SEQLZ_LIT_HEADER(size_width(block)) + delta_bytes(block);
+            // the 3 bytes, in the order of how often they are literals, which differs from page to page
+            CHECK(swap_bytes(block) == 4);
+            CHECK(std::set<unsigned>{block[at + 1], block[at + 2], block[at + 3]} ==
+                  std::set<unsigned>{hot[0], hot[1], hot[2]});
+            // h of 4, a bit of 5 to 7, the same byte twice: not valid
+            auto damaged = block;
+            damaged[at] |= 3U << SEQLZ_SWAP_H_AT;
+            CHECK(seqlz_decompress(damaged.data(), len, out.data(), scratch.data()) == -EINVAL);
+            for (unsigned bit = 5; bit < 8; ++bit) {
+                damaged = block;
+                damaged[at] ^= static_cast<unsigned char>(1U << bit);
+                CHECK(seqlz_decompress(damaged.data(), len, out.data(), scratch.data()) == -EINVAL);
+            }
+            damaged = block;
+            damaged[at + 3] = damaged[at + 1];
+            CHECK(seqlz_decompress(damaged.data(), len, out.data(), scratch.data()) == -EINVAL);
+            damaged = block;
+            damaged[at + 2] = damaged[at + 3];
+            CHECK(seqlz_decompress(damaged.data(), len, out.data(), scratch.data()) == -EINVAL);
+        }
+    }
+    CHECK(swapped == 20);
 }
 
 TEST_CASE("seqlz: a page without matches but with literals that code well gets them coded") {

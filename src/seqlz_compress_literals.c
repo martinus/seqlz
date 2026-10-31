@@ -689,15 +689,24 @@ static unsigned int own_code(struct own_work *w, unsigned int n_literals,
 	return out;
 }
 
+/* the code length of byte b: len[b], or with len NULL the low bits of enc[b] */
+static __always_inline unsigned int code_len(const u8 *len, const u32 *enc,
+					     unsigned int b)
+{
+	return len ? len[b] : enc[b] & 63U;
+}
+
 /*
- * The bytes of each stream with the block's own code, in w->sizes, and their
- * sum: 8 literals a step, the sum of each stream in a register of its own.
+ * The bytes of each stream with a code, in w->sizes, and their sum: 8
+ * literals a step, the sum of each stream in a register of its own, the
+ * code lengths from code_len().
  */
-static unsigned int own_sizes(struct own_work *w, const u8 *literals,
-			      unsigned int n_literals)
+static __always_inline unsigned int stream_sizes(struct own_work *w,
+						 const u8 *literals,
+						 unsigned int n_literals,
+						 const u8 *len, const u32 *enc)
 {
 	unsigned int *const sizes = w->sizes;
-	const u8 *const len = w->len;
 	unsigned int b0 = 0, b1 = 0, b2 = 0, b3 = 0;
 	unsigned int b4 = 0, b5 = 0, b6 = 0, b7 = 0;
 	unsigned int sum = 0;
@@ -705,14 +714,14 @@ static unsigned int own_sizes(struct own_work *w, const u8 *literals,
 
 	for (k = 0; k + SEQLZ_LIT_STREAMS <= n_literals;
 	     k += SEQLZ_LIT_STREAMS) {
-		b0 += len[literals[k]];
-		b1 += len[literals[k + 1]];
-		b2 += len[literals[k + 2]];
-		b3 += len[literals[k + 3]];
-		b4 += len[literals[k + 4]];
-		b5 += len[literals[k + 5]];
-		b6 += len[literals[k + 6]];
-		b7 += len[literals[k + 7]];
+		b0 += code_len(len, enc, literals[k]);
+		b1 += code_len(len, enc, literals[k + 1]);
+		b2 += code_len(len, enc, literals[k + 2]);
+		b3 += code_len(len, enc, literals[k + 3]);
+		b4 += code_len(len, enc, literals[k + 4]);
+		b5 += code_len(len, enc, literals[k + 5]);
+		b6 += code_len(len, enc, literals[k + 6]);
+		b7 += code_len(len, enc, literals[k + 7]);
 	}
 	sizes[0] = b0;
 	sizes[1] = b1;
@@ -723,12 +732,26 @@ static unsigned int own_sizes(struct own_work *w, const u8 *literals,
 	sizes[6] = b6;
 	sizes[7] = b7;
 	for (; k < n_literals; k++)
-		sizes[k % SEQLZ_LIT_STREAMS] += len[literals[k]];
+		sizes[k % SEQLZ_LIT_STREAMS] += code_len(len, enc, literals[k]);
 	for (k = 0; k < SEQLZ_LIT_STREAMS; k++) {
 		sizes[k] = (sizes[k] + 7U) / 8U;
 		sum += sizes[k];
 	}
 	return sum;
+}
+
+/* stream_sizes() with the block's own code */
+static unsigned int own_sizes(struct own_work *w, const u8 *literals,
+			      unsigned int n_literals)
+{
+	return stream_sizes(w, literals, n_literals, w->len, NULL);
+}
+
+/* stream_sizes() with the moved bytes' codes, see swap_try() */
+static unsigned int swap_sizes(struct own_work *w, const u8 *literals,
+			       unsigned int n_literals)
+{
+	return stream_sizes(w, literals, n_literals, NULL, w->enc);
 }
 
 /*
@@ -745,6 +768,117 @@ static unsigned int size_width(const unsigned int *sizes)
 }
 
 /*
+ * The bytes whose code changes when the first h bytes of hot move to the
+ * shortest codes of fixed table t, see SEQLZ_LIT_SWAP, as the decoder does it
+ * in read_swaps(): byte i takes the i-th code, the byte that had it takes byte
+ * i's. Each changed byte's new code goes into m, as the struct lit_table's enc
+ * entry, more[i] gets the bits the first i + 1 moves add to the literals, from
+ * the counts in freq, negative where they save. Returns how many in m.
+ */
+struct swap_moved {
+	u8 b[2U * SEQLZ_SWAP_MAX];
+	u32 enc[2U * SEQLZ_SWAP_MAX];
+};
+
+static unsigned int swap_codes(const struct lit_table *t, const u16 *freq,
+			       const u8 *hot, unsigned int h,
+			       struct swap_moved *m, int *more)
+{
+	unsigned int i, k, n = 0, nm = 0;
+	int add = 0;
+
+	for (i = 0; i < h; i++) {
+		const unsigned int b = hot[i];
+		const unsigned int len = t->decode[n] & 63U;
+		const u32 slot = len | (n >> (SEQLZ_LIT_BITS - len)) << 8;
+		unsigned int holder = t->decode[n] >> 8;
+		u32 had = t->enc[b];
+
+		/* the latest change of a byte is its code now */
+		for (k = 0; k < nm; k++) {
+			if (m->enc[k] == slot)
+				holder = m->b[k];
+			if (m->b[k] == b)
+				had = m->enc[k];
+		}
+		if (had != slot) {
+			add += (int)freq[b] * ((int)len - (int)(had & 63U)) +
+			       (int)freq[holder] *
+				       ((int)(had & 63U) - (int)len);
+			m->b[nm] = (u8)b;
+			m->enc[nm++] = slot;
+			m->b[nm] = (u8)holder;
+			m->enc[nm++] = had;
+		}
+		more[i] = add;
+		n += (1U << SEQLZ_LIT_BITS) >> len;
+	}
+	return nm;
+}
+
+/*
+ * Whether moving the block's most frequent literals to the shortest codes of
+ * fixed table set, which codes them in bits, pays, see SEQLZ_LIT_SWAP: the
+ * counts of w->freq, already summed into w->freq[0] where merged, give the
+ * SEQLZ_SWAP_MAX most frequent bytes, and each h is priced by the bits it
+ * changes and its 1 + h bytes. Where one pays, the codes go into w->enc, its
+ * bytes into w->desc, and the streams' sizes into w->sizes; returns their sum,
+ * 0 if none pays. Not inlined: its locals would go into the stack
+ * frame of code_literals(), which is near what the kernel allows.
+ */
+static noinline unsigned int swap_try(struct own_work *w, const u8 *literals,
+				      unsigned int n_literals, unsigned int set,
+				      unsigned int bits, bool merged)
+{
+	const struct lit_table *t = &seqlz_tables.lit[set];
+	unsigned int top[SEQLZ_SWAP_MAX] = { 0 };
+	unsigned int cnt[SEQLZ_SWAP_MAX] = { 0 };
+	unsigned int k, j, h, nm, best = 0;
+	int more[SEQLZ_SWAP_MAX];
+	struct swap_moved m;
+	unsigned int best_bytes = (bits + 7U) / 8U;
+	u8 hot[SEQLZ_SWAP_MAX] = { 0 };
+
+	/* the most frequent bytes, the smaller one of equal counts first */
+	for (k = 0; k < 256; k++) {
+		unsigned int f = w->freq[0][k] + (merged ? 0U : w->freq[1][k]);
+
+		if (f <= cnt[SEQLZ_SWAP_MAX - 1U])
+			continue;
+		for (j = SEQLZ_SWAP_MAX - 1U; j > 0 && f > cnt[j - 1U]; j--) {
+			cnt[j] = cnt[j - 1U];
+			top[j] = top[j - 1U];
+		}
+		cnt[j] = f;
+		top[j] = k;
+	}
+	for (h = 0; h < SEQLZ_SWAP_MAX && cnt[h]; h++)
+		hot[h] = (u8)top[h];
+	if (!merged)
+		for (j = 0; j < h; j++)
+			w->freq[0][hot[j]] += w->freq[1][hot[j]];
+	swap_codes(t, w->freq[0], hot, h, &m, more);
+	for (j = 1; j <= h; j++) {
+		unsigned int b = (unsigned int)((int)bits + more[j - 1U]);
+
+		if ((b + 7U) / 8U + 1U + j < best_bytes) {
+			best_bytes = (b + 7U) / 8U + 1U + j;
+			best = j;
+		}
+	}
+	if (!best)
+		return 0;
+	nm = swap_codes(t, w->freq[0], hot, best, &m, more);
+	memcpy(w->enc, t->enc, sizeof(w->enc));
+	for (k = 0; k < nm; k++)
+		w->enc[m.b[k]] = m.enc[k];
+	w->desc[0] = (u8)(set | (best - 1U) << SEQLZ_SWAP_H_AT);
+	for (j = 0; j < best; j++)
+		w->desc[1U + j] = hot[j];
+	return swap_sizes(w, literals, n_literals);
+}
+
+/*
  * Turns the block of len bytes in d, with raw literals as the encoder wrote it,
  * into one with Huffman coded literals, where that saves more than 1/16 of them
  * plus coded_min bytes, SEQLZ_LIT_CODED_MIN or SEQLZ_LIT_CODED_MIN_OWN, not
@@ -753,9 +887,12 @@ static unsigned int size_width(const unsigned int *sizes)
  * anything at all saved almost no more memory. Returns the new length, or len
  * if the literals stay raw.
  *
- * The code is the fixed table that codes them in the fewest bits, or, with own
- * not NULL, a table of the block's own, where that and its description take at
- * least OWN_SAVES_MIN bytes less.
+ * The code is the fixed table that codes them in the fewest bits, or, with
+ * own_ok, a table of the block's own, where that and its description take at
+ * least OWN_SAVES_MIN bytes less. Without a table of its own, and with work
+ * not NULL, the block's most frequent bytes move to that fixed table's
+ * shortest codes where that takes fewer bytes, see SEQLZ_LIT_SWAP. work is
+ * where the counts of the bytes go, and the codes of either.
  *
  * The coded literals are written over the raw ones in d, so they are read from
  * a copy: raw if the caller has one, with spare NULL, else spare, at least a
@@ -770,7 +907,8 @@ static unsigned int size_width(const unsigned int *sizes)
  */
 static __always_inline unsigned int
 code_literals(u8 *d, unsigned int len, const u8 *raw, u8 *spare,
-	      struct own_work *own, unsigned int delta, unsigned int coded_min)
+	      struct own_work *work, bool own_ok, unsigned int delta,
+	      unsigned int coded_min)
 {
 	const unsigned int n_literals = get_unaligned_le16(d);
 	const unsigned int bitstream = len - SEQLZ_HEADER - n_literals;
@@ -778,19 +916,23 @@ code_literals(u8 *d, unsigned int len, const u8 *raw, u8 *spare,
 	/* with a delta, its byte before the sizes */
 	const unsigned int delta_byte = delta != 0;
 	unsigned int bits = ~0U, k, j, coded, set = 0, sizes[SEQLZ_LIT_STREAMS],
-		     width, header, desc = 0;
+		     width, header, desc = 0, code;
+	struct own_work *own = own_ok ? work : NULL;
 	const u32 *enc;
 	/* the bits of each stream in each table, see lit_sums() */
 	u64 even[SEQLZ_LIT_STREAMS] = { 0 }, odd[SEQLZ_LIT_STREAMS] = { 0 };
 	/* where each stream starts, and the end of the last */
 	u8 *q[SEQLZ_LIT_STREAMS + 1];
 
-	if (own &&
-	    (n_literals < OWN_LITERALS_MIN || n_literals > OWN_LITERALS_MAX))
+	if (n_literals > OWN_LITERALS_MAX) {
+		work = NULL;
 		own = NULL;
-	if (own)
-		memset(own->freq, 0, sizeof(own->freq));
-	lit_sums(literals, n_literals, even, odd, own ? own->freq : NULL);
+	}
+	if (n_literals < OWN_LITERALS_MIN)
+		own = NULL;
+	if (work)
+		memset(work->freq, 0, sizeof(work->freq));
+	lit_sums(literals, n_literals, even, odd, work ? work->freq : NULL);
 	/* the table with the fewest bits */
 	for (k = 0; k < SEQLZ_LIT_SETS; k++) {
 		unsigned int b = 0;
@@ -809,6 +951,7 @@ code_literals(u8 *d, unsigned int len, const u8 *raw, u8 *spare,
 	width = size_width(sizes);
 	header = SEQLZ_LIT_HEADER(width) + delta_byte;
 	enc = seqlz_tables.lit[set].enc;
+	code = set;
 	if (own) {
 		unsigned int n =
 			own_code(own, n_literals, header + coded, coded_min);
@@ -827,6 +970,30 @@ code_literals(u8 *d, unsigned int len, const u8 *raw, u8 *spare,
 				coded = own_coded;
 				memcpy(sizes, own->sizes, sizeof(sizes));
 				enc = own->enc;
+				code = SEQLZ_LIT_OWN;
+			}
+		}
+	}
+	if (work && !desc) {
+		unsigned int sw_coded =
+			swap_try(work, literals, n_literals, set, bits, own);
+
+		if (sw_coded) {
+			unsigned int sw_width = size_width(work->sizes);
+			unsigned int sw_desc =
+				1U + (work->desc[0] >> SEQLZ_SWAP_H_AT) + 1U;
+
+			if (SEQLZ_LIT_HEADER(sw_width) + delta_byte + sw_desc +
+				    sw_coded <
+			    header + coded) {
+				desc = sw_desc;
+				width = sw_width;
+				header = SEQLZ_LIT_HEADER(width) + delta_byte +
+					 desc;
+				coded = sw_coded;
+				memcpy(sizes, work->sizes, sizeof(sizes));
+				enc = work->enc;
+				code = SEQLZ_LIT_SWAP;
 			}
 		}
 	}
@@ -849,14 +1016,13 @@ code_literals(u8 *d, unsigned int len, const u8 *raw, u8 *spare,
 	 * width - SEQLZ_SIZE_BITS_MIN in bits 4 to 6, in bit 7 whether they are
 	 * deltas
 	 */
-	d[2] = (u8)((desc ? SEQLZ_LIT_OWN : set) |
-		    (width - SEQLZ_SIZE_BITS_MIN) << SEQLZ_LIT_WIDTH_AT |
+	d[2] = (u8)(code | (width - SEQLZ_SIZE_BITS_MIN) << SEQLZ_LIT_WIDTH_AT |
 		    delta_byte << SEQLZ_LIT_DELTA_AT);
 	if (delta)
 		d[SEQLZ_LIT_HEADER(0)] = (u8)delta;
 	lit_sizes(d + SEQLZ_LIT_HEADER(0) + delta_byte, sizes, width);
 	if (desc)
-		memcpy(d + SEQLZ_LIT_HEADER(width) + delta_byte, own->desc,
+		memcpy(d + SEQLZ_LIT_HEADER(width) + delta_byte, work->desc,
 		       desc);
 	/* the bitstream, down to right after the coded literals */
 	coded += header;
@@ -895,25 +1061,32 @@ unsigned int seqlz_code_own(u8 *d, unsigned int len, struct seqlz_state *st,
 			    unsigned int delta)
 {
 	return code_literals(d, len, delta ? st->literals : NULL,
-			     delta ? NULL : st->literals, own_work(st), delta,
-			     SEQLZ_LIT_CODED_MIN_OWN);
+			     delta ? NULL : st->literals, own_work(st), true,
+			     delta, SEQLZ_LIT_CODED_MIN_OWN);
 }
 
 /*
  * The literals with the fixed tables only, below SEQLZ_LEVEL_OWN. Each entry
  * point has code_literals() inlined, compiled for its arguments: here without
- * the counts of a block's own table and without deltas.
+ * a table of the block's own and without deltas.
  */
-unsigned int seqlz_code_literals(u8 *d, unsigned int len, u8 *spare)
+unsigned int seqlz_code_literals(u8 *d, unsigned int len,
+				 struct seqlz_state *st)
 {
-	return code_literals(d, len, NULL, spare, NULL, 0, SEQLZ_LIT_CODED_MIN);
+	return code_literals(d, len, NULL, st->literals, own_work(st), false, 0,
+			     SEQLZ_LIT_CODED_MIN);
 }
 
 /*
  * The same for seqlz_encode(), whose caller has the raw literals at raw, so it
- * needs no spare: its state may be NULL
+ * needs no spare: its state may be NULL. The counts of the moved bytes go into
+ * work of its own, static: on the stack it is more than a kernel's frame, and
+ * the tests and tools call this from one thread.
  */
 unsigned int seqlz_code_raw_literals(u8 *d, unsigned int len, const u8 *raw)
 {
-	return code_literals(d, len, raw, NULL, NULL, 0, SEQLZ_LIT_CODED_MIN);
+	static struct own_work w;
+
+	return code_literals(d, len, raw, NULL, &w, false, 0,
+			     SEQLZ_LIT_CODED_MIN);
 }

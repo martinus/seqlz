@@ -236,8 +236,9 @@ static inline unsigned int seqlz_off_class(unsigned int off, unsigned int last,
  * w - SEQLZ_SIZE_BITS_MIN in bits 4 to 6 and in bit 7 whether the literals are
  * deltas, then with deltas their byte, see SEQLZ_LIT_DELTA_AT, then the sizes
  * of the 8 streams in bytes, w bits each, lowest bit first. The code is one of
- * the SEQLZ_LIT_SETS fixed tables, or SEQLZ_LIT_OWN; codes above it are
- * invalid. The decoder needs the sizes to know where each stream starts.
+ * the SEQLZ_LIT_SETS fixed tables, SEQLZ_LIT_OWN or SEQLZ_LIT_SWAP; codes
+ * above it are invalid. The decoder needs the sizes to know where each stream
+ * starts.
  *
  * w is the fewest bits that hold the largest size, but at least 5. A stream
  * holds every 8th literal of at most 10 bits, at most 640 bytes in a 4 KiB
@@ -287,6 +288,20 @@ static inline unsigned int seqlz_off_class(unsigned int off, unsigned int last,
  */
 #define SEQLZ_LIT_OWN 8U
 #define SEQLZ_OWN_RUN 9U
+/*
+ * The literals' code SEQLZ_LIT_SWAP: a fixed table with a few of the block's
+ * bytes moved to its shortest codes. After the stream sizes a byte with the
+ * table in bits 0 to 2, h - 1 in bits 3 and 4 and zeros in bits 5 to 7, h from
+ * 1 to SEQLZ_SWAP_MAX, then h different bytes. For i from 0 to h - 1 in turn,
+ * byte i takes the table's i-th code in the canonical order, by length and
+ * then by byte, the shortest first, and the byte that had that code takes the
+ * code byte i had. A block's most frequent bytes are most of what a table of
+ * its own would save over a fixed one. The decoder builds the table in the
+ * block, as an own table.
+ */
+#define SEQLZ_LIT_SWAP 9U
+#define SEQLZ_SWAP_MAX 3U
+#define SEQLZ_SWAP_H_AT 3
 /*
  * the 10 lengths, then runs of 1 to 9 bits; a run of 9 bits is more than a
  * table has bytes, and invalid, but makes the code complete

@@ -233,7 +233,7 @@ static void seqlz_test_round_trip(struct kunit *test)
 {
 	struct rnd_state rng;
 	struct bufs b;
-	int round, level, len, coded = 0, own = 0, deltas = 0;
+	int round, level, len, coded = 0, own = 0, swapped = 0, deltas = 0;
 	/* the blocks with each delta, SEQLZ_DELTA_4 to SEQLZ_DELTA_LAST */
 	int delta[SEQLZ_DELTA_LAST + 1] = {};
 
@@ -249,6 +249,9 @@ static void seqlz_test_round_trip(struct kunit *test)
 			coded += lits_coded(b.c);
 			own += lits_coded(b.c) &&
 			       (b.c[2] & SEQLZ_LIT_CODE_MASK) == SEQLZ_LIT_OWN;
+			swapped += lits_coded(b.c) &&
+				   (b.c[2] & SEQLZ_LIT_CODE_MASK) ==
+					   SEQLZ_LIT_SWAP;
 			deltas += lits_coded(b.c) &&
 				  b.c[2] >> SEQLZ_LIT_DELTA_AT;
 			KUNIT_ASSERT_LE(test, lits_delta(b.c),
@@ -292,9 +295,13 @@ static void seqlz_test_round_trip(struct kunit *test)
 							     len + 1));
 		}
 	}
-	/* the blocks have to give both layouts, own tables and each delta */
+	/*
+	 * the blocks have to give both layouts, own tables, moved byte values
+	 * and each delta
+	 */
 	KUNIT_EXPECT_GE(test, coded, 20);
 	KUNIT_EXPECT_GE(test, own, 10);
+	KUNIT_EXPECT_GE(test, swapped, 10);
 	KUNIT_EXPECT_GE(test, deltas, 10);
 	KUNIT_EXPECT_GT(test, delta[SEQLZ_DELTA_4], 0);
 	KUNIT_EXPECT_GT(test, delta[SEQLZ_DELTA_8], 0);
@@ -894,7 +901,7 @@ enum damage {
 	DELTA_0, /* deltas, their byte 0 */
 	DELTA_4, /* deltas, their byte 4 */
 	DELTA_CUT, /* deltas, the block ends 1 byte before its header does */
-	CODE_9, /* the literals' code 9, above a block's own table */
+	CODE_10, /* the literals' code 10, above the swapped fixed tables */
 	STREAM_0_LONGER, /* stream 0 a 0 byte longer than its codes */
 	BYTE_TO_STREAM_1, /* stream 0's last byte counted in stream 1 */
 	PADDING_BIT, /* the lowest bit of stream 0's last byte set */
@@ -996,8 +1003,8 @@ static unsigned int coded_literals(struct maker *m, u8 *c, unsigned int n,
 	c[2] = (width - SEQLZ_SIZE_BITS_MIN) << SEQLZ_LIT_WIDTH_AT |
 	       (own ? SEQLZ_LIT_OWN : 0) | e << SEQLZ_LIT_DELTA_AT;
 	c[3] = damage == DELTA_0 ? 0 : damage == DELTA_4 ? 4 : SEQLZ_DELTA_4;
-	if (damage == CODE_9)
-		c[2] = (c[2] & ~SEQLZ_LIT_CODE_MASK) | 9;
+	if (damage == CODE_10)
+		c[2] = (c[2] & ~SEQLZ_LIT_CODE_MASK) | 10;
 	/* the sizes are one number of 8 * width bits, little endian */
 	memset(c + 3 + e, 0, width);
 	for (q = 0; q < 8 * width; q++)

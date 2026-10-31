@@ -93,7 +93,7 @@ unsigned int seqlz_compress_block(struct seqlz_state *st, const void *src,
 	len = compress_block(st, src, dst, dst_cap);
 	if (len == 0 || level < SEQLZ_LEVEL_CODED)
 		return len;
-	return seqlz_code_literals(dst, len, st->literals);
+	return seqlz_code_literals(dst, len, st);
 }
 
 /* the interface's work memory is the matcher's state */

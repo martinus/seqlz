@@ -253,6 +253,80 @@ static noinline const u8 *read_own_table(const struct own_table *own,
 	return p + (used + 7U) / 8U;
 }
 
+/* entries n to n + run of lt decode byte b, with codes of len bits */
+static __always_inline void swap_fill(u16 *lt, unsigned int n, unsigned int len,
+				      unsigned int b)
+{
+	const unsigned int run = (1U << SEQLZ_LIT_BITS) >> len;
+	const u64 v = (u64)(len | b << 8) * 0x0001000100010001ULL;
+	unsigned int k;
+
+	if (run < 4U) {
+		for (k = 0; k < run; k++)
+			lt[n + k] = (u16)(len | b << 8);
+		return;
+	}
+	for (k = 0; k < run; k += 4)
+		__builtin_memcpy(lt + n + k, &v, 8);
+}
+
+/*
+ * A fixed table with bytes moved to its shortest codes, see SEQLZ_LIT_SWAP:
+ * reads its byte and bytes from p and writes the decode table to lt, a copy of
+ * the fixed table's with the entries of the moved codes written again. Returns
+ * where its bytes end, or NULL if they are not valid: bits 5 to 7 not zero, h
+ * more than SEQLZ_SWAP_MAX, a byte twice, or fewer bytes than it needs.
+ *
+ * The codes do not change place, only which byte each decodes to. The i-th
+ * code in the canonical order starts where the one before ends, so the
+ * entries are walked from 0. A byte's code is where the fixed table has it,
+ * unless it took another byte's code in a step before: at most 2 bytes per
+ * step change their code, kept in moved[] and at[].
+ */
+static noinline const u8 *read_swaps(const u8 *p, const u8 *end, u16 *lt)
+{
+	unsigned int h, set, i, k, n = 0, nm = 0;
+	u8 moved[2U * SEQLZ_SWAP_MAX];
+	unsigned int at[2U * SEQLZ_SWAP_MAX];
+	const struct lit_table *t;
+	const u8 *hot;
+
+	if (end - p < 2)
+		return NULL;
+	set = p[0] & (SEQLZ_LIT_SETS - 1U);
+	h = (p[0] >> SEQLZ_SWAP_H_AT) + 1U;
+	hot = p + 1;
+	if (h > SEQLZ_SWAP_MAX || (unsigned long)(end - hot) < h ||
+	    (h > 1U && hot[0] == hot[1]) ||
+	    (h > 2U && (hot[2] == hot[0] || hot[2] == hot[1])))
+		return NULL;
+	t = &seqlz_tables.lit[set];
+	__builtin_memcpy(lt, t->decode, sizeof(t->decode));
+	for (i = 0; i < h; i++) {
+		const unsigned int e = lt[n];
+		const unsigned int len = e & 63U;
+		const unsigned int holder = e >> 8;
+		unsigned int c = t->enc[hot[i]];
+		unsigned int from = (c >> 8) << (SEQLZ_LIT_BITS - (c & 63U));
+
+		for (k = 0; k < nm; k++)
+			if (moved[k] == hot[i])
+				from = at[k];
+		if (from != n) {
+			const unsigned int from_len = lt[from] & 63U;
+
+			swap_fill(lt, n, len, hot[i]);
+			swap_fill(lt, from, from_len, holder);
+			moved[nm] = hot[i];
+			at[nm++] = n;
+			moved[nm] = (u8)holder;
+			at[nm++] = from;
+		}
+		n += (1U << SEQLZ_LIT_BITS) >> len;
+	}
+	return hot + h;
+}
+
 /*
  * The header of a block's coded literals, see SEQLZ_LIT_HEADER: the width of
  * the stream sizes into *width, the delta into *delta, 0 for none, and the
@@ -282,7 +356,7 @@ read_lit_header(const u8 *s, unsigned int src_len, u8 *block, u8 *bucket,
 	if (src_len < SEQLZ_LIT_HEADER(*width) + deltas)
 		return NULL;
 	code = s[2] & SEQLZ_LIT_CODE_MASK;
-	if (code > SEQLZ_LIT_OWN)
+	if (code > SEQLZ_LIT_SWAP)
 		return NULL;
 	/* the delta, SEQLZ_DELTA_4 to SEQLZ_DELTA_LAST, in byte 3 */
 	*delta = deltas ? s[SEQLZ_LIT_HEADER(0)] : 0U;
@@ -310,6 +384,14 @@ read_lit_header(const u8 *s, unsigned int src_len, u8 *block, u8 *bucket,
 		if (!*q)
 			return NULL;
 		*lt = own;
+	} else if (code == SEQLZ_LIT_SWAP) {
+		/* as the own table, in the block, from an even address */
+		u16 *swapped = (u16 *)(block + ((unsigned long)block & 1U));
+
+		*q = read_swaps(*q, s + src_len, swapped);
+		if (!*q)
+			return NULL;
+		*lt = swapped;
 	} else {
 		*lt = seqlz_tables.lit[code & (SEQLZ_LIT_SETS - 1U)].decode;
 		prefetch_lines(*lt, sizeof(seqlz_tables.lit[0].decode));

@@ -177,6 +177,40 @@ static unsigned char undelta(unsigned int dt, unsigned char v, const unsigned ch
     return x != 0U && p >= x ? (unsigned char)(v + out[p - x]) : v;
 }
 
+/*
+ * "A fixed table with moved byte values", from byte at: its code into c, its bytes into d; 0, or -1 if it is
+ * invalid. c->sym lists the byte values in the order of their codes, c[0]'s first, so v[i] taking c[i] and
+ * the byte value there taking v[i]'s code is an exchange of two entries.
+ */
+static int
+moved_table(const struct seqlz_ref* r, const unsigned char* src, size_t len, size_t at, struct seqlz_ref_code* c, size_t* d) {
+    unsigned int u, h, i, p;
+
+    if (at >= len)
+        return -1;
+    u = src[at];
+    h = (u >> 3) + 1U;
+    if (h > 3U || at + 1U + h > len)
+        return -1;
+    for (i = 0; i < h; i++)
+        for (p = 0; p < i; p++)
+            if (src[at + 1U + i] == src[at + 1U + p])
+                return -1;
+    *c = r->lit[u & 7U];
+    for (i = 0; i < h; i++) {
+        unsigned short v = src[at + 1U + i];
+
+        for (p = 0; p < 256U && c->sym[p] != v; p++)
+            ;
+        if (p == 256U)
+            return -1;
+        c->sym[p] = c->sym[i];
+        c->sym[i] = v;
+    }
+    *d = 1U + h;
+    return 0;
+}
+
 int seqlz_ref_decode(const struct seqlz_ref* r, const unsigned char* src, size_t len, unsigned char* out) {
     unsigned char lits[1U << 14];
     const unsigned int P = r->block_bits, block = 1U << P;
@@ -209,7 +243,7 @@ int seqlz_ref_decode(const struct seqlz_ref* r, const unsigned char* src, size_t
         t = src[2];
         w = 5U + ((t >> 4) & 7U);
         e = t >> 7;
-        if (len < 3U + w + e || (t & 15U) > 8U)
+        if (len < 3U + w + e || (t & 15U) > 9U)
             return -1;
         if (e) {
             dt = src[3];
@@ -219,6 +253,11 @@ int seqlz_ref_decode(const struct seqlz_ref* r, const unsigned char* src, size_t
         code = &r->lit[t & 7U];
         if ((t & 15U) == 8U) {
             if (own_table(r, src, len, 3U + w + e, &page_own, &d))
+                return -1;
+            code = &page_own;
+        }
+        if ((t & 15U) == 9U) {
+            if (moved_table(r, src, len, 3U + w + e, &page_own, &d))
                 return -1;
             code = &page_own;
         }
