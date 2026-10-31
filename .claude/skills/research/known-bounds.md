@@ -28,3 +28,7 @@ quoting.
 - File data (Android 17 emulator image, 19 Oct, "File data of an Android 17 image"): seqlz-3 0.9
   points behind `zstd` 3 on 4 KiB blocks at 2.1 times `lz4`'s decode cycles on the A55; coded literals
   are most of seqlz's decode time there.
+- An optimal parse priced by the code lengths, coded by level 3's encoder (31 Oct, "An optimal parse in
+  today's format"): 56 bytes per page (6.3%) under `seqlz-3` on the ten samples; half the pricing (2.9%
+  with one candidate per position), half matches a hash chain of 4 to 16 finds and level 3's matcher
+  does not.
