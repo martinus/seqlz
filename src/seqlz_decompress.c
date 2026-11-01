@@ -362,12 +362,11 @@ static __always_inline void copy_match_fast(u8 *d, unsigned int off,
  * length values refill before they read. The token's entry knows the offset's
  * class, so the offset's bits are known without a second lookup.
  */
-static __always_inline u32 next_token(struct seqlz_bit_reader *br,
-				      const struct token_table *t)
+static __always_inline u32 next_token(struct seqlz_bit_reader *br)
 {
 	if (br->count < (int)(SEQLZ_TOKEN_BITS + SEQLZ_BLOCK_BITS))
 		seqlz_br_refill(br);
-	return t->decode[br->bits >> (64U - SEQLZ_TOKEN_BITS)];
+	return seqlz_tables.token.decode[br->bits >> (64U - SEQLZ_TOKEN_BITS)];
 }
 
 /*
@@ -384,13 +383,12 @@ static __always_inline u32 next_token(struct seqlz_bit_reader *br,
  * least 0.
  */
 static __always_inline u32 next_token_fast(struct seqlz_bit_reader *br,
-					   const struct token_table *t,
 					   unsigned int *skip)
 {
 	if (!*skip)
 		seqlz_br_refill_8(br);
 	*skip ^= 1U;
-	return t->decode[br->bits >> (64U - SEQLZ_TOKEN_BITS)];
+	return seqlz_tables.token.decode[br->bits >> (64U - SEQLZ_TOKEN_BITS)];
 }
 
 /*
@@ -441,10 +439,12 @@ static __always_inline int decode_block(const void *src, unsigned int src_len,
 	 * The decoder's tables first, so that their cache misses overlap. An
 	 * in-order core stops at every miss it did not see coming.
 	 */
-	prefetch_lines(seqlz_tables.token.decode,
-		       sizeof(seqlz_tables.token.decode));
-	prefetch_lines(seqlz_tables.ll.decode, sizeof(seqlz_tables.ll.decode));
-	prefetch_lines(seqlz_tables.ml.decode, sizeof(seqlz_tables.ml.decode));
+	seqlz_prefetch_lines(seqlz_tables.token.decode,
+			     sizeof(seqlz_tables.token.decode));
+	seqlz_prefetch_lines(seqlz_tables.ll.decode,
+			     sizeof(seqlz_tables.ll.decode));
+	seqlz_prefetch_lines(seqlz_tables.ml.decode,
+			     sizeof(seqlz_tables.ml.decode));
 	n_lit = get_unaligned_le16(s) & (SEQLZ_LIT_CODED - 1U);
 	if (n_lit > SEQLZ_BLOCK_SIZE)
 		return -EINVAL;
@@ -460,8 +460,8 @@ static __always_inline int decode_block(const void *src, unsigned int src_len,
 			return -EINVAL;
 		/*
 		 * The distance of SEQLZ_DELTA_4 and SEQLZ_DELTA_8, picked once
-		 * here and not per sequence, where it would be two more
-		 * branches; 0 for SEQLZ_DELTA_LAST, whose distance changes
+		 * here and not per sequence, where it took two tests instead of
+		 * one; 0 for SEQLZ_DELTA_LAST, whose distance changes
 		 */
 		delta_fixed = delta == SEQLZ_DELTA_4 ? 4U :
 			      delta == SEQLZ_DELTA_8 ? 8U :
@@ -503,7 +503,7 @@ static __always_inline int decode_block(const void *src, unsigned int src_len,
 	/* a block of literals only has no sequence with a match, no token */
 	if (n_lit == SEQLZ_BLOCK_SIZE)
 		goto last_literals;
-	tok = next_token(&br, &seqlz_tables.token);
+	tok = next_token(&br);
 	for (;;) {
 		unsigned int nl, len, off, back, raw;
 
@@ -544,7 +544,7 @@ static __always_inline int decode_block(const void *src, unsigned int src_len,
 		if (!(tok & (1U << TOK_VALUE_AT)) && d <= d_fast &&
 		    (unsigned long)lit <= lit_fast &&
 		    (unsigned long)br.p <= in_fast) {
-			tok = next_token_fast(&br, &seqlz_tables.token, &skip);
+			tok = next_token_fast(&br, &skip);
 			/*
 			 * No check of nl against the literals left, a few
 			 * instructions less per sequence. The 16 bytes read are
@@ -598,7 +598,7 @@ static __always_inline int decode_block(const void *src, unsigned int src_len,
 		 */
 		if ((unsigned long)d - (unsigned long)lit == end_gap)
 			break;
-		tok = next_token(&br, &seqlz_tables.token);
+		tok = next_token(&br);
 		skip = 0;
 	}
 last_literals:
@@ -640,4 +640,4 @@ static_assert(SEQLZ_MEM_DECOMPRESS == SEQLZ_SCRATCH);
 static_assert(SEQLZ_BLOCK_SIZE == 1U << SEQLZ_BLOCK_BITS);
 
 MODULE_LICENSE("Dual MIT/GPL");
-MODULE_DESCRIPTION("LZ compression of 4 KiB blocks with static Huffman codes");
+MODULE_DESCRIPTION("LZ compression of 4 KiB blocks with Huffman codes");

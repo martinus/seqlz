@@ -107,7 +107,7 @@ static int cost_level(int def) {
     int level = v ? atoi(v) : def;
 
 #    ifndef COST_CODEC
-    if (level < 1 || level > SEQLZ_LEVELS)
+    if (level < 1 || level > SEQLZ_LEVEL_MAX)
         abort();
 #    endif
     return level;

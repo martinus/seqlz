@@ -372,7 +372,7 @@ int main(int argc, char** argv) {
             ++pages;
             if (!counts_out.empty() || !own_out.empty()) {
                 auto const len = seqlz_compress_block(
-                    state.get(), src.data(), compressed.data(), static_cast<unsigned>(compressed.size()), SEQLZ_LEVELS);
+                    state.get(), src.data(), compressed.data(), static_cast<unsigned>(compressed.size()), SEQLZ_LEVEL_MAX);
                 own_pages += count_own(std::span(compressed.data(), len), counts.own);
             }
             if (!own_out.empty()) {

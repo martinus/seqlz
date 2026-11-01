@@ -94,7 +94,7 @@ unsigned int seqlz_encode(struct seqlz_state *st,
  * @src: the block, SEQLZ_BLOCK_SIZE bytes
  * @dst: where the compressed block goes
  * @dst_cap: the bytes at @dst
- * @level: from 1 to SEQLZ_LEVELS, see there
+ * @level: from 1 to SEQLZ_LEVEL_MAX, see there
  *
  * SEQLZ_COMPRESS_BOUND, two pages as zram's buffer has, is always enough, even
  * for random data, see the encoder in seqlz_encoder.h; more than that is not

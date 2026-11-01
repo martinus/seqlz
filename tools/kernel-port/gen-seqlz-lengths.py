@@ -218,9 +218,9 @@ def main():
           "/*\n"
           " * The code lengths of seqlz's tables, part of its format: of\n"
           " * the tokens and the length values, of the 8 literal tables, one\n"
-          " * chosen per block, the most used first, and of the code of a\n"
-          " * block's own literal table. gen_seqlz_tables builds the codes\n"
-          " * and decode tables from them.\n"
+          " * chosen per block, and of the code of a block's own literal\n"
+          " * table. gen_seqlz_tables builds the codes and decode tables\n"
+          " * from them.\n"
           " */\n"
           "#include \"seqlz_format.h\"\n\n" +
           lengths_initializer(tables, storage) + "\n" +

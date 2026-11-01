@@ -42,7 +42,7 @@ unsigned int seqlz_find(struct seqlz_state *st, const void *src,
 {
 	struct find_recorder f = { .seq = seq };
 
-	if (level < 1 || level > SEQLZ_LEVELS)
+	if (level < 1 || level > SEQLZ_LEVEL_MAX)
 		return 0;
 	seqlz_match_block(st->table, src, level >= SEQLZ_LEVEL_OWN, &f);
 	return f.n;
@@ -113,7 +113,7 @@ unsigned int seqlz_encode(struct seqlz_state *st,
 {
 	unsigned int len, delta;
 
-	if (level < 1 || level > SEQLZ_LEVELS ||
+	if (level < 1 || level > SEQLZ_LEVEL_MAX ||
 	    (level >= SEQLZ_LEVEL_OWN && !st))
 		return 0;
 	/* as seqlz_compress_block() */
@@ -123,7 +123,15 @@ unsigned int seqlz_encode(struct seqlz_state *st,
 			 st ? st->literals : NULL, &delta, dst, dst_cap);
 	if (len == 0 || level < SEQLZ_LEVEL_CODED)
 		return len;
-	if (level < SEQLZ_LEVEL_OWN)
-		return seqlz_code_raw_literals(dst, len, literals);
+	if (level < SEQLZ_LEVEL_OWN) {
+		/*
+		 * dst has the raw literals now, as seqlz_compress_block() has
+		 * them. The streams' slots: st, or without one these, for one
+		 * thread, which the tests and tools are.
+		 */
+		static u8 slots[sizeof(struct seqlz_state)];
+
+		return seqlz_code_literals(dst, len, st ? st->literals : slots);
+	}
 	return seqlz_code_own(dst, len, st, delta);
 }

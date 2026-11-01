@@ -12,9 +12,9 @@
 /*
  * The code lengths of seqlz's tables, part of its format: of
  * the tokens and the length values, of the 8 literal tables, one
- * chosen per block, the most used first, and of the code of a
- * block's own literal table. gen_seqlz_tables builds the codes
- * and decode tables from them.
+ * chosen per block, and of the code of a block's own literal
+ * table. gen_seqlz_tables builds the codes and decode tables
+ * from them.
  */
 #include "seqlz_format.h"
 

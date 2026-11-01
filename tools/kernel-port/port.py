@@ -51,8 +51,7 @@ SRC = REPO / "src"
 WIDTH = 80
 
 # what only the harness and the tests of src/ use, left out of the kernel's copy
-HARNESS_ONLY = re.compile(r"\bseqlz_find\b|\bseqlz_encode\b|\bseqlz_sequence\b|\bSEQLZ_MAX_SEQUENCES\b|"
-                          r"\bseqlz_code_raw_literals\b")
+HARNESS_ONLY = re.compile(r"\bseqlz_find\b|\bseqlz_encode\b|\bseqlz_sequence\b|\bSEQLZ_MAX_SEQUENCES\b")
 
 # the one reference to this repository the kernel's copy keeps, the project's page in MAINTAINERS
 PROJECT_URL = "https://github.com/martinus/seqlz"
@@ -345,7 +344,6 @@ def port_internal():
     t = must(t, "#define SEQLZ_HASH_BITS (SEQLZ_BLOCK_BITS == 12 ? 12U : 13U)\n", "#define SEQLZ_HASH_BITS 12U\n")
     # the cast is for C++, which src/ is compiled as too
     t = must(t, "\tconst u8 *q = (const u8 *)p; /* a cast for the C++ of the harness */\n", "\tconst u8 *q = p;\n")
-    t = must(t, "unsigned int seqlz_code_raw_literals(u8 *d, unsigned int len, const u8 *raw);\n", "")
     return fix_comments(t)
 
 
@@ -379,7 +377,7 @@ def port_compress():
     # kernel-doc, in include/linux/seqlz.h
     t = make_static(t, "seqlz_compress_block")
     t = put_doc(t, "seqlz_compress_block", "/* one block, for the interface below, which checked the level */\n")
-    t = must(t, "\tif (level < 1 || level > SEQLZ_LEVELS)\n\t\treturn 0;\n", "")
+    t = must(t, "\tif (level < 1 || level > SEQLZ_LEVEL_MAX)\n\t\treturn 0;\n", "")
     return fix_comments(t)
 
 
@@ -399,14 +397,18 @@ def port_gen():
     t = make_static(t, "seqlz_tables_build")
     gen = (REPO / "tools" / "gen-tables" / "gen_seqlz_tables.c").read_text()
     t = t.rstrip("\n") + "\n\n" + gen[gen.index("/* ---- the tables as C"):]
+    # the KUnit test, a module of its own, checks the codes in the tables
+    t = must(t, '"#include \\"seqlz_tables.h\\"\\n\\n"',
+             '"#include <kunit/visibility.h>\\n"\n\t       "#include <linux/export.h>\\n\\n"\n\t       "#include \\"seqlz_tables.h\\"\\n\\n"')
+    t = must(t, '\tprintf("};\\n");\n\treturn 0;', '\tprintf("};\\nEXPORT_SYMBOL_IF_KUNIT(seqlz_tables);\\n");\n\treturn 0;')
     return fix_comments(t)
 
 
 # lib/seqlz/Makefile: the module, and its tables, which gen_seqlz_tables, a program for the build host,
 # writes from the code lengths, as lib/crc's gen_crc32table and lib/raid's mktables do
 MAKEFILE = """# SPDX-License-Identifier: GPL-2.0-only OR MIT
-# as lib/lz4: with -O2 seqlz compresses slower, on x86-64 and arm64; a kernel
-# built for size keeps -Os
+# -O3, as lib/lz4 builds with: with -O2 seqlz compresses slower, on x86-64
+# and arm64. Unlike lib/lz4, a kernel built for size keeps -Os.
 ccflags-$(CONFIG_CC_OPTIMIZE_FOR_PERFORMANCE) += -O3
 
 obj-$(CONFIG_SEQLZ) += seqlz.o
@@ -533,8 +535,7 @@ def main():
         "lib/seqlz/seqlz_tables.h": port_tables_h(),
         "lib/seqlz/seqlz_internal.h": port_internal(),
         "lib/seqlz/seqlz_compress.c": port_compress(),
-        "lib/seqlz/seqlz_compress_literals.c": fix_comments(cut(port_c("compress_literals"),
-                                                            r"\n/\*\n \* The same for seqlz_encode\(\).*?\n\}\n")),
+        "lib/seqlz/seqlz_compress_literals.c": fix_comments(port_c("compress_literals")),
         "lib/seqlz/seqlz_decompress.c": fix_comments(port_c("decompress")),
         "lib/seqlz/seqlz_decompress_literals.c": fix_comments(port_c("decompress_literals")),
         "lib/seqlz/gen_seqlz_tables.c": port_gen(),
@@ -580,7 +581,8 @@ def main():
           "\t  seqlz compresses and decompresses one block of 4 KiB at a\n"
           "\t  time, for zram, whatever the page size. It is an LZ format\n"
           "\t  whose sequences and literals are Huffman coded with fixed\n"
-          "\t  tables, see Documentation/staging/seqlz.rst.\n\n", "config SEQLZ\n")
+          "\t  tables, and at level 3 a block's literals with a table of\n"
+          "\t  its own, see Documentation/staging/seqlz.rst.\n\n", "config SEQLZ\n")
     # with the other KUnit tests of lib/, in the runtime testing menu
     patch(tree / "lib/Kconfig.debug", "config PRANDOM_KUNIT_TEST\n",
           "config SEQLZ_KUNIT_TEST\n"
@@ -639,8 +641,9 @@ def main():
     patch(tree / "MAINTAINERS", "F:\tdrivers/iio/chemical/sps30_serial.c\n\nSERIAL DEVICE BUS\n",
           "F:\tdrivers/iio/chemical/sps30_serial.c\n\n" + MAINTAINERS_ENTRY + "\nSERIAL DEVICE BUS\n",
           "F:\tlib/seqlz/")
-    patch(tree / ZRAM_RST, "the value the lower the compression ratio).\n\n",
-          "the value the lower the compression ratio).\n\n" + ZRAM_DOC, "CONFIG_ZRAM_BACKEND_SEQLZ")
+    # after the two paragraphs about parameters of every algorithm, so the second stays about all of them
+    patch(tree / ZRAM_RST, "by the `algorithm_params` write that has configured them.\n\n",
+          "by the `algorithm_params` write that has configured them.\n\n" + ZRAM_DOC, "CONFIG_ZRAM_BACKEND_SEQLZ")
     apply_patch(tree, HERE / "x86-prefetcht0.patch")
     for path in out:
         print(path)

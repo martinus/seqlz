@@ -17,7 +17,7 @@
  * first byte already used. Each code shifts them further left, so the
  * position of that 1 tells how many bits were used since ip, and a refill
  * needs no counter: 8 streams with a counter each do not fit into the 16
- * registers of a 64-bit CPU. A refill leaves at least 56 bits, codes never
+ * registers of x86-64. A refill leaves at least 56 bits, codes never
  * reach the 1.
  */
 /*
@@ -301,10 +301,10 @@ read_lit_header(const u8 *s, unsigned int src_len, u8 *block, u8 *bucket,
 		 * fixed tables below: each step waits for the lookup before,
 		 * so on a cold read their misses came one after the other.
 		 */
-		prefetch_lines(seqlz_tables.own.quad,
-			       sizeof(seqlz_tables.own.quad));
-		prefetch_lines(seqlz_tables.own.decode,
-			       sizeof(seqlz_tables.own.decode));
+		seqlz_prefetch_lines(seqlz_tables.own.quad,
+				     sizeof(seqlz_tables.own.quad));
+		seqlz_prefetch_lines(seqlz_tables.own.decode,
+				     sizeof(seqlz_tables.own.decode));
 		*q = read_own_table(&seqlz_tables.own, *q, s + src_len, own,
 				    bucket);
 		if (!*q)
@@ -312,7 +312,7 @@ read_lit_header(const u8 *s, unsigned int src_len, u8 *block, u8 *bucket,
 		*lt = own;
 	} else {
 		*lt = seqlz_tables.lit[code & (SEQLZ_LIT_SETS - 1U)].decode;
-		prefetch_lines(*lt, sizeof(seqlz_tables.lit[0].decode));
+		seqlz_prefetch_lines(*lt, sizeof(seqlz_tables.lit[0].decode));
 	}
 	return s + SEQLZ_LIT_HEADER(0) + deltas;
 }
@@ -321,7 +321,8 @@ read_lit_header(const u8 *s, unsigned int src_len, u8 *block, u8 *bucket,
  * Decodes the coded literals of a block into out, the scratch, see
  * SEQLZ_LIT_HEADER for the layout, and their delta into *delta, 0 for none.
  * Returns where the sequences' bitstream starts, or NULL if the block is not
- * valid. Not inlined: inside the loop over the sequences its registers made
+ * valid. Not inlined, which only a kernel built with LTO could do, its caller
+ * being in another file: inside the loop over the sequences its registers made
  * blocks with raw literals slower too.
  */
 noinline const u8 *seqlz_decode_literals(const u8 *s, unsigned int src_len,

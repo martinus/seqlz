@@ -10,8 +10,9 @@
  * match, a copy of bytes that came earlier in the same block. lz4 writes the
  * numbers of a sequence in whole bytes. seqlz writes them with Huffman codes,
  * and the code tables are fixed: trained once on real memory pages and compiled
- * in, so a block carries no table of its own. That makes blocks smaller than
- * lz4's, and decoding the codes costs time.
+ * in, so a block carries no table but at level 3, which may give it a literal
+ * table of its own. That makes blocks smaller than lz4's, and decoding the
+ * codes costs time.
  *
  * A sequence has three numbers:
  *   ll:     the number of literals before the match
@@ -39,7 +40,7 @@
  *
  * An ll of 15 or more is followed by ll - 15 as a length value, an ml - 4 of 31
  * or more by ml - 4 - 31. A length value below 16 is its own symbol. A larger
- * one is sent as the position of its highest bit, symbol 12 + bit_width(v) - 1,
+ * one is sent as the position of its highest bit, symbol 12 + fls(v) - 1,
  * followed by the bits below that one as they are. ll and ml have a table each.
  *
  * Everything goes into one bitstream, most significant bit first: per sequence

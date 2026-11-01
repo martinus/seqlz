@@ -8,6 +8,7 @@
 #define pr_fmt(fmt) "seqlz: " fmt
 
 #include <linux/kernel.h>
+#include <linux/minmax.h>
 #include <linux/seqlz.h>
 #include <linux/slab.h>
 
@@ -18,19 +19,6 @@ static_assert(PAGE_SIZE == SEQLZ_BLOCK_SIZE);
 /* kmalloc() from its caches, larger would take pages of a higher order */
 static_assert(SEQLZ_MEM_COMPRESS <= KMALLOC_MAX_CACHE_SIZE);
 static_assert(SEQLZ_MEM_DECOMPRESS <= KMALLOC_MAX_CACHE_SIZE);
-
-#ifndef ZCOMP_RW_SPLIT
-/*
- * The work memory of compression and of decompression, per CPU. zram holds
- * the stream's mutex for either, and neither keeps anything in it from one
- * page to the next, so they share it: kmalloc() gives 8 KiB for the larger,
- * 16 KiB for both together.
- */
-union seqlz_ctx {
-	u8 cmem[SEQLZ_MEM_COMPRESS];
-	u8 dmem[SEQLZ_MEM_DECOMPRESS];
-};
-#endif
 
 static void seqlz_release_params(struct zcomp_params *params)
 {
@@ -46,8 +34,7 @@ static int seqlz_setup_params(struct zcomp_params *params)
 		params->level = SEQLZ_LEVEL_DEFAULT;
 	if (params->level < SEQLZ_LEVEL_MIN ||
 	    params->level > SEQLZ_LEVEL_MAX) {
-		pr_err("compression level %d is not supported\n",
-		       params->level);
+		pr_err("invalid compression level %d\n", params->level);
 		return -EINVAL;
 	}
 	return 0;
@@ -71,12 +58,17 @@ static int seqlz_create_dctx(struct zcomp_params *params,
 	return ctx->context ? 0 : -ENOMEM;
 }
 #else
+/*
+ * The work memory of compression and of decompression, per CPU. zram holds
+ * the stream's mutex for either, and neither keeps anything in it from one
+ * page to the next, so they share it: kmalloc() gives 8 KiB for the larger,
+ * 16 KiB for both apart.
+ */
 static int seqlz_create(struct zcomp_params *params, struct zcomp_ctx *ctx)
 {
-	union seqlz_ctx *c = kzalloc_obj(*c);
-
-	ctx->context = c;
-	return c ? 0 : -ENOMEM;
+	ctx->context = kzalloc(max(SEQLZ_MEM_COMPRESS, SEQLZ_MEM_DECOMPRESS),
+			       GFP_KERNEL);
+	return ctx->context ? 0 : -ENOMEM;
 }
 #endif
 
@@ -88,16 +80,12 @@ static void seqlz_destroy(struct zcomp_ctx *ctx)
 static int seqlz_zcomp_compress(struct zcomp_params *params,
 				struct zcomp_ctx *ctx, struct zcomp_req *req)
 {
-#ifdef ZCOMP_RW_SPLIT
-	void *wrkmem = ctx->context;
-#else
-	void *wrkmem = ((union seqlz_ctx *)ctx->context)->cmem;
-#endif
 	int ret;
 
+	/* seqlz compresses one block of a page, see the static_assert above */
 	if (req->src_len != PAGE_SIZE)
 		return -EINVAL;
-	ret = seqlz_compress(req->src, req->dst, req->dst_len, wrkmem,
+	ret = seqlz_compress(req->src, req->dst, req->dst_len, ctx->context,
 			     params->level);
 	if (ret < 0)
 		return ret;
@@ -108,20 +96,10 @@ static int seqlz_zcomp_compress(struct zcomp_params *params,
 static int seqlz_zcomp_decompress(struct zcomp_params *params,
 				  struct zcomp_ctx *ctx, struct zcomp_req *req)
 {
-#ifdef ZCOMP_RW_SPLIT
-	void *wrkmem = ctx->context;
-#else
-	void *wrkmem = ((union seqlz_ctx *)ctx->context)->dmem;
-#endif
-	int ret;
-
+	/* seqlz writes a whole block */
 	if (req->dst_len < PAGE_SIZE)
 		return -EINVAL;
-	ret = seqlz_decompress(req->src, req->src_len, req->dst, wrkmem);
-	if (ret)
-		return ret;
-	req->dst_len = PAGE_SIZE;
-	return 0;
+	return seqlz_decompress(req->src, req->src_len, req->dst, ctx->context);
 }
 
 const struct zcomp_ops backend_seqlz = {

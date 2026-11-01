@@ -93,7 +93,7 @@ int main(int argc, char** argv) {
     }
     for (kind = 0; kind < N_PAGES; kind++) {
         make_page(kind, page);
-        for (level = 1; level <= SEQLZ_LEVELS; level++) {
+        for (level = 1; level <= SEQLZ_LEVEL_MAX; level++) {
             static const char* const prefix[] = {"", "level1-", "level2-", "level3-"};
             unsigned int len = seqlz_compress_block(&st, page, dst, sizeof(dst), level);
             if (!len)
