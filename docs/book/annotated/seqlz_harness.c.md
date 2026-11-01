@@ -25,7 +25,7 @@ after them, so `seqlz_encoder.h`, included above, keeps its names, and after the
 @anchor ch-encoder--find
 `seqlz_find()` is not for zram: the table trainer counts the symbols of exactly these sequences, and a
 fuzzer checks that `seqlz_encode()` of them gives the same bytes as `seqlz_compress_block()`. The kernel copy
-does not have it. A level outside 1 to `SEQLZ_LEVELS` gives no sequences, as the other two entry
+does not have it. A level outside 1 to `SEQLZ_LEVEL_MAX` gives no sequences, as the other two entry
 points give no page for it.
 
 One call, with `lazy` computed from the level: speed does not matter here, so this copy of the
@@ -63,10 +63,13 @@ once more without them if the page does not fit, as `compress_own()` does: `rec`
 `true` and `e.rec` decides, as speed does not matter here. `seqlz_delta_literals()` then writes the
 literals' deltas to `deltas`, and `*delta` is the delta it picked, or 0.
 
-@@ 108-129
-The public entry for sequences from outside. The level is checked before anything is written, so a
-level outside 1 to `SEQLZ_LEVELS`, or level 3 without the state, returns 0 as
-[the header](seqlz.h.html#b60) says. At level 2 it codes the literals where the caller has them, since
-its state may be `NULL`; until 23rd October 2026 it copied them into a block on its stack, a frame of
-4240 bytes where `src/` is built into a kernel (commit `d8937df`). At level 3 with the deltas and
-maybe a table of the page's own. The kernel copy does not have this function.
+@@ 108-137
+The public entry for sequences from outside. The level is checked before anything is written, so a level
+outside 1 to `SEQLZ_LEVEL_MAX`, or level 3 without the state, returns 0 as [the
+header](seqlz.h.html#b60) says. At level 2 `encode_raw()` has left the raw literals in `dst`, as
+`seqlz_compress_block()` has them, and `seqlz_code_literals()` codes them with the slots in `st`, or
+without a state in a static buffer of its size: one thread at a time, which the tests and tools are.
+Until 1st November 2026 it called `seqlz_code_raw_literals()`, which read them from `literals`, and
+until 23rd October 2026 it copied the literals into a block on its stack, a frame of 4240 bytes where
+`src/` is built into a kernel (commit `d8937df`). At level 3 with the deltas and maybe a table of the
+page's own. The kernel copy does not have this function.

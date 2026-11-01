@@ -303,8 +303,8 @@ exactly {{ch01.union_kib}} KiB. With the split streams they are two allocations,
 KiB. The tables, {{size.tables|grp}} bytes, are not per CPU: they are generated when the kernel is
 built, and are part of its read-only data.
 @assert ch01.union == 1024 * ch01.union_kib and ch01.cctx_kib == ch01.dctx_kib and ch01.split_kib < 20
-[`struct seqlz_state`](#ch-header--state) and [the backend](#ch-zram-glue--backend) have the details, and why 16 KiB pages need
-twice `lz4`'s work memory.
+[`struct seqlz_state`](#ch-header--state) and [the backend](#ch-zram-glue--backend) have the details,
+and [the decisions](#ch-decisions) why seqlz has no blocks of 16 KiB.
 
 ## The decoder must survive any input {#ch-zram--safety}
 
@@ -516,7 +516,6 @@ $r = 0.73$ is one phone's, in one week of one person's use. Its swap-ins come in
 of use on 16th October 2026, 92% of the pages came in bursts of 1024 pages and more, and 114 of 366 241
 came alone ([explored-designs.md](https://github.com/martinus/seqlz/blob/main/docs/explored-designs.md#swap-ins-on-a-pixel-9a-in-use-92-of-the-pages-in-bursts-of-1024-or-more-073-reads-per-write-again)). So a slower read costs a user thousands of times
 the difference per page, which is what the mean counts; how long a burst takes, and on which core, is not
-measured. With 16 KiB pages, which Android is moving to and which the project
-has only from the Android 17 emulator, seqlz needs more work memory than `lz4` once the streams are
-split, which the score counts as a cost.
-@assert k16.size.state + k16.const.SCRATCH > 16416 and k16.size.state <= 16416
+measured. For 16 KiB pages, which Android is moving to and which the project has only from the
+Android 17 emulator, seqlz has no format: the library compresses blocks of 4 KiB with any page size,
+and its zram backend is for 4 KiB pages only.

@@ -303,14 +303,13 @@ The table is a cache, not a map. Each slot holds the last position stored there;
 older one. That costs a match now and then, never a wrong result, because every candidate is compared
 first.
 
-- **2 bytes per slot.** A position needs 12 bits, also 14 for 16 KiB pages. 4096 pointers would take
+- **2 bytes per slot.** A position needs 12 bits. 4096 pointers would take
   32 KiB per CPU. `lz4` in the kernel also stores positions of 2 bytes for inputs this small, 8192 of
   them.
 - **4096 slots.** On the Mi 9T, 2048 slots made pages 939.6 instead of 936.9 bytes and were no faster;
   8192 slots made them 937.1 bytes, cost the in-order A55 1.6 µs more per write, and would take 16 KiB
   per CPU, all of `lz4`'s budget
   ([item 5](https://github.com/martinus/seqlz/blob/main/docs/explored-designs.md#5-the-matchers-hash-5-bytes-into-4096-slots-stays)).
-  With 16 KiB pages `SEQLZ_HASH_BITS` is 13: 8192 slots, 16 KiB.
 - **Cleared for each page.** A `memset()` of {{ch09.table_bytes}} bytes per page took the compressor
   from 25 064 to 23 327 cycles per page, 7% less, against a check at every position whether the entry
   is a position of this page

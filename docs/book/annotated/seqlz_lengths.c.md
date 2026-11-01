@@ -1,13 +1,13 @@
 # src/seqlz_lengths.c
 
 The code lengths of every table of the format, compiled in: the token table, the two tables of length
-values, the 8 literal tables and the code `OWN`. The numbers themselves are in a generated header, one
-per page size, [`seqlz_lengths.h`](seqlz_lengths.h.html) for 4 KiB pages; this file only picks it.
+values, the 8 literal tables and the code `OWN`. The numbers themselves are in a generated header,
+[`seqlz_lengths.h`](seqlz_lengths.h.html); this file only includes it.
 [`seqlz_codes.c`](seqlz_codes.c.html) turns them into codes and decode tables when seqlz is built.
 
 ## The lengths of the format
 
-@@ 1-12
+@@ 1-11
 @anchor ch-codes--lengths
 These lengths are the format: a page decodes only with the tables it was compressed with, and the page
 carries no version ([no version](book:#ch-format--version)). So they are generated, never edited:
@@ -18,7 +18,7 @@ headers again and fails if one differs by a byte
 The training pages are not pages the benchmarks measure, so no benchmark measures the tables on the
 pages they were trained on.
 @more {#ch-codes--training-pages} The training pages of 13th October 2026, and what they changed
-The 4 KiB counts of 13th October 2026 are from {{ch08.counts4k.pages|grp}} pages: three sessions of a
+The counts of 13th October 2026 are from {{ch08.counts4k.pages|grp}} pages: three sessions of a
 Xiaomi Mi 9T under memory pressure, the resident pages of a desktop and 200 000 pages of its zram dump
 of 28th September ([where the tables come from](#ch-format--tables)). On two test sessions of the
 phone, with web sites none of the training sessions loaded, `seqlz-2` stores up to 1.7% less than
@@ -29,14 +29,14 @@ counts are sums over all pages, each literal table's over at least
 {{ch08.counts4k.lit_min_pages|grp}} pages, and a count says nothing about which symbol came after which.
 @end
 
-@@ 13-24
+@@ 12-23
 k-means, in plain words: give each training page to the table that codes its literals in the fewest
 bits, make each table the Huffman code of the literals of its pages, and repeat until the groups stop
 changing. Where it ends depends on the starting tables, so the trainer runs it from 32 starts and keeps
-the best. The result is 8 tables for 8 kinds of pages: in the 4 KiB tables e.g. one for text, two that give
+the best. The result is 8 tables for 8 kinds of pages: in the tables e.g. one for text, two that give
 the byte `0x00` a 2-bit code, one that gives `0xff` a 2-bit code.
 
-"The most used table comes first" is out of date for the 4 KiB tables. `bench/seqlz_counts_4k.txt`
+"The most used table comes first" is out of date for the tables. `bench/seqlz_counts.txt`
 says they are in the order that matches the tables trained before them, so that table 0 is still the
 one for text, and table 1 has more pages than table 0. The order means nothing to the format.
 
@@ -56,11 +56,10 @@ tables made cold reads 0.27 µs slower, so they were dropped
 :::
 @end
 
-@@ 25-31
-seqlz is built for one page size, `SEQLZ_PAGE_BITS` 12 or 14, and each has its own tables: on 16 KiB
-pages the offsets have more bits and the length values two more symbols. The literal tables and `OWN` are in the
-same header.
-@more {#ch-codes--fixed} Fixed tables, and the 16 KiB ones
+@@ 24-26
+The tables come from one header, `seqlz_lengths.h`, the literal tables and `OWN` included. Until 1st
+November 2026 a build for 16 KiB pages took `seqlz_lengths_16k.h` instead.
+@more {#ch-codes--fixed} Fixed tables, and the 16 KiB ones that were
 All of the tables are made once, before the first page, and no zram device has tables of its own. A
 page carries no token or length table; at level 3 it may carry a literal table, written in the fixed
 code `OWN`, which the decoder builds per page ([the page's own table](#ch-literals-dec--own)).
@@ -69,13 +68,12 @@ code `OWN`, which the decoder builds per page ([the page's own table](#ch-litera
 tables could be trained again on 13th and 14th October 2026: nobody uses the format yet, and new
 tables only need new hashes in `format.md`.
 
-The 16 KiB tables, [`seqlz_lengths_16k.h`](seqlz_lengths_16k.h.html),
-are the same construction with counts from
-{{ch08.counts16k.pages|grp}} pages of a zram dump of the Android 17 emulator with 16 KiB pages. They
-give {{k16.ch08.tok.coded}} tokens a code, with a {{k16.tok.len.3072}}-bit escape, below that page
-size's limit of $31 - 14 - 12 = 5$ bits. On pages of the emulator that were not in the training, they
-made `seqlz-2` 2.6% smaller than the 16 KiB tables before them, which were trained on desktop pages
+Until 1st November 2026 there were 16 KiB tables too, `seqlz_lengths_16k.h`, the same construction
+with counts from 26 933 pages of a zram dump of the Android 17 emulator with 16 KiB pages. On pages of
+the emulator that were not in the training they made `seqlz-2` 2.6% smaller than 16 KiB tables trained
+on desktop pages
 ([explored-designs.md](https://github.com/martinus/seqlz/blob/main/docs/explored-designs.md#android-17-in-the-emulator-the-4-kib-tables-fit-the-16-kib-ones-trained-again-26-smaller)).
-That is one emulator and no real phone, and the format for 16 KiB pages is not fixed yet
+They went with the 16 KiB blocks: the kernel's copy never had them, and a 16 KiB page as four blocks of
+4 KiB took 7.0% to 8.6% more memory on the emulator's pages
 ([format.md](https://github.com/martinus/seqlz/blob/main/docs/format.md#status)).
 @end

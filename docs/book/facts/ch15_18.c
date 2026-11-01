@@ -5,7 +5,6 @@
  * listings of tools/ and bench/ files, found by their first and last lines, so that a listing moves with
  * its code, and the output of test/seqlz_endian.c, which it runs.
  */
-// facts: also 16k
 #include "facts.h"
 #include "seqlz_compress.c"
 #include "seqlz_compress_literals.c"
@@ -186,7 +185,7 @@ static void kernel_port(void) {
     }
 
     /* the pages the tables were trained on, from the head of the counts they are built from */
-    load(SEQLZ_PAGE_BITS == 12 ? "bench/seqlz_counts_4k.txt" : "bench/seqlz_counts_16k.txt");
+    load("bench/seqlz_counts.txt");
     {
         const char* p = strstr(file_buf, " pages, ");
         unsigned int pages;
@@ -232,7 +231,7 @@ int main(void) {
     if (sscanf(endian_out, "pages %*u, coded %*u, own table %u", &s) != 1)
         exit(1);
     fact_num("ch15.endian.own", s);
-    fact_num("ch15.endian.runs", 600 * SEQLZ_LEVELS);
+    fact_num("ch15.endian.runs", 600 * SEQLZ_LEVEL_MAX);
 
     fact_num("ch15.state_plus_scratch", sizeof(struct seqlz_state) + SEQLZ_SCRATCH);
     fact_num("ch15.mem.union", sizeof(struct seqlz_state) > SEQLZ_SCRATCH ? sizeof(struct seqlz_state) : SEQLZ_SCRATCH);
@@ -276,7 +275,7 @@ int main(void) {
     fact_num("ch17.lit_lines", sizeof_field(struct lit_table, decode) / 64);
     fact_num("ch17.prefetch_lines", PREFETCH_STEP / 64);
     fact_num("ch17.lit_cost_run", LIT_COST_RUN);
-    fact_num("ch17.refill_below", SEQLZ_TOKEN_BITS + SEQLZ_PAGE_BITS);
+    fact_num("ch17.refill_below", SEQLZ_TOKEN_BITS + SEQLZ_BLOCK_BITS);
     fact_num("ch17.width_min", SEQLZ_SIZE_BITS_MIN);
     fact_num("ch17.width_max", SEQLZ_SIZE_BITS_MAX);
     fact_num("ch17.hash_slots", 1U << SEQLZ_HASH_BITS);

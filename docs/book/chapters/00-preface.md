@@ -22,7 +22,7 @@ desktop, `seqlz-3` stores 3.8% less than `zstd` 3, in 72% of its time to write a
 take 36% less time ([chapter 6](#ch-decisions--score)).
 
 All of that is {{ch00.src_lines|grp}} lines of C in one directory, `src/`, the trained code lengths
-in two generated headers among them, one for each page size.
+in a generated header among them.
 This book goes through every one of those lines, in pieces as they are in the repository, and after
 each piece says what it does that is not plain from the C, and why it is written this way. The "why"
 is mostly a measurement: the repository logs every design it tried, also the ones that lost, in
@@ -64,7 +64,7 @@ produces, and collects [the design decisions](#ch-decisions) with what they were
 | [`src/seqlz.h`](#f-seqlz-h) | {{ch00.lines.seqlz_h}} | what the tests and tools call besides the kernel's interface |
 | [`src/seqlz_tables.h`](#f-seqlz_tables-h) | {{ch00.lines.seqlz_tables_h}} | the layout of the tables in memory, the token table's entries |
 | [`src/seqlz_codes.c`](#f-seqlz_codes-c) | {{ch00.lines.seqlz_codes_c}} | builds codes and decode tables from code lengths |
-| [`src/seqlz_lengths.c`](#f-seqlz_lengths-c), [`seqlz_lengths.h`](#f-seqlz_lengths-h) and [`seqlz_lengths_16k.h`](#f-seqlz_lengths_16k-h) | ${{ch00.lines.seqlz_lengths_c}} + {{ch00.lines.seqlz_lengths_h}} + {{ch00.lines.seqlz_lengths_16k_h}}$ | the trained code lengths, part of the format, generated |
+| [`src/seqlz_lengths.c`](#f-seqlz_lengths-c) and [`seqlz_lengths.h`](#f-seqlz_lengths-h) | ${{ch00.lines.seqlz_lengths_c}} + {{ch00.lines.seqlz_lengths_h}}$ | the trained code lengths, part of the format, generated |
 | [`src/seqlz_match.h`](#f-seqlz_match-h) | {{ch00.lines.seqlz_match_h}} | the matcher: finds the repeats in a page |
 | [`src/seqlz_encoder.h`](#f-seqlz_encoder-h) | {{ch00.lines.seqlz_encoder_h}} | the encoder: writes the sequences as the matcher finds them |
 | [`src/seqlz_compress.c`](#f-seqlz_compress-c) | {{ch00.lines.seqlz_compress_c}} | the compressor, the two put together, and the kernel's `seqlz_compress()` |
@@ -73,8 +73,7 @@ produces, and collects [the design decisions](#ch-decisions) with what they were
 | [`src/seqlz_decompress_literals.c`](#f-seqlz_decompress_literals-c) | {{ch00.lines.seqlz_decompress_literals_c}} | the decoding of literals |
 | [`src/seqlz_harness.c`](#f-seqlz_harness-c) | {{ch00.lines.seqlz_harness_c}} | `seqlz_find()` and `seqlz_encode()`, for the tests and tools |
 | [`src/zram_seqlz.c`](#f-zram_seqlz-c) | {{ch00.lines.zram_seqlz_c}} | seqlz as a zram backend, for the benchmarks |
-@assert len(ch00.lines) == 32 and ch00.linux_files == 15
-@assert ch00.lines.seqlz_lengths_h == ch00.lines.seqlz_lengths_16k_h
+@assert len(ch00.lines) == 31 and ch00.linux_files == 15
 
 How the pieces call each other, the compressor on the left and the decompressor on the right:
 
@@ -106,11 +105,10 @@ repository at the commit named on the title page, the last one that changed `src
 name `a2d57dd` of 10th October 2026, an older commit, for a count or a layout taken there. The code is
 in the kernel's style: tabs of 8 columns, lines within 80 columns.
 
-**4 KiB pages unless said otherwise.** seqlz compresses one block at a time, for zram one page. In
-`src/` a block is 4 KiB or 16 KiB, as `SEQLZ_PAGE_BITS` is 12 or 14. Linux on x86-64 and on most
-phones has 4 KiB pages, and the kernel's copy of seqlz compresses blocks of 4 KiB only, whatever the
-page size. The book says page where the block is zram's page, which is almost everywhere, and where
-16 KiB pages change something, the text says so.
+**4 KiB pages.** seqlz compresses one block of 4 KiB at a time, for zram one page, whatever the page
+size. Linux on x86-64 and on most phones has 4 KiB pages. The book says page where the block is
+zram's page, which is almost everywhere. Until 1st November 2026 `src/` also had blocks of 16 KiB,
+which the kernel's copy never had.
 
 **Boxes.** **Kernel background** and **CPU background** boxes are easy to skip if you know the
 subject. **Why** boxes hold a design decision and what it was measured against, **Measured** boxes a
@@ -131,9 +129,8 @@ spends on the pages ([chapter 1](#ch-zram--size-classes)). A number like
 **`src/` is the kernel's code, nearly.** A script, `tools/kernel-port/port.py`, generates the kernel's
 copy from `src/`, and since 30th October 2026 it changes little: it puts `seqlz_encoder.h` and
 `seqlz_match.h` into `seqlz_compress.c`, makes `seqlz_compress_block()` static, turns `seqlz_codes.c`
-into the build machine's table generator, takes out the 16 KiB blocks and what only the benchmarks and
-tests use, `seqlz.h` and `seqlz_harness.c`, and rewrites a few comments
-([what `port.py` changes](#ch-zram-glue--port)). The kernel headers each file includes, the interface
-`src/linux/seqlz.h`, the exports and the module's licence are in `src/` as the kernel has them. Outside the kernel, the headers
-in `src/linux/` stand in for the kernel's ([`src/linux/`](#ch-linux)). So a reviewer of the kernel patches can
-read this book.
+into the build machine's table generator, takes out what only the benchmarks and tests use, `seqlz.h`
+and `seqlz_harness.c`, and rewrites a few comments ([what `port.py` changes](#ch-zram-glue--port)). The
+kernel headers each file includes, the interface `src/linux/seqlz.h`, the exports and the module's
+licence are in `src/` as the kernel has them. Outside the kernel, the headers in `src/linux/` stand in
+for the kernel's ([`src/linux/`](#ch-linux)). So a reviewer of the kernel patches can read this book.

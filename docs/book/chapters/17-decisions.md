@@ -150,7 +150,7 @@ A literal table built for each page saved 2.4% for writes 14% slower the first t
 ([below](#ch-decisions--not-kept)); level 3 has one since 15th October 2026, only where it promises
 to save enough ([below](#ch-decisions--level3)). The tokens and the lengths stay fixed at every level.
 
-The 4 KiB tables of 13th October 2026 are trained on {{ch17.train_pages|grp}} pages: three sessions of
+The tables of 13th October 2026 are trained on {{ch17.train_pages|grp}} pages: three sessions of
 the Mi 9T under memory pressure, a desktop's resident pages, and 200 000 pages of its zram dump of 28th
 September. On two test sessions of the phone, with web sites none of the training sessions loaded,
 `seqlz-2` stores up to 1.7% less than with the tables before, and the phone dump of 3rd October,
@@ -193,7 +193,7 @@ Each row is a decision of [chapter 4](#ch-format), against the other way in the 
 | 4 bits of `ll`, 5 of `ml` in the token | 4 and 4 | a length value after 8.5% of the matches instead of 18.7%, 9180 instead of 9400 decode cycles | a larger token alphabet | [second round](https://github.com/martinus/seqlz/blob/main/docs/explored-designs.md#second-round-branches-tails-and-table-sizes) |
 | one repeat offset | three, as `zstd` | 17% fewer decode cycles, 89 instead of 124 mispredictions per page | 26.6% instead of 26.4% | [third decoder round](https://github.com/martinus/seqlz/blob/main/docs/explored-designs.md#seqlz-third-decoder-round-one-repeat-offset-offset-class-in-the-token-and-why-cold-is-slow) |
 | two classes for multiples of 8 | plain offsets only | 13 bytes per page in the kernel | 0.21 µs per page written | [by the score](https://github.com/martinus/seqlz/blob/main/docs/explored-designs.md#seqlz-fast-lit-by-the-score-no-budget-offsets-in-steps-of-8) |
-| offset 2 in 1 bit, class 5 below 2048 in 8 bits | offsets below 16 in 4 bits, class 5 in 9 | 0.6% smaller on 4 KiB pages, 1.4% on 16 KiB | none measured | [offset 2 in 1 bit](https://github.com/martinus/seqlz/blob/main/docs/explored-designs.md#offset-2-in-1-bit-multiples-of-8-below-2048-in-8-03-to-08-smaller-at-the-same-speed-kept) |
+| offset 2 in 1 bit, class 5 below 2048 in 8 bits | offsets below 16 in 4 bits, class 5 in 9 | 0.6% smaller on 4 KiB pages | none measured | [offset 2 in 1 bit](https://github.com/martinus/seqlz/blob/main/docs/explored-designs.md#offset-2-in-1-bit-multiples-of-8-below-2048-in-8-03-to-08-smaller-at-the-same-speed-kept) |
 | token codes of at most 11 bits | 12 bits | cold p99 4350 instead of 5070 ns, measured with entries of 2 bytes | {{ch17.tok_own}} of {{const.TOKEN_SYMBOLS}} tokens have a code, the rest is escaped | [second round](https://github.com/martinus/seqlz/blob/main/docs/explored-designs.md#second-round-branches-tails-and-table-sizes) |
 | the bitstream read most significant bit first | least significant first | a page touches 42.5 instead of 55 of the token table's {{ch17.tok_lines}} cache lines | none, the same bytes | [bit order](https://github.com/martinus/seqlz/blob/main/docs/explored-designs.md#the-sequences-bitstream-most-significant-bit-first-the-token-tables-codes-in-one-range-on-every-cpu-kept) |
 | only complete prefix codes | a check for invalid codes | 6% of the decoder's instructions | | [second round](https://github.com/martinus/seqlz/blob/main/docs/explored-designs.md#second-round-branches-tails-and-table-sizes) |
@@ -556,7 +556,7 @@ per page more than right after decoding the same page, and `zcomp_decompress()` 
 ([explored-designs.md](https://github.com/martinus/seqlz/blob/main/docs/explored-designs.md#the-decoder-in-a-fault-found-110-branch-mispredictions-per-page-that-a-decode-of-the-same-page-before-hides)).
 The largest source was the check for fewer than {{ch17.refill_below}} bits left
 ([explored-designs.md](https://github.com/martinus/seqlz/blob/main/docs/explored-designs.md#which-branches-three-in-the-sequence-loop-are-58-of-the-130-misses-of-a-page-seen-once)).
-Two fast sequences take at most $2 \times (11 + 14) = 50$ of the 56 bits of a refill, so a fast sequence
+Two fast sequences take at most $2 \times (11 + 12) = 46$ of the 56 bits of a refill, so a fast sequence
 refills every second time without asking ([why the bits never run short](#ch-decode--bits-left)): `zcomp_decompress()` went
 from 1995 to 2008 ns to 1936 to 1942 ns in 3 boots with gcc, and on the A76 a page seen once decoded about
 70 ns faster. A refill on every fast sequence took out as many misses, but its loads cost 500 cycles more
@@ -639,26 +639,28 @@ Level 1 has no decompression context. The tables, {{size.tables|grp}} bytes, are
 kernel is built and shared by every CPU.
 @assert ch15.mem.union_gets == ch15.mem.cctx_gets == ch15.mem.dctx_gets == 8192 and ch15.mem.struct_gets == ch15.mem.split_gets == 16384
 
-### 16 KiB pages: why the kernel copy is 4 KiB only
+### 16 KiB pages: why seqlz has blocks of 4 KiB only
 
-seqlz is written for both page sizes, and 16 KiB pages have their own tables, trained on the Android 17
-emulator's zram and 2.6% smaller on another of its dumps than tables from desktop pages
+Until 1st November 2026 `src/` had blocks of 16 KiB too, with tables of their own, trained on the
+Android 17 emulator's zram and 2.6% smaller on another of its dumps than tables from desktop pages
 ([explored-designs.md](https://github.com/martinus/seqlz/blob/main/docs/explored-designs.md#android-17-in-the-emulator-the-4-kib-tables-fit-the-16-kib-ones-trained-again-26-smaller)).
-But the work memory doubles with the page: the union asks for {{k16.ch15.mem.union|grp}} bytes and gets
-{{k16.ch15.mem.union_gets|grp}}, the split contexts ask for {{k16.ch15.state_plus_scratch|grp}} and get
-{{k16.ch15.mem.split_gets|grp}}, against `lz4`'s 32 768. Each split context alone stays at `lz4`'s 32 KiB,
-their sum does not, and the score counts the sum
-([plan.md §3.3](https://github.com/martinus/seqlz/blob/main/docs/plan.md#33-per-cpu-workspace-is-real-memory-on-a-phone)).
+But the work memory doubled with the page: the union asked for 16 400 bytes and got 32 768, the split
+contexts asked for 32 784 and got 49 152, against `lz4`'s 32 768. Each split context alone stayed at
+`lz4`'s 32 KiB, their sum did not, and the score counts the sum ([plan.md
+§3.3](https://github.com/martinus/seqlz/blob/main/docs/plan.md#33-per-cpu-workspace-is-real-memory-on-a-phone)).
 Decoding the coded literals into the end of the output page removes the scratch; it was built, and made
 cold reads 0.08 to 0.22 µs slower on 4 KiB pages in the kernel VM, for memory those pages do not need
 ([explored-designs.md](https://github.com/martinus/seqlz/blob/main/docs/explored-designs.md#16-kib-pages-tuned-c5-does-not-hold-the-literals-in-the-page-would-fix-it-not-kept)).
 zram's own buffer of two pages per stream, unused while reading and half unused while writing, is not
 tried yet
 ([explored-designs.md](https://github.com/martinus/seqlz/blob/main/docs/explored-designs.md#not-evaluated-yet)).
-Until that is decided, and until there is a phone with 16 KiB pages, their format is not fixed, the
-kernel copy compresses blocks of 4 KiB, and its zram backend is for 4 KiB pages only
+A 16 KiB page as four blocks of 4 KiB needs no tables of its own and no more work memory: on the
+emulator's pages it took 7.0% to 8.6% more memory than one block with the 16 KiB tables, at 16 instead
+of 48 KiB of work memory per CPU
+([explored-designs.md](https://github.com/martinus/seqlz/blob/main/docs/explored-designs.md#16-kib-pages-as-four-blocks-of-4-kib-70-to-86-more-memory-than-one-block-of-16-kib-measured)).
+With no phone with 16 KiB pages to measure on, the 16 KiB blocks went from `src/`, which now has the
+kernel copy's blocks of 4 KiB with any page size; the zram backend is for 4 KiB pages only
 ([format.md](https://github.com/martinus/seqlz/blob/main/docs/format.md#status)).
-@assert k16.ch15.mem.cctx_gets <= 32768 and k16.ch15.mem.dctx_gets <= 32768 and k16.ch15.mem.split_gets == 48 * 1024
 
 ## Level 3: a lazy step and a literal table of the page's own {#ch-decisions--level3}
 
@@ -969,8 +971,8 @@ same list.)
 - **The decoder in a fault.** About 110 mispredicted branches per page are left that a predictor gets
   right only on a page it has seen. The refill without its branch took out about 29 and was kept; every
   other attempt so far cost more than the misses.
-- **16 KiB pages**: no phone with them yet, the format not fixed, and the split contexts' 48 KiB above
-  `lz4`'s 32 KiB.
+- **16 KiB pages**: no phone with them yet, and no format for them since 1st November 2026; a page as
+  four blocks of 4 KiB took 7.0% to 8.6% more memory on the emulator's pages.
 - **Whether zram wants a new algorithm at all.** The question went to linux-mm, linux-block and
   linux-kernel on 9th October 2026, with the phone's numbers, and is not answered yet
   ([plan.md §9](https://github.com/martinus/seqlz/blob/main/docs/plan.md#9-where-the-project-stands-and-the-next-actions)).

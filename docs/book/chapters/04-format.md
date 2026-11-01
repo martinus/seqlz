@@ -16,9 +16,9 @@ this chapter says what `seqlz_compress()` writes, it says so.
 
 ## One header, five layouts {#ch-format--layout}
 
-This chapter uses the spec's names for three numbers: `PAGE` is the size of a page, 4096 bytes, or
-16384 for 16 KiB pages, `P` is its log2, 12 or 14, and `len` is the length of the compressed page, in
-bytes. The spec says `BLOCK` for `PAGE`, as seqlz compresses blocks of that size, one page each in zram.
+This chapter uses the spec's names for three numbers: `PAGE` is the size of a page, 4096 bytes, `P` is
+its log2, 12, and `len` is the length of the compressed page, in bytes. The spec says `BLOCK` for
+`PAGE`, as seqlz compresses blocks of that size, one page each in zram.
 
 A compressed page starts with a 2-byte number `h`, little endian. The top bit, `h & 0x8000`, says
 whether the literals that follow are raw or coded; the other 15 bits, `n = h & 0x7fff`, are the number of literals of
@@ -203,8 +203,8 @@ are part of the format, not of the page. There are {{ch17.tables}}:
 | table | symbols | longest code allowed | codes |
 | --- | --- | --- | --- |
 | `TOK`, the tokens and the escape | {{tok.symbols}} | {{ch06.TOKEN_BITS}} bits | the token of each sequence |
-| `LL`, literal length values | {{ll.symbols}} ({{k16.ll.symbols}} on 16 KiB pages) | {{ch06.MAX_BITS}} bits | the rest of a long `ll` |
-| `ML`, match length values | {{ml.symbols}} ({{k16.ml.symbols}} on 16 KiB pages) | {{ch06.MAX_BITS}} bits | the rest of a long `ml` |
+| `LL`, literal length values | {{ll.symbols}} | {{ch06.MAX_BITS}} bits | the rest of a long `ll` |
+| `ML`, match length values | {{ml.symbols}} | {{ch06.MAX_BITS}} bits | the rest of a long `ml` |
 | literal tables 0 to 7 | 256 each | {{ch06.LIT_BITS}} bits | the coded literals |
 | `OWN`, a page's own literal table | {{own.symbols}} | {{own.code_bits}} bits | the lengths of a page's own table, [below](#ch-format--own) |
 @assert ch04.longest.tok == ch06.TOKEN_BITS and ch04.longest.ll <= ch06.MAX_BITS and ch04.longest.ml <= ch06.MAX_BITS and ch04.longest.lit == ch06.LIT_BITS
@@ -349,25 +349,25 @@ if t == 3072:
 
 Right after the token come the **offset bits**, as many as the token's class says:
 
-| class | offset bits, 4 KiB | offset bits, 16 KiB | offset | offsets it can send |
-| --- | --- | --- | --- | --- |
-| 0 | {{ch04.raw.0}} | {{k16.ch04.raw.0}} | the offset of the match before | the same again |
-| 1 | {{ch04.raw.1}} | {{k16.ch04.raw.1}} | `read(1) * 2` | 2 |
-| 2 | {{ch04.raw.2}} | {{k16.ch04.raw.2}} | `read(8)` | 1 to 255 |
-| 3 | {{ch04.raw.3}} | {{k16.ch04.raw.3}} | `read(P)` | 1 to `PAGE - 1` |
-| 4 | {{ch04.raw.4}} | {{k16.ch04.raw.4}} | `read(5) * 8` | 8 to 248, multiples of 8 |
-| 5 | {{ch04.raw.5}} | {{k16.ch04.raw.5}} | `read(8) * 8` | 8 to 2040, multiples of 8 |
-@assert ch04.raw[1] == k16.ch04.raw[1] == 1 and ch04.raw[5] == k16.ch04.raw[5] == 8
+| class | offset bits | offset | offsets it can send |
+| --- | --- | --- | --- |
+| 0 | {{ch04.raw.0}} | the offset of the match before | the same again |
+| 1 | {{ch04.raw.1}} | `read(1) * 2` | 2 |
+| 2 | {{ch04.raw.2}} | `read(8)` | 1 to 255 |
+| 3 | {{ch04.raw.3}} | `read(P)` | 1 to `PAGE - 1` |
+| 4 | {{ch04.raw.4}} | `read(5) * 8` | 8 to 248, multiples of 8 |
+| 5 | {{ch04.raw.5}} | `read(8) * 8` | 8 to 2040, multiples of 8 |
+@assert ch04.raw[1] == 1 and ch04.raw[5] == 8
 
 Class 0 is the **repeat offset**, the offset of the sequence before, in 0 bits; at the start of each
-page it is 1, so class 0 also works for a first match that is a run of one byte. Class 1 is the
-single offset 2, an array of 16-bit values: of the offsets that are not the repeat offset, about 8%
-are 2 on phone and desktop pages, more than any other single offset
+page it is 1, so class 0 also works for a first match that is a run of one byte. Class 1 is the single
+offset 2, an array of 16-bit values: of the offsets that are not the repeat offset, about 8% are 2 on
+phone and desktop pages, more than any other single offset
 ([explored-designs.md](https://github.com/martinus/seqlz/blob/main/docs/explored-designs.md#offset-2-in-1-bit-multiples-of-8-below-2048-in-8-03-to-08-smaller-at-the-same-speed-kept)).
-Classes 4 and 5 store the offset divided by 8, for the pointers and 8-byte fields of memory: class 4
-in 3 bits less than class 2, class 5 in 4 bits less than class 3 on 4 KiB pages and 6 less on 16 KiB
-pages. A multiple of 8 from 2048 on goes to class 3. An offset must be 1 to the number of bytes
-written so far; class 1 with the bit `0` gives offset 0, and that page is invalid.
+Classes 4 and 5 store the offset divided by 8, for the pointers and 8-byte fields of memory: class 4 in
+3 bits less than class 2, class 5 in 4 bits less than class 3. A multiple of 8 from 2048 on goes to
+class 3. An offset must be 1 to the number of bytes written so far; class 1 with the bit `0` gives
+offset 0, and that page is invalid.
 
 The format does not care which class a compressor uses, as long as the offset comes out: class 3 can
 send offset 5, class 2 can send 2 and 8. `seqlz_compress()` uses class 0 for the offset before, else
@@ -388,16 +388,16 @@ the class with the fewest offset bits that holds it, chosen in `seqlz_off_class(
 
 ::: why Why offsets are plain bits, and why the class is in the token
 Offsets were once a Huffman-coded symbol for their number of bits, followed by the bits. Moving the
-class into the token, with plain bits after it, cost 0.4 points of memory and took the decoder from
-8758 to 8168 cycles per page: one table lookup on the chain from one token to the next, not two
+class into the token, with plain bits after it, cost 0.4 points of memory and took the decoder from 8758
+to 8168 cycles per page: one table lookup on the chain from one token to the next, not two
 ([explored-designs.md](https://github.com/martinus/seqlz/blob/main/docs/explored-designs.md#seqlz-third-decoder-round-one-repeat-offset-offset-class-in-the-token-and-why-cold-is-slow)).
 The classes for multiples of 8 came later and saved 13 bytes per page in the kernel, for about 0.2 µs
 more per page written
 ([explored-designs.md](https://github.com/martinus/seqlz/blob/main/docs/explored-designs.md#seqlz-fast-lit-by-the-score-no-budget-offsets-in-steps-of-8)).
 On 14th October 2026 class 1 became offset 2 in 1 bit, instead of the offsets below 16 in 4 bits, and
-class 5 the multiples of 8 below 2048 in 8 bits, instead of all of them from 256 on in 9. With the
-token tables trained again, `seqlz-2` stores 0.6% less on the 4 KiB dumps, on average, and
-1.4% less on the 16 KiB ones, at the same speed on the Mi 9T and in the kernel VM
+class 5 the multiples of 8 below 2048 in 8 bits, instead of all of them from 256 on in 9. With the token
+tables trained again, `seqlz-2` stores 0.6% less on the dumps, on average, at the same speed on the Mi
+9T and in the kernel VM
 ([explored-designs.md](https://github.com/martinus/seqlz/blob/main/docs/explored-designs.md#offset-2-in-1-bit-multiples-of-8-below-2048-in-8-03-to-08-smaller-at-the-same-speed-kept)).
 :::
 
@@ -414,11 +414,11 @@ else:       b = s - 12;  value = 2^b + read(b)
 ```
 
 A value of 16 or more is sent as the position of its highest bit, $b$, as the symbol $12 + b$, and the
-$b$ bits below it as plain bits. That is {{ll.symbols}} symbols on 4 KiB pages, $12 + P$, and
-{{k16.ll.symbols}} on 16 KiB pages. E.g. the value 100 is in the range 64 to 127, so $b = 6$, the
-symbol is 18, and `read(6)` is $100 - 64 = 36$; symbol 18 has the code `{{ll.code.18}}` in the real
-`LL` table, so `ll = 115` costs the token, {{ll.len.18}} bits of code and 6 plain bits.
-@assert ll.symbols == ml.symbols == 24 and k16.ll.symbols == 26
+$b$ bits below it as plain bits. That is {{ll.symbols}} symbols, $12 + P$. E.g. the value 100 is in the
+range 64 to 127, so $b = 6$, the symbol is 18, and `read(6)` is $100 - 64 = 36$; symbol 18 has the code
+`{{ll.code.18}}` in the real `LL` table, so `ll = 115` costs the token, {{ll.len.18}} bits of code and 6
+plain bits.
+@assert ll.symbols == ml.symbols == 24
 
 A code of a length value has at most {{ch06.MAX_BITS}} bits, a decode table of 256 entries. A match
 length value follows 8.5% of the matches, which is why `ml` has 5 bits in the token and not 4: with 4,
@@ -470,7 +470,7 @@ that coding them needs ([the rule](#ch-literals-enc--rule)).
 - `{{ch04.ab.lithex}}`: the {{ab.lits}} literals, `a` and `b`.
 - `{{ab.b.hex}}`: `B`, {{ab.b.bits}} bits.
 
-@anim abbits The {{ab.len}} bytes read as the spec reads them, one field per step, with the codes of the real 4 KiB tables; the page fills up below.
+@anim abbits The {{ab.len}} bytes read as the spec reads them, one field per step, with the codes of the real tables; the page fills up below.
 
 | bits | read as | means |
 | --- | --- | --- |
@@ -656,8 +656,8 @@ per literal, where the raw page spends 8. `seqlz-3` stores the same page in {{ow
 table of its own, [below](#ch-format--own).
 
 ::: why Why the stream sizes take `w` bits and not 2 bytes each
-A stream holds every 8th literal, and a literal code has at most 10 bits: on a 4 KiB page at most 640
-bytes, 10 bits, on a 16 KiB page 2560 bytes, 12 bits. The largest stream of most pages is below 128
+A stream holds every 8th literal, and a literal code has at most 10 bits: at most 640 bytes, 10 bits.
+The largest stream of most pages is below 128
 bytes, 7 bits. With 2 bytes per size, as until 5th October 2026, the header was 19 bytes, and pages
 were 5.3 bytes larger on average
 ([explored-designs.md](https://github.com/martinus/seqlz/blob/main/docs/explored-designs.md#stream-sizes-in-as-many-bits-as-the-largest-needs-kept)).
@@ -925,22 +925,21 @@ example and both reference decoders.
 
 ## Where the tables come from {#ch-format--tables}
 
-The {{ch17.tables}} tables are counts turned into code lengths. `bench/seqlz_counts_4k.txt` has, for 4
-KiB pages, how often each token, each `ll` symbol and each `ml` symbol occurred on the training pages,
+The {{ch17.tables}} tables are counts turned into code lengths. `bench/seqlz_counts.txt` has how
+often each token, each `ll` symbol and each `ml` symbol occurred on the training pages,
 and for each of the 8 literal tables, how often each byte value occurred as a literal on the pages that
 table codes best; k-means put pages whose literals look alike into one group for each table. Its line
 `own` has how often each symbol of `OWN` occurred in the tables of the {{own.counts.pages|grp}} training
 pages that level 3 gave a table of their own; the lengths 7 to 10 are {{own.counts.share_7_10}}% of them.
 `tools/kernel-port/gen-seqlz-lengths.py` turns the counts into length-limited Huffman code lengths and
 writes `src/seqlz_lengths.h`; CI checks that the files in `src/` are its output, byte for byte, and `seqlz-train --from-counts` does the same in C++.
-The kernel's copy gets the generator, as `scripts/gen-seqlz-lengths.py`, and the 4 KiB counts.
+The kernel's copy gets the generator, as `scripts/gen-seqlz-lengths.py`, and the counts.
 
-The 4 KiB tables of 13th October 2026 are counted on {{ch02.train_pages|grp}} pages: three sessions
+The tables of 13th October 2026 are counted on {{ch02.train_pages|grp}} pages: three sessions
 of a Xiaomi Mi 9T under memory pressure, the resident pages of a desktop and 200 000 pages of its zram
-dump of 28th September 2026. The 16 KiB tables are counted on 26 933 pages of a zram dump of the
-Android 17 emulator with 16 KiB pages. The pages are not published, because memory pages hold keys
+dump of 28th September 2026. The pages are not published, because memory pages hold keys
 and passwords. The counts cannot give a page back: they are sums over many pages, each literal
-table's over 10 590 pages or more for 4 KiB, and say nothing about which symbol came after which
+table's over 10 590 pages or more, and say nothing about which symbol came after which
 ([`docs/format.md`](https://github.com/martinus/seqlz/blob/main/docs/format.md#where-the-tables-come-from)).
 
 A decoder has to have exactly the right tables. `docs/format.md` lists the SHA-256 of each table's
@@ -949,11 +948,11 @@ code lengths, as bytes in symbol order, and `seqlz_ref.py` refuses to run when t
 
 | table | SHA-256 of the code lengths |
 | --- | --- |
-| `TOK_4k` | `{{ch04.sha.TOK}}` |
-| `LL_4k` | `{{ch04.sha.LL}}` |
-| `ML_4k` | `{{ch04.sha.ML}}` |
-| `LIT_4k` | `{{ch04.sha.LIT}}` |
-| `OWN_4k` | `{{ch04.sha.OWN}}` |
+| `TOK` | `{{ch04.sha.TOK}}` |
+| `LL` | `{{ch04.sha.LL}}` |
+| `ML` | `{{ch04.sha.ML}}` |
+| `LIT` | `{{ch04.sha.LIT}}` |
+| `OWN` | `{{ch04.sha.OWN}}` |
 
 Fixed tables cost bytes, since a table fitted to each page codes it tighter. For the tokens and the
 lengths no way of fitting them that was measured paid for its time, and tables trained on a phone's own

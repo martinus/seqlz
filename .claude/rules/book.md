@@ -17,11 +17,6 @@ paths:
   Then reread the prose next to each listing marked CHANGED, grep the chapters for every name the
   changes removed or renamed, then `docs/book/build.py --check` (`npm install` in `docs/book` once, or
   `ln -s` another worktree's `docs/book/node_modules`; git ignores it).
-- The first book update after the rename from quetschn (23 Oct 2026) also renames in `docs/book/`:
-  `QUETSCHN_PAGE_BITS` in `build.py` and the facts, `quetschn_prefetch_page` in `facts/ch15_18.c`, and
-  the binaries and options the chapters name.
-- The first book update after 1 Nov 2026 also drops the 16 KiB facts (`k16` and `-DSEQLZ_PAGE_BITS=14`
-  in `build.py`, the chapters' 16 KiB numbers): `src/` has blocks of 4 KiB only since then.
 - Computed values are `{{key}}` from `docs/book/facts/*.c`, `@program`/`@output` or `@assert`
   (`docs/book/README.md`): format/table changes fail the build where prose needs a look.
 - Writing chapters: `docs/book/STYLE.md` (the reader knows C and C++; one number per measurement, the

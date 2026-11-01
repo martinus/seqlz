@@ -57,10 +57,10 @@ enough, and returns the new length or `len` unchanged; `seqlz_code_own()` does t
 also with a table of the page's own. Both use `st->literals`, the matcher's 8 KiB table as bytes
 through the union in `struct seqlz_state` ([what lies where](#ch-header--state)): level 2 writes the
 coded streams into slots there and copies them over the raw literals once all are read
-([the slots](seqlz_compress_literals.c.html#b859)), level 3 mostly reads the literals from a copy there
+([the slots](seqlz_compress_literals.c.html#b864)), level 3 mostly reads the literals from a copy there
 while it writes the coded ones over the raw ones in `dst` ([in place](#ch-literals-enc--in-place)).
 `seqlz_code_own()` also uses
-[`own_work(st)`](seqlz_compress_literals.c.html#b987), the upper half of the same 8 KiB.
+[`own_work(st)`](seqlz_compress_literals.c.html#b992), the upper half of the same 8 KiB.
 
 The text page of [chapter 4](#ch-format--own) shows what the levels do to one page: {{words.len}}
 bytes at level 1, {{words.coded.len}} at level 2 and {{words.l3.len}} at level 3, without deltas; the
@@ -87,7 +87,7 @@ The interface's `seqlz_compress()`, which zram's backend calls, declared in
 level outside 1 to 3 is `-EINVAL`. The `static_assert`s tie the interface's numbers to the codec's:
 the work memory is the matcher's state, and the interface's levels are the codec's, so
 `seqlz_compress()` passes `level` on unchanged. The last one ties the 32 bytes that `seqlz_compress()`'s
-kernel-doc names ([`linux/seqlz.h`](linux-seqlz.h.html#b43)) to `ENC_ROOM`, so the documentation
+kernel-doc names ([`linux/seqlz.h`](linux-seqlz.h.html#b42)) to `ENC_ROOM`, so the documentation
 cannot drift from the encoder.
 
 ::: kernel EXPORT_SYMBOL_GPL

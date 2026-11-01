@@ -70,7 +70,7 @@ static inline const struct seqlz_tables* fact_tables(void) {
     return &seqlz_tables;
 }
 
-/* the page compressed as seqlz_compress_block() writes it at a level, 1 to SEQLZ_LEVELS, and decoded again */
+/* the page compressed as seqlz_compress_block() writes it at a level, 1 to SEQLZ_LEVEL_MAX, and decoded again */
 static inline unsigned int fact_compress_level(const unsigned char* page, unsigned char* dst, unsigned int level) {
     static struct seqlz_state st;
     static unsigned char out[SEQLZ_BLOCK_SIZE], scratch[SEQLZ_SCRATCH];

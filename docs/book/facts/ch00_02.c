@@ -5,7 +5,7 @@
  *   ch00.src_lines  of all *.c and *.h of src/ and src/linux/
  *   ch00.linux_lines, ch00.linux_files   of the stand-ins in src/linux/, all but its seqlz.h
  *   ch01.*          the work memory per CPU, as the kernel's allocators round it
- *   ch02.cls.*      the offset classes' shares in bench/seqlz_counts_4k.txt, their entropy, the
+ *   ch02.cls.*      the offset classes' shares in bench/seqlz_counts.txt, their entropy, the
  *                   Huffman code built from them by hand in the chapter
  *   ch02.cat.K.*    sequence K of chapter 2's page, as the bitstream writes it
  *   ch02.hash.*     the matcher's hash on that page, and the page with a # in front
@@ -174,7 +174,7 @@ static void classes(void) {
     unsigned long long count[N] = {0}, total = 0, cents[N], rem[N], sum = 0, w[2 * N];
     unsigned int depth[2 * N] = {0}, parent[2 * N], alive[2 * N], nodes = N, k, j, step;
     char members[2 * N][32], key[64], text[128];
-    FILE* f = repo_open("bench/seqlz_counts_4k.txt");
+    FILE* f = repo_open("bench/seqlz_counts.txt");
     char* line = NULL;
     size_t cap = 0;
     double h = 0;

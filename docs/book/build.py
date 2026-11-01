@@ -44,8 +44,7 @@ Directives, each on a line of its own, outside fenced code:
       a value the facts programs compute, anywhere in a chapter, also in code and figures: each
       facts/*.c is built with src/ and prints a JSON object, nested objects give dotted keys, list
       items their index (ab.bytes, tok.code.34). |grp writes a number in groups of 3 digits,
-      524 912. An unknown key fails the build. A facts file with the line "// facts: also 16k" is
-      built for 16 KiB pages too, its keys then start with k16.
+      524 912. An unknown key fails the build.
 
   @assert <python expression>
       fails the build when false, for a sentence that depends on the code without quoting a
@@ -285,17 +284,16 @@ TABLES_LOCK = threading.Lock()
 
 
 def tables_c(flags=()):
-    """seqlz_tables.c, the codec's tables, which tools/gen-tables/gen-tables.sh generates, once per build
-    and block size: flags, a program's -D flags, may set SEQLZ_PAGE_BITS"""
-    bits = tuple(f for f in flags if f.startswith("-DSEQLZ_PAGE_BITS="))
+    """seqlz_tables.c, the codec's tables, which tools/gen-tables/gen-tables.sh generates, once per build;
+    flags, a program's -D flags, do not change them"""
     with TABLES_LOCK:
-        if bits not in TABLES:
+        if "c" not in TABLES:
             tmp = tempfile.mkdtemp()
             atexit.register(shutil.rmtree, tmp, True)
-            subprocess.run([str(REPO / "tools" / "gen-tables" / "gen-tables.sh"), f"{tmp}/seqlz_tables.c", *bits],
+            subprocess.run([str(REPO / "tools" / "gen-tables" / "gen-tables.sh"), f"{tmp}/seqlz_tables.c"],
                            check=True)
-            TABLES[bits] = f"{tmp}/seqlz_tables.c"
-        return TABLES[bits]
+            TABLES["c"] = f"{tmp}/seqlz_tables.c"
+        return TABLES["c"]
 
 
 def run_c(main, include_dirs=(), link=SRC_C, flags=(), extra=()):
@@ -425,11 +423,7 @@ def load_facts(pool):
     FACTS["src.lines"] = sum((REPO / "src" / f.name).read_text().count("\n") for f in (REPO / "src").iterdir()
                              if f.suffix in (".c", ".h"))
     files = sorted((HERE / "facts").glob("*.c"))
-    # a facts file with the line "// facts: also 16k" is built a second time for 16 KiB pages, its
-    # keys then start with k16.
-    k16 = [c for c in files if "// facts: also 16k" in c.read_text()]
     runs = [(c, "", pool.submit(facts_of, c)) for c in files]
-    runs += [(c, "k16.", pool.submit(facts_of, c, ("-DSEQLZ_PAGE_BITS=14",))) for c in k16]
     for c, prefix, fut in runs:
         flatten(fut.result(), prefix, FACTS, f"facts/{c.name}")
     fact_tree()
@@ -907,8 +901,8 @@ def chapter_refs(page, labels):
 # files of src/ that are gone, and where their notes went: their old pages go there, without the line
 MOVED = {"seqlz_compat.h": "ch-linux", "seqlz_default_tables.c": "f-seqlz_lengths-c",
          "seqlz_lit_sets.c": "f-seqlz_lengths-c", "seqlz_default_tables_4k.inc": "f-seqlz_lengths-h",
-         "seqlz_lit_sets_4k.inc": "f-seqlz_lengths-h", "seqlz_default_tables_16k.inc": "f-seqlz_lengths_16k-h",
-         "seqlz_lit_sets_16k.inc": "f-seqlz_lengths_16k-h"}
+         "seqlz_lit_sets_4k.inc": "f-seqlz_lengths-h", "seqlz_default_tables_16k.inc": "f-seqlz_lengths-h",
+         "seqlz_lit_sets_16k.inc": "f-seqlz_lengths-h", "seqlz_lengths_16k.h": "f-seqlz_lengths-h"}
 
 
 def moved(target, book):

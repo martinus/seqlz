@@ -36,20 +36,19 @@ token 576, no literals and 8 bytes from offset 2, class 1: a run of one 16-bit v
 ## Where the numbers come from
 
 @@ 1-22
-`gen-seqlz-lengths.py` reads `bench/seqlz_counts_4k.txt`: how often each symbol occurred on about 1.1
+`gen-seqlz-lengths.py` reads `bench/seqlz_counts.txt`: how often each symbol occurred on about 1.1
 million training pages from a phone and a desktop. It turns the counts into an optimal prefix code
 whose longest code has 11 bits, by package-merge, which is Huffman's idea with a length limit. A
 frequent symbol gets a short code.
 
-Only the 640 most frequent of the 3072 tokens get a code; all others go through the escape. The
-SPDX line is in the kernel's order. The head comment names the command that wrote the file: in the
-kernel's copy it is `scripts/gen-seqlz-lengths.py lib/seqlz/seqlz_counts.txt`, without `--extern`.
-The include guard is the kernel's, for `lib/seqlz/seqlz_lengths.h`; the 16 KiB file has the same one,
-and `seqlz_lengths.c` includes only one of them. `seqlz_format.h` gives `struct seqlz_lengths`. The
-`gen_seqlz_tables` of the comment is the kernel's program; in `src/` it is `tools/gen-tables/`.
+Only the 640 most frequent of the 3072 tokens get a code; all others go through the escape. The SPDX
+line is in the kernel's order. The head comment names the command that wrote the file: in the kernel's
+copy it is `scripts/gen-seqlz-lengths.py lib/seqlz/seqlz_counts.txt`, without `--extern`. The include
+guard is the kernel's, for `lib/seqlz/seqlz_lengths.h`. `seqlz_format.h` gives `struct seqlz_lengths`.
+The `gen_seqlz_tables` of the comment is the kernel's program; in `src/` it is `tools/gen-tables/`.
 @anim huffman Building a Huffman code from counts, by hand
 @more {#ch-codes--training-counts-then-lengths} From counts to lengths: what the generator does
-`tools/kernel-port/gen-seqlz-lengths.py --extern` makes this file from `bench/seqlz_counts_4k.txt`, how
+`tools/kernel-port/gen-seqlz-lengths.py --extern` makes this file from `bench/seqlz_counts.txt`, how
 often each token, each `ll` and `ml` symbol and each byte as a literal occurred on the training pages,
 and for each literal table how many pages it codes:
 
@@ -66,11 +65,11 @@ and for each literal table how many pages it codes:
   anything.
 @assert ch08.tok.coded % 64 == 0
 
-`tools/seqlz-ref/check.sh`, in CI, generates this file and `seqlz_lengths_16k.h` again and fails if one
-differs by a byte. `seqlz_ref.py`, the decoder written from the spec, checks the SHA-256 of every table against
+`tools/seqlz-ref/check.sh`, in CI, generates this file again and fails if it differs by a byte.
+`seqlz_ref.py`, the decoder written from the spec, checks the SHA-256 of every table against
 [`docs/format.md`](https://github.com/martinus/seqlz/blob/main/docs/format.md#where-the-tables-come-from),
-e.g. `{{ch08.tok4k_sha}}...` for the 4 KiB token table, and the test `seqlz_train` checks that
-`seqlz-train --from-counts` in C++ gives the same tables.
+e.g. `{{ch08.tok_sha}}...` for the token table, and the test `seqlz_train` checks that `seqlz-train
+--from-counts` in C++ gives the same tables.
 
 ::: try Check a table's hash yourself
 From the repository's root:
@@ -82,8 +81,8 @@ print(len(tok), hashlib.sha256(bytes(tok)).hexdigest())
 print(sum(1 for l in tok[:3072] if l), "tokens with a code, escape", tok[3072], "bits")
 print(sum(2.0 ** -l for l in tok if l))
 ```
-This prints {{tok.symbols}} and the `TOK_4k` hash of `format.md`, `{{ch08.tok.coded}} tokens with a code, escape {{tok.len.3072}} bits`, and
-`1.0`, the Kraft sum of a complete code.
+This prints {{tok.symbols}} and the `TOK` hash of `format.md`, `{{ch08.tok.coded}} tokens with a code,
+escape {{tok.len.3072}} bits`, and `1.0`, the Kraft sum of a complete code.
 :::
 @end
 
@@ -107,7 +106,7 @@ shortest, 7 bits for token 1040: a match right after a match, at a new near offs
 `ll` 15, has codes in 14 of the 32 rows: it stands for every literal run of 15 or more.
 
 @@ 119-150
-Class 3, any offset, 12 bits on 4 KiB pages. The same picture as class 2, codes from 7 bits on, so a
+Class 3, any offset, 12 bits. The same picture as class 2, codes from 7 bits on, so a
 sequence here takes at least 19 bits before its literals and length values.
 
 @@ 151-182
@@ -125,7 +124,7 @@ Symbol 3072, the escape, has 4 bits, as short as the most frequent token: the 24
 code are each rare but frequent together: about 15 of about 205 sequences per page on desktop pages
 and 10 of 170 on phone pages (20 000 pages of each dump, `seqlz_find()` and the tables of 14th October
 2026, same-filled pages left out, measured on 14th October). An escaped token costs 4 + 12 bits. The
-format allows at most 7 bits here on 4 KiB pages; [the escape](book:#ch-header--escape) has why the
+format allows at most 7 bits here; [the escape](book:#ch-header--escape) has why the
 rare tokens do not all get a code.
 
 @@ 217-220
@@ -144,7 +143,7 @@ decode table of 256 entries.
 @@ 226-227
 The 8 literal tables, and the code `OWN`, as code lengths: one byte per byte value, 16 per line, so
 line `n` of a table is the bytes `16 * n` to `16 * n + 15`. Generated from the same counts as the
-token table ([how they are trained](seqlz_lengths.c.html#b13)).
+token table ([how they are trained](seqlz_lengths.c.html#b12)).
 
 A page with coded literals names one of the 8 tables in the low bits of its byte 2; the compressor picks the one that
 codes the page's literals in the fewest bits. Each table is complete, codes 2 to 10 bits, and every

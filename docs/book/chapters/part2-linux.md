@@ -141,7 +141,7 @@ seqlz are loaded side by side, and a symbol may be exported by one module only.
 
 Older arm64 kernels, 4.14 among them, say a cache line is 128 bytes; the phone's Cortex-A76 and A55
 have 64, and mainline arm64 says 64 too. The decoder prefetches its tables before it decodes a page, in
-[`prefetch_lines()`](#ch-dec-basics--prefetch), in steps of {{ch05.prefetch_step}} bytes with one
+[`seqlz_prefetch_lines()`](#ch-dec-basics--prefetch), in steps of {{ch05.prefetch_step}} bytes with one
 `prefetch()` every `L1_CACHE_BYTES` inside a step:
 
 ```c

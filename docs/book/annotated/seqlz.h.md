@@ -36,11 +36,10 @@ No function takes the tables as a parameter. They are one global `const` struct,
 generated as C during the build ([at build time](book:#ch-codes--kernel)). Tests that build other tables
 pass a struct of their own.
 @more {#ch-header--tables} One global table for every CPU
-The codes for the encoder and the decode tables are {{size.tables|grp}} bytes on both page sizes, one
+The codes for the encoder and the decode tables are {{size.tables|grp}} bytes, one
 global `const` struct, `seqlz_tables` ([its layout](#ch-internal--tables)), which every CPU reads. So
 they are no part of the work memory per CPU. A program for the build machine writes the struct as C
 when seqlz is built, in userspace as in the kernel, so a program that compresses calls nothing first.
-@assert size.tables == k16.size.tables
 @end
 @more {#ch-header--refused} The ways `seqlz_tables_build()` refuses lengths
 Four failures are the ways lengths are no complete prefix code
@@ -63,7 +62,7 @@ arrays are the format; everything else is computed from them ([tables as code le
 
 @@ 42-44
 Every sequence with a match covers at least 4 bytes, so a 4 KiB block has at most 1024 of them, plus
-the last one, which only has literals: 1025, and {{k16.const.MAX_SEQUENCES}} on 16 KiB pages.
+the last one, which only has literals: 1025.
 `seqlz_find()` needs room for that many and `seqlz_encode()` rejects more, and the decoder's work per
 page is bounded by the same count.
 

@@ -71,13 +71,13 @@ the codec the copy is nearly a copy.
 
 | file in the tree | from |
 | --- | --- |
-| `include/linux/seqlz.h` | `src/linux/seqlz.h`, for blocks of 4 KiB only |
+| `include/linux/seqlz.h` | `src/linux/seqlz.h` as it is |
 | `lib/seqlz/seqlz_format.h`, `seqlz_tables.h`, `seqlz_internal.h` | `src/`, without what only the harness uses |
 | `lib/seqlz/seqlz_compress.c` | `src/seqlz_compress.c`, with `seqlz_encoder.h` and `seqlz_match.h` in place |
 | `lib/seqlz/seqlz_compress_literals.c`, `seqlz_decompress.c`, `seqlz_decompress_literals.c` | `src/` |
 | `lib/seqlz/gen_seqlz_tables.c` | `src/seqlz_codes.c` and `tools/gen-tables/gen_seqlz_tables.c`: a program for the build machine, which writes the tables, `seqlz_tables.c`, when the kernel is built |
 | `lib/seqlz/seqlz_lengths.h` | the code lengths, written in the tree by its `scripts/gen-seqlz-lengths.py` from `lib/seqlz/seqlz_counts.txt`; `src/seqlz_lengths.h` is the same file without `static` |
-| `scripts/gen-seqlz-lengths.py`, `lib/seqlz/seqlz_counts.txt` | `tools/kernel-port/gen-seqlz-lengths.py` and `bench/seqlz_counts_4k.txt` |
+| `scripts/gen-seqlz-lengths.py`, `lib/seqlz/seqlz_counts.txt` | `tools/kernel-port/gen-seqlz-lengths.py` and `bench/seqlz_counts.txt` |
 | `lib/seqlz/tests/seqlz_kunit.c` | `tools/kernel-port/seqlz_kunit.c`, with values from `docs/format.md` filled in |
 | `lib/Kconfig`, `lib/Kconfig.debug`, `lib/Makefile`, `lib/seqlz/Makefile` | `CONFIG_SEQLZ`, and `CONFIG_SEQLZ_KUNIT_TEST` with the other KUnit tests of `lib/`; `-O3` as `lib/lz4` |
 | `drivers/block/zram/backend_seqlz.[ch]`, `Kconfig`, `Makefile`, `zcomp.c` | the backend, `CONFIG_ZRAM_BACKEND_SEQLZ` |
@@ -86,25 +86,13 @@ the codec the copy is nearly a copy.
 | `arch/x86/include/asm/processor.h` | `x86-prefetcht0.patch`, unless the tree has it |
 @end
 @more {#ch-zram-glue--what-portpy-changes-in-the-code} What `port.py` changes in the code
-The whole diff between `src/seqlz_decompress.c` and its copy:
-
-```text
-- * number of extra bits, which follow the code. Takes up to SEQLZ_MAX_BITS +
-- * SEQLZ_BLOCK_BITS bits, 20 or 22; the caller refills before.
-+ * number of extra bits, which follow the code. Takes up to
-+ * SEQLZ_MAX_BITS + SEQLZ_BLOCK_BITS bits, 20; the caller refills before.
-- * 50, 11 for each token and up to 14 for each offset; after a slow one it
-+ * 46, 11 for each token and up to 12 for each offset; after a slow one it
-```
-
-- **Blocks of 4 KiB only.** `#define SEQLZ_BLOCK_BITS 12U` in place of `SEQLZ_PAGE_BITS`, and
-  `SEQLZ_BLOCK_SIZE` of the interface `4096U`, whatever the kernel's `PAGE_SIZE` is: the library
-  compresses blocks of 4 KiB and builds with 16 KiB and 64 KiB pages too. The values for 16 KiB blocks
-  are cut, e.g. `SEQLZ_HASH_BITS` becomes `12U` and `SEQLZ_MEM_COMPRESS` `8192`, and so are the numbers
-  for them in the comments, as in the diff above. The format for 16 KiB blocks is not fixed yet, and
-  with them `seqlz-2` asks for twice `lz4`'s work memory per CPU
-  ([format.md](https://github.com/martinus/seqlz/blob/main/docs/format.md#status)). A library in
-  `lib/` that built only with 4 KiB pages would fail the first build bot with 64 KiB pages on arm64.
+`seqlz_decompress.c`, `seqlz_decompress_literals.c`, `seqlz_compress_literals.c` and `seqlz_tables.h`
+are copied as they are, and the copy of `seqlz_format.h` differs in one line, the name of the
+specification. Since 1st November 2026 `src/` has the kernel's blocks of 4 KiB, `SEQLZ_BLOCK_BITS`
+`12U` and `SEQLZ_BLOCK_SIZE` `4096U` whatever `PAGE_SIZE` is; until then `port.py` cut the values and
+comments of the 16 KiB blocks the userspace build had. The library builds with 16 KiB and 64 KiB pages
+too: one in `lib/` that built only with 4 KiB pages would fail the first build bot with 64 KiB pages
+on arm64. What `port.py` still changes:
 - **The encoder and the matcher in place.** What follows the includes of `seqlz_encoder.h` and
   `seqlz_match.h` goes into `seqlz_compress.c`, right before `compress_block()`, and its includes of
   them and of `seqlz.h` become one of `seqlz_internal.h`: in the kernel they have one user, and a
@@ -114,10 +102,9 @@ The whole diff between `src/seqlz_decompress.c` and its copy:
 - **`seqlz_codes.c` as a program for the build machine**, `gen_seqlz_tables.c`
   ([at build time](#ch-codes--kernel)), the one that writes the tables of `src/` too, with
   `seqlz_tables_build()` `static`.
-- **What only the harness uses is cut**: all of `src/seqlz.h` and `src/seqlz_harness.c`,
-  `seqlz_code_raw_literals()` and its declaration, and the cast in `seqlz_internal.h` that the C++ of the
-  harness needs. The `raw` parameter of `code_literals()` stays: at level 3 it carries the deltas
-  ([`seqlz_code_own()`](#ch-literals-enc--code-own)).
+- **What only the harness uses is cut**: all of `src/seqlz.h` and `src/seqlz_harness.c`, and the cast
+  in `seqlz_internal.h` that the C++ of the harness needs. The `raw` parameter of `code_literals()`
+  stays: at level 3 it carries the deltas ([`seqlz_code_own()`](#ch-literals-enc--code-own)).
 
 Every textual replacement goes through `must()` or `cut()`, which assert that the text occurs exactly as
 often as expected, so a change in `src/` that moves such a text stops `port.py` instead of writing a copy
@@ -374,7 +361,7 @@ Linux, is the kernel built as an ordinary program, `ARCH=um`, which boots in a s
 machine. `port.py` writes `lib/seqlz/tests/seqlz_kunit.c`, {{ch15.kunit.cases}} cases:
 
 - `seqlz_test_tables`: the SHA-256 of each table's code lengths against `docs/format.md`. The template's
-  placeholders, like `"@TOK_4k@"`, are filled from the specification's table, so the kernel's tests check
+  placeholders, like `"@TOK@"`, are filled from the specification's table, so the kernel's tests check
   against the specification, not a copy.
 - `seqlz_test_example`: the specification's {{ab.len}} bytes that decode to a page of `ab`; the same bytes
   without the last one, and with a zero byte more, must be `-EINVAL`.
@@ -424,7 +411,7 @@ scratch` checks the context sizes, and that `seqlz-1` decodes with a stream with
   bug in one of them, or an unclear sentence of the specification.
 
 `fuzz/smoke.sh` runs all four for 60 seconds each under AddressSanitizer and UndefinedBehaviorSanitizer;
-CI runs it for 4 KiB and 16 KiB pages and once with MemorySanitizer, which reports a read of a byte the
+CI runs it so, and once more with MemorySanitizer, which reports a read of a byte the
 codec did not write for this input. On the diff target, `docs/format.md` records two long AFL++ runs: on
 6th October 2026, 10 instances for 2 hours, 1.7 billion inputs, and on 9th October, with the code of commit
 `5342a9b`, 12 instances for 2 hours, 1.94 billion, no difference found in either
@@ -452,8 +439,8 @@ coded literals, `own table {{ch15.endian.own}}` those among them with a table of
 | job | what it runs |
 | --- | --- |
 | `format` | `clang-format` 21.1.8 on every `.c`, `.h` and `.cpp` |
-| `test` | `seqlz_test` built 4 ways: gcc debug with sanitizers, clang release, gcc release on arm64, gcc release with sanitizers for 16 KiB pages |
-| `fuzz` | `fuzz/smoke.sh 60` for 4 KiB, 16 KiB and MSan |
+| `test` | `seqlz_test` built 3 ways: gcc debug with sanitizers, clang release, gcc release on arm64 |
+| `fuzz` | `fuzz/smoke.sh 60` with ASan and UBSan, and with MSan |
 | `same-bytes` | `test/seqlz_endian.c` on x86-64, 32-bit x86 and s390x, outputs diffed |
 | `docs` | `tools/seqlz-ref/check.sh` and `tools/check-links.py` |
 | `book` | this book, `docs/book/build.py --check` and `lint.py`; `pages` publishes it from `main` |
@@ -497,9 +484,9 @@ interface, and `zram_codec.h`, the harness's copy of zram's interface.
 @end
 
 @@ 10-17
-`setup_params()`, once per device. seqlz is compiled for one page size, so a 4 KiB build given a
-corpus of 16 KiB pages fails here instead of reading past every page. No tables are built: they are
-`const` data, generated when seqlz is built, shared by every device and CPU.
+`setup_params()`, once per device. seqlz compresses blocks of 4 KiB, so a corpus of 16 KiB pages, which
+the harness also runs for the other codecs, fails here instead of reading past every page. No tables are
+built: they are `const` data, generated when seqlz is built, shared by every device and CPU.
 @more {#ch-zram-glue--setup} Tables per device until October 2026, and why not
 Lengths from a bad training stop the build that generates the tables
 ([at build time](#ch-codes--kernel)), not a benchmark. The kernel generates them the same way
@@ -591,7 +578,7 @@ names it.
 
 @@ 89-99
 The scratch that coded literals are decoded into before the sequences are copied
-([`seqlz_decode_literals()`](book:#ch-literals-dec)): a page plus 16 bytes, 4112 on 4 KiB pages, because the
+([`seqlz_decode_literals()`](book:#ch-literals-dec)): a page plus 16 bytes, 4112, because the
 decoder's 16-byte copies read up to 15 bytes past the last literal. With the hash table that is
 12 304 bytes per CPU, which `kmalloc()` hands out as 16 384, below `lz4`'s 20 480.
 @more {#ch-zram-glue--fast-lit} The 16 spare bytes, and what the split cost in memory

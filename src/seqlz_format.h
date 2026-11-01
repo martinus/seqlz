@@ -8,12 +8,11 @@
  * seqlz compresses one block of SEQLZ_BLOCK_SIZE bytes at a time, for zram,
  * whatever the kernel's PAGE_SIZE is. Like lz4, a block is a list of sequences:
  * some literal bytes, copied as they are, then a match, a copy of bytes that
- * came earlier in the same block. lz4 writes the
- * numbers of a sequence in whole bytes. seqlz writes them with Huffman codes,
- * and the code tables are fixed: trained once on real memory pages and compiled
- * in, so a block carries no table but at level 3, which may give it a literal
- * table of its own. That makes blocks smaller than lz4's, and decoding the
- * codes costs time.
+ * came earlier in the same block. lz4 writes the numbers of a sequence in whole
+ * bytes. seqlz writes them with Huffman codes, and the code tables are fixed:
+ * trained once on real memory pages and compiled in, so a block carries no
+ * table but at level 3, which may give it a literal table of its own. That
+ * makes blocks smaller than lz4's, and decoding the codes costs time.
  *
  * A sequence has three numbers:
  *   ll:     the number of literals before the match

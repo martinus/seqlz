@@ -5,7 +5,6 @@
  * 49 and 4 fill, the bits the decoder's fast path counts on, and what the chapters count in the
  * files of the repository. Includes seqlz_decompress.c for PREFETCH_STEP.
  */
-// facts: also 16k
 #include <dirent.h>
 #include <stddef.h>
 
@@ -158,7 +157,7 @@ int main(void) {
         if (SEQLZ_RAW_BITS(cls) > raw_max)
             raw_max = SEQLZ_RAW_BITS(cls);
     fact_num("ch03.off_max", raw_max);
-    fact_num("ch03.refill_at", SEQLZ_TOKEN_BITS + SEQLZ_PAGE_BITS);
+    fact_num("ch03.refill_at", SEQLZ_TOKEN_BITS + SEQLZ_BLOCK_BITS);
     fact_num("ch03.two_fast", 2 * (SEQLZ_TOKEN_BITS + raw_max));
     fact_num("ch03.lit_rounds", SEQLZ_LIT_ROUNDS);
     fact_num("ch03.lit_cost_run", LIT_COST_RUN);

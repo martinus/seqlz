@@ -56,8 +56,7 @@ $l$ bits long. Symbol 18 of the `ll` table, the values 64 to 127:
 Its {{ll.len.18}}-bit code is `{{ll.code.18}}`, so the entry
 `64 << 8 | 6 << 4 | {{ll.len.18}} = {{ch07.ll18.entry}}` fills the {{ch07.ll18.entries}} entries
 {{ch07.ll18.first}} to {{ch07.ll18.last}} of the 256, and the value is `64 + read(6)`
-([`seqlz_br_value()`](#ch-dec-basics--value)). The largest base is {{ch07.len_base_max}} on 4 KiB
-pages and {{k16.ch07.len_base_max}} on 16 KiB pages.
+([`seqlz_br_value()`](#ch-dec-basics--value)). The largest base is {{ch07.len_base_max}}.
 @end
 
 @@ 30-38
@@ -73,9 +72,9 @@ compares two constants inside a longer one ([checks](book:#ch-zram-glue--check))
 `enc_put()` shifts the accumulator by `n & 63U`, its count of bits masked
 ([the encoder](#ch-encoder--put)), and `put_len_value()` indexes the length values' `enc[]` with the
 symbol of the value `v`, `seqlz_len_symbol(v, &n_extra) & (ENC_LEN_SYMBOLS - 1U)`. The symbol is at
-most {{ch08.le_last_symbol}} ({{k16.ch08.le_last_symbol}} on 16 KiB pages), and `& 31` changes
+most {{ch08.le_last_symbol}}, and `& 31` changes
 nothing; it only tells the compiler what the code knows. For that `enc[]` has `ENC_LEN_SYMBOLS`, 32,
-entries, where {{const.LEN_SYMBOLS}} would do ({{k16.const.LEN_SYMBOLS}} on 16 KiB pages). On 23rd
+entries, where {{const.LEN_SYMBOLS}} would do. On 23rd
 September 2026 the masks took the compressor to 4.7% fewer instructions ([chapter 3](#ch-cpu--ubsan)
 has the cycles).
 @end
@@ -270,8 +269,8 @@ with codes of 2 or 3 bits, so 8 bits often hold two whole, and `quad[]` returns 
 
 E.g. `quad[0xd1]`: the 8 bits are a run of 1, then the length 9, then the length 10. The first ends
 after 6 bits, the second after 8. `OWN_QUAD_NONE`, 11, is no length: it marks a missing second one, and
-the decoder handles it without a branch ([`read_own_table()`](seqlz_decompress_literals.c.html#b233)). A run longer than 7
-gets only bit 31, and the decoder takes its symbol from `decode[]`.
+the decoder handles it without a branch ([`read_own_table()`](seqlz_decompress_literals.c.html#b239)). A
+run longer than 7 gets only bit 31, and the decoder takes its symbol from `decode[]`.
 @anim ownread How the decoder reads a page's own table with quad[]
 @more {#ch-internal--own} `quad[0xd1]` and `quad[0xfc]`, field by field
 For the 8 bits `{{own.q.d1.bits}}`: `{{own.code.10}}` is a run of {{own.q.d1.run1}}, `{{own.code.8}}`
@@ -330,9 +329,6 @@ The layout on x86-64, from `sizeof` and `offsetof`; arm64 aligns a `u64` the sam
 | `ll` | {{ch07.off.ll|grp}} | {{ch07.size.value_table}} | both, for long literal runs |
 | `ml` | {{ch07.off.ml|grp}} | {{ch07.size.value_table}} | both, for long matches |
 
-The 16 KiB build has the same size, {{k16.size.tables|grp}} bytes: its length tables have
-{{k16.const.LEN_SYMBOLS}} symbols, and `enc[]` has 32 entries either way.
-
 The decoder's 12 KiB fit the L1 cache ([cache](#ch-cpu--cache)). With a table of the page's own it
 reads `own.quad` and `own.decode`, 1.5 KiB, instead of a 2 KiB literal table, and builds the 2 KiB
 table in the page. The encoder reads `token.enc`, 6 KiB, the `enc` of `ll` and `ml`, `lit_cost`, 2 KiB,
@@ -343,8 +339,8 @@ and one literal table's `enc`, 1 KiB, at level 3 also `own.enc`.
 
 @@ 132-139
 The asserts check the widths of the entry's fields, described next. `DROP` has 5 bits, at most 31, and
-the most a token with a code moves the bitstream is 11 code bits plus class 3's 12 offset bits, 23 (25
-on 16 KiB pages). `ll` has 4 bits, `ml` 6 bits for at most 35, the shift 2 bits.
+the most a token with a code moves the bitstream is 11 code bits plus class 3's 12 offset bits, 23. `ll`
+has 4 bits, `ml` 6 bits for at most 35, the shift 2 bits.
 
 `SEQLZ_OFF_SHIFT()` reads a whole nibble ([the nibbles](book:#ch-header--offsets)), so a shift of 4
 fails here instead of being cut to 0 by the `& 3U` of `TOK_SHIFT()`. The last assert: an escaped token
@@ -503,8 +499,8 @@ is still free.
 
 **`(64U - raw_bits) & 63U`.** `BACK` is the right shift that brings the offset bits down after the
 code was shifted out on top of the 64-bit register: for class 3, $64 - 12 = 52$. `& 63U` turns class
-0's 64 into 0 and leaves 52, 56, 59 and 63 as they are. Every class but 0 has a `BACK` of at least 50
-(class 3 on 16 KiB pages), so one field is a shift and a flag at once.
+0's 64 into 0 and leaves 52, 56, 59 and 63 as they are. Every class but 0 has a `BACK` of at least 52,
+so one field is a shift and a flag at once.
 @end
 @more {#ch-internal--a-class-3-token-and-one-with-a-length-value} Tokens 1552 and 1567: class 3, and a length value to follow
 Token 1552 is no literals and a match of 5 bytes at an offset in 12 bits. It has a

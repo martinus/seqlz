@@ -6,7 +6,6 @@
  * files' lines, the counts the tables were trained on, and the matcher's steps
  * on the pages of chapter 9.
  */
-// facts: also 16k
 #include <stddef.h>
 
 #include "facts.h"
@@ -398,9 +397,8 @@ static void ch08(void) {
     fact_num("ch08.litinc.line20", k + 0x20 / 16);
     fact_num("ch08.litinc.line60", k + 0x60 / 16);
 
-    counts("ch08.counts4k", "bench/seqlz_counts_4k.txt");
-    counts("ch08.counts16k", "bench/seqlz_counts_16k.txt");
-    format_hash("ch08.tok4k_sha", "TOK_4k");
+    counts("ch08.counts4k", "bench/seqlz_counts.txt");
+    format_hash("ch08.tok_sha", "TOK");
 }
 
 /* ---- chapter 9: the matcher */

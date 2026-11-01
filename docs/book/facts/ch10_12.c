@@ -11,7 +11,6 @@
  *   ch12.*                  the sizes and offsets of the decoder's tables, repeat_pattern(), and the
  *                           bit reader on made-up bytes and on the page of ab
  */
-// facts: also 16k
 #include <stdarg.h>
 
 #include "facts.h"
@@ -394,7 +393,6 @@ static void chapter11(void) {
     fact_num("ch11.ex.1000.l3", 1000 - 1000 / 16 - SEQLZ_LIT_CODED_MIN_OWN - 1);
     fact_num("ch11.ex.100.l2", 100 - 100 / 16 - SEQLZ_LIT_CODED_MIN - 1);
     fact_num("ch11.ex.100.l3", 100 - 100 / 16 - SEQLZ_LIT_CODED_MIN_OWN - 1);
-    fact_num("ch11.slots", LIT_SLOTS);
     fact_num("ch11.slot", LIT_SLOT(SEQLZ_BLOCK_SIZE));
     fact_num("ch11.slots_bytes", SEQLZ_LIT_STREAMS * LIT_SLOT(SEQLZ_BLOCK_SIZE));
     fact_num("ch11.state_bytes", sizeof(struct seqlz_state));
