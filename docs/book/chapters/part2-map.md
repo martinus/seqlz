@@ -108,8 +108,10 @@ zram calls `seqlz_compress()` with the page, a buffer for the result and the lev
    which goes to the back of the output in whole bytes ([both ends](#ch-encoder--layout)).
    `encoder_finish()` moves the bits to right after the literals, and that is a level 1 page.
 3. **The literal coder** ([`seqlz_compress_literals.c`](#ch-literals-enc)), at levels 2 and 3 only, prices the 8 fixed
-   literal tables with one add per literal, takes the one with the fewest bits, and writes the literals
-   as 8 streams of Huffman codes over the raw ones, where that saves enough
+   literal tables with one add per literal, on every {{ch11.sample.step}}th literal at level 2 and on
+   every literal where level 3 may give a page deltas or a table of its own, takes the one with the
+   fewest bits, and writes the literals as 8 streams of Huffman codes over the raw ones, where that
+   saves enough
    ([the rule](#ch-literals-enc--rule)).
 
 Level 3 does more in each step: the matcher looks one position further and extends a match backwards

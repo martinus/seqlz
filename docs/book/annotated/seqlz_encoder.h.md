@@ -465,10 +465,11 @@ match at offset {{ch10.ab.s1.off}}, with `last` 1: class {{ch10.ab.s1.cls}}, {{c
 token $2 + 16 \times 31 + 512 \times 1 = {{ch10.ab.s1.tok}}$.
 @assert ch10.ab.s1.ll == 2 and ch10.ab.s1.cls == 1 and ch10.ab.s1.raw == 1 and ch10.ab.s1.tok == 2 + 16 * 31 + 512
 
-The offset is shifted right by `SEQLZ_OFF_SHIFT(cls)` and ANDed with `0U - (cls != 0)`. Without the
-mask, class 0 would OR the offset into the low bits of the token's code. The other classes need no
-mask: `seqlz_off_class()` picks a class whose bits hold the offset. Masking only class 0, instead of
-every offset to `raw_bits` bits, came with commit `996248b`, with no number of its own. One put instead
+The offset is shifted right by `ENC_SHIFT(cls)`, which is 15 for class 0 and shifts its offset to 0.
+Without that, class 0 would OR the offset into the low bits of the token's code. The other classes
+need nothing more: `seqlz_off_class()` picks a class whose bits hold the offset. Clearing only class 0's
+offset, instead of masking every offset to `raw_bits` bits, came with commit `996248b`, with no number
+of its own, as a mask `0U - (cls != 0)` that the shift replaced on 31st October 2026. One put instead
 of two took 21 786 to 21 233 cycles per page on x86-64
 ([explored-designs.md](https://github.com/martinus/seqlz/blob/main/docs/explored-designs.md#the-compressor-second-round-fewer-instructions)).
 For the page of `ab`: `{{ch10.ab.s1.codehex}} << {{ch10.ab.s1.raw}} | ({{ch10.ab.s1.off}} >> 1) = {{ch10.ab.s1.put}}`,

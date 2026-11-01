@@ -523,7 +523,7 @@ How far back the byte is that a literal is a delta to: `delta_fixed`, 4 or 8, wh
 [`decode_block()`](#b451) picks once per page from the header, else derived from the offset of the
 sequence before, at least 4 ([chapter 4](book:#ch-format--deltas),
 [its values](book:#ch-internal--delta-last)). Both restoring functions below start with it. Picked
-from the header's byte in every sequence, the distance was two more branches per sequence
+from `delta` in every sequence, the distance took two tests per sequence instead of one
 ([what the deltas cost](#ch-literals-dec--undelta-cost)).
 
 @@ 252-269
@@ -619,7 +619,7 @@ kept
 
 The deltas also cost branch mispredictions. Until 31st October 2026 `undelta_literals()` had a loop of
 words and then a loop of bytes, both with trip counts that change from sequence to sequence, and the
-distance came from the header's byte in every sequence, two branches more. On the Mi 9T, one decode
+distance came from `delta` in every sequence, two tests instead of one. On the Mi 9T, one decode
 per page seen once, a page with deltas mispredicted 49.5 branches more on the A76 and 91.6 more on the
 A55 than the same page at level 3 without deltas. Steps of 16 bytes left 31.1 and 71.2, and the
 distance picked once per page 27.2 and 61.4; in zram in the phone's kernel level 3's warm reads got

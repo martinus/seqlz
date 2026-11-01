@@ -50,7 +50,8 @@ table may take at most {{ch11.ex.1000.l2}} bytes coded at level 2 and {{ch11.ex.
 The minimum pays for a cost that does not shrink with the literals: a cold literal table and a second
 pass over a buffer. Level 3 trades more time for bytes, so its minimum is smaller.
 [Why these bytes](book:#ch-literals-enc--51) has the measurements behind the numbers. Both also cover
-the larger header, at most 13 bytes more than the 2 of a page with raw literals, which a
+the larger header, at most 14 bytes more than the 2 of a page with raw literals, 3 + 12 and the
+delta's byte, which a
 `static_assert` in `seqlz_compress_literals.c` checks, because the coded literals are written over the
 raw ones in place ([in place](book:#ch-literals-enc--in-place)).
 
@@ -126,8 +127,9 @@ Until 11th October 2026 the last sequence had a token, and the line was
 @@ 94-107
 The compressor's work memory, one per CPU, since zram compresses on every CPU at once. The union reuses
 the hash table, 8 KiB for 4 KiB pages: once the matcher is through the page, the table is garbage, and the
-literal coder keeps a copy of the raw literals there while it writes the coded ones over their old
-place in `dst` ([in place](book:#ch-literals-enc--in-place)).
+literal coder writes the coded streams there before it copies them over the raw literals, or at level 3
+keeps a copy of the raw literals there while it writes the coded ones over their old place in `dst`
+([in place](book:#ch-literals-enc--in-place)).
 
 `work` adds no byte, `(sizeof(u16) << SEQLZ_HASH_BITS) / sizeof(u64)` is the table's size in `u64`s.
 What it adds is the alignment of 8: level 3 puts `struct own_work`, with `u32` members, behind the copy

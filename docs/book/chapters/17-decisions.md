@@ -353,7 +353,7 @@ less than $n - n/16$ for $n$ literals ([the rule](#ch-literals-enc--rule)). Codi
 and a coded page costs the decoder a fixed time, large on the in-order A55: its literal table from memory,
 and the literals through a buffer. Raising the minimum from 19 to 51 bytes on 5th October 2026 cost 7.9
 bytes per page on the phone and saved 2.7 µs per page written on the A55 and 1.1 µs on the A76, with the
-0.34 reads per write of then; on the PC, 11 bytes for 0.1 µs
+0.34 reads per write of then; on the PC, about 9 bytes for 0.1 µs
 ([explored-designs.md](https://github.com/martinus/seqlz/blob/main/docs/explored-designs.md#coded-literals-only-where-they-save-51-bytes-27-µs-per-page-written-less-on-the-a55-kept)).
 It was the best of 19, 51 and 115, not a measured optimum, and with the prefetches added later the gain
 shrank to 0.4 µs on the A76 and 0.8 µs on the A55
@@ -388,7 +388,8 @@ pricing a sample could save 400 cycles at most, as long as the exact stream size
 On 31st October 2026 level 2 stopped taking them from there: it prices every {{ch11.sample.step}}th
 literal, writes the streams into slots in the matcher's state and takes their sizes from where they
 end. The pass over every literal had become 34% of `code_literals()`' instructions at level 2, and
-level 2 now writes a page 1.4% to 1.8% faster on the Mi 9T, for 0.5 bytes per page
+without it, measured with every 5th literal, level 2 wrote a page 1.4% to 1.8% faster on the Mi 9T, for
+0.5 bytes per page
 ([explored-designs.md](https://github.com/martinus/seqlz/blob/main/docs/explored-designs.md#the-literal-table-from-a-sample-the-streams-into-slots-level-2-writes-14-to-18-faster-on-the-mi-9t-for-05-bytes-per-page-kept-the-sample-before-the-pass-level-3-from-the-counts-and-four-counts-not-kept)). Level 3 still prices every literal where a page may get
 deltas or a table of its own: the same pass counts the bytes for it.
 One stream after the other waited on its accumulator, about 3.5 cycles per literal, so the encoder writes

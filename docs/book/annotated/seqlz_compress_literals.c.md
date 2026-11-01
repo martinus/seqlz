@@ -224,8 +224,8 @@ literals of most raw pages come close to paying, and the coded ones still needed
 literal for their sizes
 ([item 8 of "Six choices"](https://github.com/martinus/seqlz/blob/main/docs/explored-designs.md#8-coded-literals-on-the-a55-78-instructions-per-literal-at-one-per-cycle)).
 Since 31st October 2026 level 2 has no such pass: the table comes from every
-{{ch11.sample.step}}th literal and the sizes from the streams themselves, written into slots, and
-level 2 writes a page 1.4% to 1.8% faster on the Mi 9T for 0.5 bytes per page
+{{ch11.sample.step}}th literal and the sizes from the streams themselves, written into slots; measured
+with every 5th literal, level 2 wrote a page 1.4% to 1.8% faster on the Mi 9T for 0.5 bytes per page
 ([the sample](#ch-literals-enc--sample)).
 This is where `seqlz-1`, which never calls `code_literals()`, gains on the phone: in an earlier
 measurement on the Mi 9T's little core, `seqlz-2` stored 55 bytes per page less and took
@@ -260,7 +260,7 @@ own; at level 3 optionally as deltas first.
 @@ 17-27
 The deltas are priced on every {{delta.step}}th literal only, a prime, so that it is not the same byte
 of each field of 2, 3, 4 or 8 bytes. Every 11th instead of every 5th made pages 0.08% larger on ten
-samples of 20 000 pages, and level 3's writes on the Mi 9T 2.5% faster on the A76 and 3.1% on the A55,
+samples of 20 000 pages, and level 3's writes on the Mi 9T 2.5% faster on the A55 and 3.1% on the A76,
 on 31st October 2026 ([explored-designs.md](https://github.com/martinus/seqlz/blob/main/docs/explored-designs.md#the-deltas-priced-on-every-11th-literal-instead-of-every-5th-008-more-bytes-level-3-writes-25-and-31-faster-on-the-mi-9t-kept)).
 Every 4th had made pages 1.0 byte larger, because in fields of 4 or 8 bytes it sees the same byte of
 each field every time, and every literal almost no smaller, with the XOR that came before the deltas,
@@ -804,12 +804,13 @@ it, and it has to save {{own.enc.saves_min}} bytes against the best fixed table.
 The description takes at most 256 bytes; its room is 512, a power of 2, so `own_put()` can mask its
 index and the compiler sees the bound.
 
-Below level 3 the table comes from every {{ch11.sample.step}}th literal, and the streams go into 8
-slots of `LIT_SLOT()` bytes in the matcher's state first: room for the longest stream a page's
-literals can have, every literal with a code of 10 bits, plus 9 bytes, for `lit_flush()`'s 8-byte
-stores. On 4 KiB pages that is {{ch11.slot}} bytes a slot, {{ch11.slots_bytes|grp}} for all 8, in the
-{{ch11.state_bytes|grp}} bytes of the state; on 16 KiB pages they do not fit, `LIT_SLOTS` is 0, and
-every literal is priced, as at level 3.
+Below level 3, and at level 3 on a page without deltas and with fewer than {{own.enc.min_lits}} literals, the table
+comes from every {{ch11.sample.step}}th literal, and the streams go into 8 slots of `LIT_SLOT()` bytes
+in the matcher's state first: room for the longest stream a page's literals can have, every literal
+with a code of 10 bits, plus 9 bytes, 1 for the rounding down of `/ 8U` and 8 for `lit_flush()`'s
+8-byte stores. On 4 KiB pages that is {{ch11.slot}} bytes a slot, {{ch11.slots_bytes|grp}} for all 8,
+in the {{ch11.state_bytes|grp}} bytes of the state; on 16 KiB pages they do not fit, `LIT_SLOTS` is 0,
+and every literal is priced, as on level 3's other pages.
 @more {#ch-literals-enc--the-work-memory} Which pages may try, measured, and why 256 bytes of description at most
 A table of the page's own needs counts, lengths, codes and room for the description,
 {{own.enc.work_size|grp}} bytes in `struct own_work`. The compressor's work memory is the 8 KiB of the
