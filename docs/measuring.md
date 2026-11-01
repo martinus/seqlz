@@ -39,8 +39,9 @@ sudo dd if=/dev/zram0 bs=1M iflag=direct status=progress |
 ./build/seqlz-import-raw --in ~/seqlz-corpus/zram0.raw --out ~/seqlz-corpus/zram0
 ```
 
-A dump of 16 KiB pages needs `--page-size 16384`. Pages from Android with 16 KiB or 4 KiB pages come
-from the emulator, see [tools/android-emu/](../tools/android-emu/README.md).
+A dump of 16 KiB pages needs `--page-size 16384`; seqlz compresses blocks of 4 KiB only, so such a
+corpus is for the other codecs. Pages from Android with 16 KiB or 4 KiB pages come from the emulator,
+see [tools/android-emu/](../tools/android-emu/README.md).
 
 A dump has no process names, so take a second dump some days later, train on one and measure on the
 other. [The plan, §5.3](plan.md#53-statistical-presentation) says why the pages that are trained on

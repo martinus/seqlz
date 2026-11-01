@@ -13,7 +13,7 @@ paths:
   `format.md#example`, many `explored-designs.md#...`). Never rename a heading without fixing its
   links. After Markdown edits: `tools/check-links.py` (checks every tracked `*.md`, `.claude/` too).
 - Doc numbers go stale when tables or the matcher change. Verify before quoting:
-  `seqlz_ref.load_tables(12)` (from `tools/seqlz-ref/`) gives codes; `tools/seqlz-compress/compress.c`
+  `seqlz_ref.load_tables()` (from `tools/seqlz-ref/`) gives codes; `tools/seqlz-compress/compress.c`
   (`-Isrc`) compresses a page file. Name the tables used ("tables of 7 October").
 - Codec charts: x = time per page, y = memory as % of page, both from 0. Every chart labels every
   axis, categorical ones too. `tools/plot-*.py` take the mean over the boots of a `BOOTS=n` log.

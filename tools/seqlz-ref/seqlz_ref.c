@@ -13,6 +13,8 @@
 #define TOKENS 3072U    /* "Tokens": 16 * 32 * 6, the escape is the symbol after them */
 #define OWN_SYMBOLS 19U /* "A block's own literal table": the 10 lengths, then runs of 1 to 9 bits */
 #define OWN_FULL 1024U  /* "the code space", in units of 2^-10 */
+#define P 12U           /* "Block size": log2 of the block size */
+#define BLOCK (1U << P)
 
 /* "Prefix codes", rules 1 to 3; 0, or -1 if the lengths are no complete prefix code */
 static int make_code(struct seqlz_ref_code* c, const unsigned char* len, unsigned int n) {
@@ -39,14 +41,10 @@ static int make_code(struct seqlz_ref_code* c, const unsigned char* len, unsigne
     return space == 1UL << MAX_CODE ? 0 : -1;
 }
 
-int seqlz_ref_init(struct seqlz_ref* r, const struct seqlz_ref_tables* t, unsigned int block_bits) {
+int seqlz_ref_init(struct seqlz_ref* r, const struct seqlz_ref_tables* t) {
     unsigned int k;
 
-    if (block_bits != 12U && block_bits != 14U)
-        return -1;
-    r->block_bits = block_bits;
-    if (make_code(&r->tok, t->tok, TOKENS + 1U) || make_code(&r->ll, t->ll, 12U + block_bits) ||
-        make_code(&r->ml, t->ml, 12U + block_bits))
+    if (make_code(&r->tok, t->tok, TOKENS + 1U) || make_code(&r->ll, t->ll, 12U + P) || make_code(&r->ml, t->ml, 12U + P))
         return -1;
     for (k = 0; k < 8U; k++)
         if (make_code(&r->lit[k], t->lit[k], 256U))
@@ -178,8 +176,7 @@ static unsigned char undelta(unsigned int dt, unsigned char v, const unsigned ch
 }
 
 int seqlz_ref_decode(const struct seqlz_ref* r, const unsigned char* src, size_t len, unsigned char* out) {
-    unsigned char lits[1U << 14];
-    const unsigned int P = r->block_bits, block = 1U << P;
+    unsigned char lits[BLOCK];
     /* "Offsets": the offset bits of each class, and what the number read is multiplied by */
     const unsigned int class_bits[6] = {0, 1, 8, P, 5, 8};
     const unsigned int class_scale[6] = {0, 2, 1, 1, 8, 8};
@@ -191,7 +188,7 @@ int seqlz_ref_decode(const struct seqlz_ref* r, const unsigned char* src, size_t
         return -1;
     h = src[0] | (unsigned int)src[1] << 8;
     n = h & 0x7fffU;
-    if (n > block)
+    if (n > BLOCK)
         return -1;
     if (!(h & 0x8000U)) {
         if (2U + (size_t)n > len)
@@ -257,7 +254,7 @@ int seqlz_ref_decode(const struct seqlz_ref* r, const unsigned char* src, size_t
     }
 
     /* "Decoding": until the literals left fill the rest of the block */
-    while (n - used != block - size) {
+    while (n - used != BLOCK - size) {
         unsigned int tk, ll, mlf, c, x, off, ml;
 
         /* "Tokens" */
@@ -276,7 +273,7 @@ int seqlz_ref_decode(const struct seqlz_ref* r, const unsigned char* src, size_t
                 return -1;
             ll = 15U + x;
         }
-        if (ll > n - used || ll > block - size)
+        if (ll > n - used || ll > BLOCK - size)
             return -1;
         for (k = 0; k < ll; k++, size++)
             out[size] = undelta(dt, lits[used++], out, size, last);
@@ -287,7 +284,7 @@ int seqlz_ref_decode(const struct seqlz_ref* r, const unsigned char* src, size_t
             ml = 35U + x;
         }
         last = off;
-        if (off == 0 || off > size || ml > block - size)
+        if (off == 0 || off > size || ml > BLOCK - size)
             return -1;
         /* one byte at a time, so that a match can repeat what it writes */
         for (k = 0; k < ml; k++, size++)

@@ -14,7 +14,7 @@ src/ stays the one source of the codec. This writes from it:
                                         tables, seqlz_tables.c, when the kernel is built
   lib/seqlz/seqlz_lengths.h             the code lengths it builds them from, written in the tree by
                                         scripts/gen-seqlz-lengths.py, tools/kernel-port/gen-seqlz-lengths.py,
-                                        from lib/seqlz/seqlz_counts.txt, bench/seqlz_counts_4k.txt with
+                                        from lib/seqlz/seqlz_counts.txt, bench/seqlz_counts.txt with
                                         comments of its own and lines of at most 80 columns
   lib/seqlz/tests/seqlz_kunit.c         the KUnit tests, tools/kernel-port/seqlz_kunit.c, with the
                                         tables' SHA-256 and the worked example from docs/format.md
@@ -27,8 +27,7 @@ src/ stays the one source of the codec. This writes from it:
   Documentation/admin-guide/blockdev/zram.rst: the backend, its page size and its levels
   arch/x86/include/asm/processor.h      x86-prefetcht0.patch, prefetch() as prefetcht0 on x86-64, which
                                         clang drops otherwise; not if the tree has it already
-On the way: blocks of 4 KiB whatever PAGE_SIZE is, SEQLZ_BLOCK_BITS 12 and SEQLZ_BLOCK_SIZE of the
-interface, and no references to this repository in the comments (its documents, tools and build) and no
+On the way: no references to this repository in the comments (its documents, tools and build) and no
 reasons that only hold for the Mi 9T's 4.14, Fedora's config or our test machines, which say the reason
 in general terms instead; a comment that changed is wrapped again to 80 columns. Fails if a reference is left,
 naming it; the one URL it keeps is PROJECT_URL.
@@ -80,23 +79,6 @@ FORBIDDEN = re.compile(r"docs/|explored|seqlz-bench|seqlz-score|seqlz-train|\bbe
 # whole sentences or phrases of comments, as they read after the comment's lines are joined
 REWRITES = [
     ("docs/format.md is the specification.", f"{SPEC} specifies the format."),
-    # the library works on blocks of 4 KiB whatever PAGE_SIZE is, see BLOCK_BITS_KERNEL
-    ("seqlz compresses one block at a time, a memory page for zram.",
-     "seqlz compresses one block of SEQLZ_BLOCK_SIZE bytes at a time, for zram, whatever the kernel's PAGE_SIZE "
-     "is."),
-    # the kernel's copy is for blocks of 4 KiB only, see BLOCK_BITS_KERNEL
-    (" For blocks of 16 KiB it is 16 KiB, as lz4's table.", ""),
-    ("A block has at most 16 KiB of literals", "A block has at most 4 KiB of literals"),
-    ("at most 640 bytes in a 4 KiB block and 2560 in a 16 KiB block, so w is at most 12.",
-     "at most 640 bytes in a 4 KiB block, so w is at most 10 here; the format allows 12."),
-    ("; for blocks of 16 KiB 15 872 bytes", ""),
-    (", 60 for 16 KiB blocks", ""),
-    ("20 or 22 bits more", "20 bits more"),
-    ("SEQLZ_BLOCK_BITS bits, 20 or 22;", "SEQLZ_BLOCK_BITS bits, 20;"),
-    # the numbers of blocks of 4 KiB, where src/'s are for both sizes
-    ("as it has at most 60 bits (see below)", "as it has at most 58 bits (see below)"),
-    ("two fast sequences take at most 50, 11 for each token and up to 14 for each offset",
-     "two fast sequences take at most 46, 11 for each token and up to 12 for each offset"),
 ]
 # the entry in MAINTAINERS, its fields in the order the file's head gives, the files in alphabetic order
 MAINTAINERS_ENTRY = f"""SEQLZ COMPRESSION LIBRARY
@@ -127,20 +109,6 @@ saves more space and takes more time again::
 """
 # a measurement's heading in parentheses, with a number of an item or a remark after it
 HEADING = re.compile(r" ?\(\"[^\"]+\"(?:,? [^)]*)?\)")
-# the block size of src/, a setting of the build, and what the kernel's copy has instead: blocks of 4 KiB,
-# whatever PAGE_SIZE is, SEQLZ_BLOCK_SIZE of the interface
-BLOCK_BITS_SRC = re.compile(r"/\*\n \* A block is what seqlz compresses at a time.*?\*/\n#ifndef SEQLZ_PAGE_BITS\n"
-                            r"#define SEQLZ_PAGE_BITS 12\n#endif\n#define SEQLZ_BLOCK_BITS SEQLZ_PAGE_BITS\n", re.S)
-# the same in the interface, src/linux/seqlz.h, with the comment above it
-BLOCK_SIZE_SRC = re.compile(r"/\*\n \* the bytes of a block[^/]*\*/\n#ifndef SEQLZ_PAGE_BITS\n#define SEQLZ_PAGE_BITS 12\n"
-                            r"#endif\n#define SEQLZ_BLOCK_SIZE \(1U << SEQLZ_PAGE_BITS\)\n")
-BLOCK_BITS_KERNEL = """/*
- * A block is what seqlz compresses at a time: SEQLZ_BLOCK_SIZE bytes of the
- * interface, a memory page for zram with 4 KiB pages, whatever the kernel's
- * PAGE_SIZE is. SEQLZ_BLOCK_BITS is its log2.
- */
-#define SEQLZ_BLOCK_BITS 12U
-"""
 
 # the comment of the counts in the kernel's copy, instead of the one of bench/
 COUNTS_HEAD = """# SPDX-License-Identifier: GPL-2.0-only OR MIT
@@ -315,21 +283,14 @@ def put_doc(text, name, doc):
 
 
 def port_interface():
-    """include/linux/seqlz.h: src/linux/seqlz.h for blocks of 4 KiB only, whatever PAGE_SIZE is"""
-    t = (SRC / "linux" / "seqlz.h").read_text()
-    t, k = BLOCK_SIZE_SRC.subn("/* the bytes of a block, whatever PAGE_SIZE is */\n#define SEQLZ_BLOCK_SIZE 4096U\n", t)
-    assert k == 1, "the block size of src/linux/seqlz.h"
-    return must(t, "#define SEQLZ_MEM_COMPRESS (SEQLZ_PAGE_BITS == 12 ? 8192 : 16384)\n",
-                "#define SEQLZ_MEM_COMPRESS 8192\n")
+    """include/linux/seqlz.h: src/linux/seqlz.h"""
+    return (SRC / "linux" / "seqlz.h").read_text()
 
 
 def port_format():
     """lib/seqlz/seqlz_format.h: the format's numbers; with seqlz_tables.h it builds for the host too, for
     gen_seqlz_tables, so only headers that tools/include has"""
-    t = (SRC / "seqlz_format.h").read_text()
-    t, k = BLOCK_BITS_SRC.subn(BLOCK_BITS_KERNEL, t)
-    assert k == 1, "the block size of src/seqlz_format.h"
-    return fix_comments(t)
+    return fix_comments((SRC / "seqlz_format.h").read_text())
 
 
 def port_tables_h():
@@ -340,8 +301,6 @@ def port_tables_h():
 def port_internal():
     """lib/seqlz/seqlz_internal.h: what the codec's files share"""
     t = (SRC / "seqlz_internal.h").read_text()
-    # blocks of 4 KiB only, whatever PAGE_SIZE is: the values of 16 KiB pages go, not only their comments
-    t = must(t, "#define SEQLZ_HASH_BITS (SEQLZ_BLOCK_BITS == 12 ? 12U : 13U)\n", "#define SEQLZ_HASH_BITS 12U\n")
     # the cast is for C++, which src/ is compiled as too
     t = must(t, "\tconst u8 *q = (const u8 *)p; /* a cast for the C++ of the harness */\n", "\tconst u8 *q = p;\n")
     return fix_comments(t)
@@ -441,8 +400,8 @@ def port_lengths_script():
 
 
 def port_counts():
-    """bench/seqlz_counts_4k.txt with the comment of the kernel's copy and at most 80 columns"""
-    words = [w for line in (REPO / "bench" / "seqlz_counts_4k.txt").read_text().split("\n")
+    """bench/seqlz_counts.txt with the comment of the kernel's copy and at most 80 columns"""
+    words = [w for line in (REPO / "bench" / "seqlz_counts.txt").read_text().split("\n")
              if not line.startswith("#") for w in line.split()]
     out, line = [], ""
     for w in words:
@@ -462,7 +421,7 @@ def port_kunit():
     bytes of the worked example"""
     t = (HERE / "seqlz_kunit.c").read_text()
     spec = (REPO / "docs" / "format.md").read_text()
-    for key, sha in re.findall(r"^\| `(\w+_4k)` \| `([0-9a-f]{64})` \|", spec, re.MULTILINE):
+    for key, sha in re.findall(r"^\| `(\w+)` \| `([0-9a-f]{64})` \|", spec, re.MULTILINE):
         t = must(t, f'"@{key}@"', f'"{sha}"')
     m = re.search(r"The (\d+) bytes `([0-9a-f ]+)` are a 4 KiB block of `ab`", spec)
     assert m, "no example in docs/format.md"

@@ -2,17 +2,17 @@
 # SPDX-License-Identifier: MIT OR GPL-2.0-only
 """retrain-tables.py: seqlz's tables trained again, everything that follows from the counts.
 
-    tools/retrain-tables.py --page-bits 12 --train <build> --corpus <base> [--name <corpus name>]
-    tools/retrain-tables.py --page-bits 12 --counts <counts file>
+    tools/retrain-tables.py --train <build> --corpus <base> [--name <corpus name>]
+    tools/retrain-tables.py --counts <counts file>
 
 --train runs <build>/seqlz-train --corpus <base> --counts --lit-sets (a Release build: 11 min
-for the 4 KiB corpus of 13th October), and the counts' head names the corpus as --name, default the
+for the corpus of 13th October), and the counts' head names the corpus as --name, default the
 base's file name. --counts takes counts trained before. Then, from the repository's root:
 
 - the 8 lit lines in the order that fits the committed literal tables best, by the sum of the
   differences of their code lengths, so that an unchanged table keeps its number (the order means
   nothing to the format);
-- bench/seqlz_counts_<4k|16k>.txt, and src/seqlz_lengths.h or _16k.h by tools/kernel-port/gen-seqlz-lengths.py;
+- bench/seqlz_counts.txt, and src/seqlz_lengths.h by tools/kernel-port/gen-seqlz-lengths.py;
 - the SHA-256 of each table in docs/format.md.
 
 The counts' own line comes from the pages level 3 gives a table of their own with the tables <build> has
@@ -34,6 +34,8 @@ from pathlib import Path
 
 REPO = Path(__file__).resolve().parent.parent
 GEN = "tools/kernel-port/gen-seqlz-lengths.py"
+COUNTS = "bench/seqlz_counts.txt"
+LENGTHS = REPO / "src" / "seqlz_lengths.h"
 ORDER = (
     "# The 8 lit lines are in the order that matches the literal tables trained before them best, by the\n"
     "# sum of the differences of their code lengths: the order means nothing to the format.\n"
@@ -46,11 +48,6 @@ def gen(*args):
 
 def numbers(text):
     return [int(x) for x in re.findall(r"\d+", text)]
-
-
-def lengths_file(size):
-    """src/seqlz_lengths.h, or _16k.h"""
-    return REPO / "src" / ("seqlz_lengths.h" if size == "4k" else f"seqlz_lengths_{size}.h")
 
 
 def lit_lengths(text):
@@ -90,24 +87,22 @@ def ordered(counts, old_text):
     return counts, perm
 
 
-def table_hashes(size):
+def table_hashes():
     """SHA-256 of each table's code lengths, as tools/seqlz-ref/seqlz_ref.py computes them"""
-    src = lengths_file(size).read_text()
+    src = LENGTHS.read_text()
     field = lambda n: numbers(re.search(r"\." + n + r"\s*=\s*\{([^}]*)\}", src).group(1))  # noqa: E731
     lit = sum(lit_lengths(src), [])
     tables = {"TOK": field("token"), "LL": field("ll"), "ML": field("ml"), "LIT": lit, "OWN": own_lengths(src)}
-    return {f"{k}_{size}": hashlib.sha256(bytes(v)).hexdigest() for k, v in tables.items()}
+    return {k: hashlib.sha256(bytes(v)).hexdigest() for k, v in tables.items()}
 
 
 def main():
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
-    ap.add_argument("--page-bits", type=int, choices=(12, 14), required=True)
     ap.add_argument("--train", metavar="BUILD", help="a build dir with seqlz-train")
     ap.add_argument("--corpus", help="the corpus base for --train")
     ap.add_argument("--name", help="the corpus' name in the counts' head, default the base's file name")
     ap.add_argument("--counts", help="counts trained before, instead of --train")
     args = ap.parse_args()
-    size = "4k" if args.page_bits == 12 else "16k"
     if bool(args.train) == bool(args.counts) or bool(args.train) != bool(args.corpus):
         ap.error("--train and --corpus, or --counts")
     if args.train:
@@ -125,12 +120,11 @@ def main():
     if not re.search(r"^token \d+ ", counts, re.M):
         raise SystemExit("no token line in the counts")
 
-    before = table_hashes(size)
-    counts, perm = ordered(counts, lengths_file(size).read_text())
-    (REPO / "bench" / f"seqlz_counts_{size}.txt").write_text(counts)
-    rel = f"bench/seqlz_counts_{size}.txt"
-    lengths_file(size).write_text(gen("--extern", rel))
-    after = table_hashes(size)
+    before = table_hashes()
+    counts, perm = ordered(counts, LENGTHS.read_text())
+    (REPO / COUNTS).write_text(counts)
+    LENGTHS.write_text(gen("--extern", COUNTS))
+    after = table_hashes()
 
     spec = REPO / "docs" / "format.md"
     text = spec.read_text()

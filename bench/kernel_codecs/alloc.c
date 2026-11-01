@@ -4,10 +4,7 @@
 #include <stdlib.h>
 #include <string.h>
 
-#ifndef SEQLZ_PAGE_BITS
-#    define SEQLZ_PAGE_BITS 12
-#endif
-#define KERNEL_PAGE ((size_t)1 << SEQLZ_PAGE_BITS)
+#define KERNEL_PAGE ((size_t)4096)
 
 /*
  * Blocks of a page or more are page aligned, like vmalloc and kmalloc of a page in the kernel; smaller

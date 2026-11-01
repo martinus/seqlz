@@ -110,7 +110,7 @@ static inline void bench_prefetch_page(const void* src, unsigned int src_len, vo
 void* bench_zalloc(__SIZE_TYPE__ size, __SIZE_TYPE__* counter);
 void* bench_vzalloc(__SIZE_TYPE__ size, __SIZE_TYPE__* counter);
 void bench_free(void* p, __SIZE_TYPE__* counter);
-/* what kmalloc() and vmalloc() hand out for size bytes, the page size of SEQLZ_PAGE_BITS */
+/* what kmalloc() and vmalloc() hand out for size bytes, with 4 KiB pages */
 __SIZE_TYPE__ bench_kmalloc_size(__SIZE_TYPE__ size);
 __SIZE_TYPE__ bench_vmalloc_size(__SIZE_TYPE__ size);
 

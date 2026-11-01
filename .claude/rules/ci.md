@@ -6,8 +6,8 @@ paths:
 
 # CI
 
-- `.github/workflows/ci.yml` jobs: format; gcc debug+sanitize; clang release; gcc arm64; gcc 16 KiB
-  release+sanitize (no kernel tree); fuzz 60 s/target (4 KiB, 16 KiB, MSan); `same-bytes`
+- `.github/workflows/ci.yml` jobs: format; gcc debug+sanitize; clang release; gcc arm64; fuzz 60
+  s/target (ASan+UBSan, MSan); `same-bytes`
   (`test/seqlz_endian.c` on x86-64, `-m32`, s390x/qemu, outputs diffed); `docs`
   (`tools/seqlz-ref/check.sh`, `tools/check-links.py`); `book` (`docs/book/build.py --check`,
   `lint.py`; job `pages` publishes it from `main` to https://martin.ankerl.com/seqlz/);

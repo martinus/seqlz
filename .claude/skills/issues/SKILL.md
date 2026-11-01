@@ -173,8 +173,8 @@ checks and the measurement again and changes the commit message: read it again b
 
 ### 7. The checks, then push, then watch CI
 
-CLAUDE.md, Build, test, format, is the list. For a codec change all of it: 4 KiB with the kernel
-tree, 16 KiB, clang-format 21.1.8, the fuzz smoke with both sanitizer sets, `test/seqlz_endian.c`
+CLAUDE.md, Build, test, format, is the list. For a codec change all of it: the build with the
+kernel tree, clang-format 21.1.8, the fuzz smoke with both sanitizer sets, `test/seqlz_endian.c`
 also with `-m32`, `tools/seqlz-ref/check.sh`, `tools/check-links.py`, the kernel port. For a docs
 change: `tools/seqlz-ref/check.sh` and `tools/check-links.py`.
 

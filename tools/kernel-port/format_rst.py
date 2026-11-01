@@ -133,8 +133,7 @@ def paragraphs(lines):
 
 def convert(md):
     """format.md as reST"""
-    # the kernel's copy has the tables of 4 KiB blocks only, so their names lose the suffix
-    lines = [re.sub(r"`(TOK|LL|ML|LIT|OWN)_4k`", r"`\1`", line) for line in select(md)]
+    lines = select(md)
     titles = {}
     for line in lines:
         m = re.match(r"(#{1,3}) (.*)", line)

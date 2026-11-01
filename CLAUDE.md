@@ -51,7 +51,7 @@ src/            codec, freestanding C11, kernel rules: seqlz_compress.c + seqlz_
                 seqlz_codes.c (builds the tables; tools/gen-tables/ prints them as C at build time),
                 headers seqlz_format.h (format), seqlz_tables.h (tables' layout), seqlz_internal.h
                 (what the codec's files share), seqlz.h (userspace API: harness, tests, tools),
-                seqlz_lengths{,_16k}.h (trained tables = format, generated) + seqlz_lengths.c,
+                seqlz_lengths.h (trained tables = format, generated) + seqlz_lengths.c,
                 zram_seqlz.c (zram call shape, harness); linux/seqlz.h = the kernel's interface,
                 linux/*.h the rest = kernel headers outside the kernel (u8, get_unaligned_le64(), ...)
 bench/          C++20 harness, zsmalloc cost model, table training (seqlz_train*.cpp; counts in
@@ -82,7 +82,6 @@ cmake/          kernel_codecs.cmake (kernel flags), check_prefetch.cmake (ctest)
 ```sh
 cmake -S . -B $B -G Ninja -DSEQLZ_WERROR=ON -DSEQLZ_KERNEL_TREE=/home/martinus/gra/linux/finehill
 cmake --build $B && $B/seqlz_test && ctest --test-dir $B      # ctest 2/2 with kernel tree
-# 16 KiB pages: -DSEQLZ_PAGE_BITS=14, no kernel tree (zram glue 4 KiB only)
 clang-format --dry-run --Werror $(git ls-files '*.cpp' '*.h' '*.c')   # must be 21.1.8 (~/.local/bin)
 fuzz/smoke.sh 10 $S/build-fuzz -DFETCHCONTENT_SOURCE_DIR_DOCTEST=...  # clang, ASan+UBSan
 fuzz/smoke.sh 10 $S/build-msan -DSEQLZ_SANITIZE=OFF -DSEQLZ_MSAN=ON  # MSan, fuzz targets only

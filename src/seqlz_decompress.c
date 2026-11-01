@@ -198,8 +198,8 @@ static inline void seqlz_br_drop(struct seqlz_bit_reader *r, unsigned int n)
 
 /*
  * Reads one length value. The entry of its code has the base value and the
- * number of extra bits, which follow the code. Takes up to SEQLZ_MAX_BITS +
- * SEQLZ_BLOCK_BITS bits, 20 or 22; the caller refills before.
+ * number of extra bits, which follow the code. Takes up to
+ * SEQLZ_MAX_BITS + SEQLZ_BLOCK_BITS bits, 20; the caller refills before.
  */
 static inline unsigned int seqlz_br_value(struct seqlz_bit_reader *r,
 					  const struct value_table *t)
@@ -378,7 +378,7 @@ static __always_inline u32 next_token(struct seqlz_bit_reader *br)
  * Whether they run short depends on the codes before, which the branch
  * predictor learns only for a block it has seen, and a swap-in decodes a block
  * once. A refill leaves at least 56 bits, and two fast sequences take at most
- * 50, 11 for each token and up to 14 for each offset; after a slow one it
+ * 46, 11 for each token and up to 12 for each offset; after a slow one it
  * always refills, *skip is 0 then. 8 bytes of input are there, and count is at
  * least 0.
  */

@@ -32,6 +32,7 @@ TOKEN_BITS = 11     # the longest code of a token
 VALUE_BITS = 8      # the longest code of a length value
 LIT_BITS = 10       # the longest code of a literal
 ESCAPE_BITS = 12    # the bits of a token after the escape
+BLOCK_BITS = 12     # log2 of the block size, 4 KiB
 LIT_SETS = 8
 TOKENS = 3072
 OWN_BITS = 8        # the longest code of a symbol of a block's own table
@@ -77,11 +78,11 @@ def code_lengths(counts, max_bits):
     return lengths
 
 
-def token_lengths(counts, block_bits):
+def token_lengths(counts):
     """Codes for the k most frequent tokens and the escape, with k in steps
     of 64 as it gives the fewest bits. A token and its offset take at most 31
     bits, also when escaped, which limits the escape's code."""
-    max_escape = 31 - block_bits - ESCAPE_BITS
+    max_escape = 31 - BLOCK_BITS - ESCAPE_BITS
     order = sorted(range(len(counts)), key=lambda s: -counts[s])
     most = min(len(counts), (1 << TOKEN_BITS) - 1)
     best, best_bits = None, 0.0
@@ -156,18 +157,17 @@ def initializer(name, lists):
 def lengths_initializer(tables, storage):
     plus_one = [[c + 1.0 for c in t] for t in tables[:3]]
     # a length value's symbols: 16 of their own, then one per highest bit
-    # from 4 up to the block's bits minus 1, 12 + P of them, see
+    # from 4 up to the block's bits minus 1, 12 + BLOCK_BITS of them, see
     # SEQLZ_LEN_SYMBOLS
-    block_bits = len(tables[1]) - 12
-    if block_bits not in (12, 14):
-        sys.exit(f"ll: {len(tables[1])} symbols, which is no block size")
-    token = token_lengths(plus_one[0], block_bits)
+    if len(tables[1]) != 12 + BLOCK_BITS:
+        sys.exit(f"ll: {len(tables[1])} symbols, not {12 + BLOCK_BITS}")
+    token = token_lengths(plus_one[0])
     ll = code_lengths(plus_one[1], VALUE_BITS)
     ml = code_lengths(plus_one[2], VALUE_BITS)
     # a token without a code is sent as the escape, which must have one that
     # leaves room for the offset
     check("token", token, TOKEN_BITS, False)
-    if not 0 < token[-1] <= 31 - block_bits - ESCAPE_BITS:
+    if not 0 < token[-1] <= 31 - BLOCK_BITS - ESCAPE_BITS:
         sys.exit("token: the escape has no code, or one too long")
     check("ll", ll, VALUE_BITS, True)
     check("ml", ml, VALUE_BITS, True)

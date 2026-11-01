@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: MIT OR GPL-2.0-only
 #
 # check.sh [dir]: docs/format.md against the code, for CI. seqlz_ref.py checks the SHA-256 of every
-# table in src/ against the one docs/format.md gives, for 4 KiB and for 16 KiB pages, and then decodes
+# table in src/ against the one docs/format.md gives, and then decodes
 # pages that src/ compressed, with raw and with coded literals: each must give the page back.
 # A retrain of the tables without new hashes in docs/format.md fails here, and so does a format change
 # that the spec does not describe. The pages are made up, never from a dump: tools/seqlz-worst/pages/,
@@ -14,14 +14,10 @@ repo=$(cd "$here/../.." && pwd)
 out=${1:-$(mktemp -d)}
 mkdir -p "$out"
 
-for s in 4k 16k; do
-    f=src/seqlz_lengths.h
-    [[ $s == 4k ]] || f=src/seqlz_lengths_16k.h
-    if ! (cd "$repo" && tools/kernel-port/gen-seqlz-lengths.py --extern "bench/seqlz_counts_$s.txt" | cmp -s - "$f"); then
-        echo "$f is not what tools/kernel-port/gen-seqlz-lengths.py --extern makes" >&2
-        exit 1
-    fi
-done
+if ! (cd "$repo" && tools/kernel-port/gen-seqlz-lengths.py --extern bench/seqlz_counts.txt | cmp -s - src/seqlz_lengths.h); then
+    echo "src/seqlz_lengths.h is not what tools/kernel-port/gen-seqlz-lengths.py --extern makes" >&2
+    exit 1
+fi
 # and it refuses lengths that seqlz_tables_build() refuses, so the kernel's tables built from what it writes
 # cannot fail
 python3 - "$repo/tools/kernel-port/gen-seqlz-lengths.py" <<'EOF'
@@ -41,8 +37,8 @@ for lengths, every in [([1, 2, 2, 2], True), ([1, 2, 3], True), ([1, 2, 4, 4, 4,
     sys.exit(f"gen-seqlz-lengths.py takes the lengths {lengths}, which seqlz_tables_build() refuses")
 EOF
 
-"$repo/tools/gen-tables/gen-tables.sh" "$out/seqlz_tables.c" -DSEQLZ_PAGE_BITS=12
-${CC:-cc} -O2 -DSEQLZ_PAGE_BITS=12 -I"$repo/src" -o "$out/compress" "$repo/tools/seqlz-compress/compress.c" \
+"$repo/tools/gen-tables/gen-tables.sh" "$out/seqlz_tables.c"
+${CC:-cc} -O2 -I"$repo/src" -o "$out/compress" "$repo/tools/seqlz-compress/compress.c" \
     "$repo"/src/seqlz_*.c "$out/seqlz_tables.c"
 cp "$repo"/tools/seqlz-worst/pages/*.page "$out/"
 python3 - "$out" "$repo/docs/format.md" <<'EOF'
@@ -74,9 +70,6 @@ while len(p) < 4096:
 open(f"{out}/delta-last3.page", "wb").write(p[:4096])
 EOF
 "$out/compress" "$out"/*.page >/dev/null
-
-# The 16 KiB tables: only their hashes. Loading them checks them, the empty file is no page.
-python3 "$here/seqlz_ref.py" --block-bits 14 /dev/null >/dev/null
 
 pages=0
 wrong=0

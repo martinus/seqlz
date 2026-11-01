@@ -29,7 +29,7 @@
  * the two: a sequence's copies write up to 16 bytes past its literals, and its
  * flushes write at most 15 bytes below where the bitstream was before it. A
  * sequence has at most two flushes: the first moves the bitstream down by at
- * most 7 bytes, as it has at most 60 bits (see below), and the second writes 8
+ * most 7 bytes, as it has at most 58 bits (see below), and the second writes 8
  * bytes below that. 16 + 15 bytes fit into ENC_ROOM. A block that does not fit
  * stops the writes there, and seqlz_compress_block() returns 0. It can happen
  * up to ENC_ROOM bytes before dst is full.
@@ -41,16 +41,15 @@
  * bits are more than its token, offset and two length values take. The last
  * sequence has no bits. So the bitstream has at most ENC_BITSTREAM_MAX bytes,
  * 3968 for blocks of 4 KiB, and with a block of literals that leaves more than
- * ENC_ROOM bytes free; for blocks of 16 KiB 15 872 bytes. The records take 6
- * bytes more per sequence, and compress_own() writes a block without them
- * where they do not fit.
+ * ENC_ROOM bytes free. The records take 6 bytes more per sequence, and
+ * compress_own() writes a block without them where they do not fit.
  *
  * Bits are collected in a 64-bit accumulator and written 8 bytes at a time;
  * then the write position moves down by the whole bytes, and the at most 7 bits
  * left over are written again with the next ones. After a write the accumulator
  * holds at most 7 bits, so a sequence's token, offset and match length value
- * fit before the next one: 7 + 31 + 20 = 58 bits, 60 for 16 KiB blocks. Only a
- * literal length value, 20 or 22 bits more, needs a write of its own.
+ * fit before the next one: 7 + 31 + 20 = 58 bits. Only a literal length value,
+ * 20 bits more, needs a write of its own.
  */
 #define ENC_ROOM 32U
 /* the most bits of a length value: its code and the bits below its top bit */

@@ -24,11 +24,9 @@ extern "C" {
 
 namespace {
 
-// The page size seqlz is built for, 4 KiB or 16 KiB (SEQLZ_PAGE_BITS): the tests run with both.
-constexpr unsigned page_bits = SEQLZ_PAGE_BITS;
 constexpr unsigned page_size = SEQLZ_BLOCK_SIZE;
-// zram's huge_class_size, from which on a page is stored as it is (docs/plan.md §3.1 and §3.5)
-constexpr unsigned zram_huge = page_bits == 12 ? 3625U : 14553U;
+// zram's huge_class_size, from which on a page is stored as it is (docs/plan.md §3.1)
+constexpr unsigned zram_huge = 3625U;
 
 // The u16 at the start of a compressed page: SEQLZ_LIT_CODED if its literals are coded, and their number.
 bool lits_coded(std::vector<unsigned char> const& c) {
@@ -148,7 +146,7 @@ TEST_CASE("seqlz: the largest length value a page needs is the last length symbo
     auto extra = 0U;
     // ll - 15 of all literals but a last match of 4 bytes, and ml - 35 of a match of all but the first byte
     CHECK(seqlz_len_symbol(page_size - 4 - SEQLZ_LL_CAP, &extra) == SEQLZ_LEN_SYMBOLS - 1);
-    CHECK(extra == SEQLZ_PAGE_BITS - 1);
+    CHECK(extra == SEQLZ_BLOCK_BITS - 1);
     CHECK(seqlz_len_symbol(page_size - 1 - 4 - SEQLZ_ML_CAP, &extra) == SEQLZ_LEN_SYMBOLS - 1);
     // the direct symbols end at 15, the ranges start at 16
     CHECK(seqlz_len_symbol(15, &extra) == 15);
@@ -176,7 +174,7 @@ TEST_CASE("seqlz: the token holds ll and ml - 4 up to their caps and the offset 
     CHECK(seqlz_off_class(3, 9, &bits) == 2);
     CHECK(seqlz_off_class(255, 9, &bits) == 2);
     CHECK(seqlz_off_class(257, 9, &bits) == 3);
-    CHECK(bits == page_bits);
+    CHECK(bits == SEQLZ_BLOCK_BITS);
     CHECK(seqlz_off_class(4095, 9, &bits) == 3);
     // the multiples of 8 below 2048, divided by 8
     CHECK(seqlz_off_class(8, 9, &bits) == 4);
@@ -833,15 +831,10 @@ TEST_CASE("seqlz: seqlz_encode() rejects sequences that do not make a page, befo
 
 TEST_CASE("seqlz: the tables need a code for every symbol the compressor may write") {
     // a complete code where one match length symbol has none: fine for the decoder, not for the
-    // encoder, so the tables are not built. 4 KiB pages: two codes of 2 bits, eleven of 5 and ten of 6,
-    // 2/4 + 11/32 + 10/64 = 1. 16 KiB pages: two of 2 bits, nine of 5 and fourteen of 6,
-    // 2/4 + 9/32 + 14/64 = 1. The last symbol none.
+    // encoder, so the tables are not built. Two codes of 2 bits, eleven of 5 and ten of 6,
+    // 2/4 + 11/32 + 10/64 = 1. The last symbol none.
     auto l = seqlz_default_lengths;
-#if SEQLZ_PAGE_BITS == 12
     unsigned char const ml[SEQLZ_LEN_SYMBOLS] = {2, 2, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 0};
-#else
-    unsigned char const ml[SEQLZ_LEN_SYMBOLS] = {2, 2, 5, 5, 5, 5, 5, 5, 5, 5, 5, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 0};
-#endif
     std::memcpy(l.ml, ml, sizeof(ml));
     // still a complete code, as its Kraft sum says, otherwise this test tests nothing
     auto kraft = 0U;
@@ -923,7 +916,7 @@ std::vector<unsigned char> reference_encode(seqlz_lengths const& lengths,
             put(token[SEQLZ_ESCAPE], lengths.token[SEQLZ_ESCAPE]);
             put(tok, SEQLZ_ESCAPE_BITS);
         }
-        put(o / std::array<unsigned, 6>{1, 2, 1, 1, 8, 8}[cls], std::array<unsigned, 6>{0, 1, 8, page_bits, 5, 8}[cls]);
+        put(o / std::array<unsigned, 6>{1, 2, 1, 1, 8, 8}[cls], std::array<unsigned, 6>{0, 1, 8, SEQLZ_BLOCK_BITS, 5, 8}[cls]);
         if (l >= SEQLZ_LL_CAP) {
             value(ll, lengths.ll, l - SEQLZ_LL_CAP);
         }
@@ -1580,7 +1573,7 @@ TEST_CASE("seqlz: the compressor codes the literals of every page where that pay
                         many.begin() + static_cast<std::ptrdiff_t>(pos + seq[i].literals));
             pos += seq[i].literals + seq[i].match;
         }
-        CHECK(n > 400 * (page_size / 4096));
+        CHECK(n > 400);
         auto const len = seqlz_encode(
             nullptr, seq.data(), n, lits.data(), static_cast<unsigned>(lits.size()), nullptr, e.data(), 2 * page_size, 2);
         REQUIRE(len == n_many);
@@ -1590,8 +1583,7 @@ TEST_CASE("seqlz: the compressor codes the literals of every page where that pay
 
 TEST_CASE("seqlz: level 3 gives a page a literal table of its own where that saves, levels 1 and 2 never") {
     // Letters, the frequent ones more often, with few repeats: many literals, which a table of the page's
-    // own codes in fewer bits than any of the fixed tables. Zeros after the first 4 KiB: a page of 16 KiB
-    // with more literals has no room for the work of its own table.
+    // own codes in fewer bits than any of the fixed tables.
     auto st = std::make_unique<seqlz_state>();
     auto rng = std::mt19937_64(61);
     auto scratch = std::vector<unsigned char>(SEQLZ_SCRATCH);
@@ -1602,7 +1594,7 @@ TEST_CASE("seqlz: level 3 gives a page a literal table of its own where that sav
     for (int round = 0; round < 20; ++round) {
         CAPTURE(round);
         auto page = std::vector<unsigned char>(page_size);
-        for (unsigned k = 0; k < 4096; ++k) {
+        for (unsigned k = 0; k < page_size; ++k) {
             auto const n = letters.size();
             page[k] = static_cast<unsigned char>(letters[rng() % n * (rng() % n) / n]);
         }
@@ -1721,7 +1713,7 @@ TEST_CASE("seqlz: level 3 codes the literals as deltas to the bytes that make th
             auto const len = seqlz_compress_block(st.get(), page.data(), c.data(), 2 * page_size, 3);
             REQUIRE(len > 0);
             c.resize(len);
-            // a few 5-byte repeats in a page of fields, more in one of 16 KiB, leave sequences after a match
+            // a few 5-byte repeats in a page of fields leave sequences after a match
             // of the field's size: there SEQLZ_DELTA_LAST is the same delta
             CHECK((lit_delta(c) == kind || lit_delta(c) == SEQLZ_DELTA_LAST));
             picked += lit_delta(c) == kind;
@@ -1863,14 +1855,14 @@ TEST_CASE("seqlz: level 3 without room for the delta's records writes the page w
     }
 }
 
-TEST_CASE("seqlz: level 3 keeps the plain literals raw where the deltas it picked stay raw" * doctest::skip(page_bits != 12)) {
+TEST_CASE("seqlz: level 3 keeps the plain literals raw where the deltas it picked stay raw") {
     // A delta is picked by pricing every 5th literal. Where its deltas then do not code, level 3 does not
     // try the plain literals again: that coded 0.4% of the pages and saved 0.71 bytes per page, for a
     // second pricing of a quarter of them. Such a page is a near tie between the delta and the plain
     // literals: a page of records for SEQLZ_DELTA_LAST, from split on literals as table 1 codes them. On
     // some of them level 3 keeps raw literals that level 2, with the same sequences, codes. Found by a
-    // search with the 4 KiB tables of 13th October: 2 of these 640 pages, none for 16 KiB pages in the
-    // same family. Tables trained again may need another search.
+    // search with the tables of 13th October: 2 of these 640 pages. Tables trained again may need another
+    // search.
     auto st = std::make_unique<seqlz_state>();
     auto c3 = std::vector<unsigned char>(2 * page_size);
     auto c2 = std::vector<unsigned char>(2 * page_size);

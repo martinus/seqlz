@@ -247,14 +247,12 @@ in a run of 21st October, 25.4% in 12.96 µs.
 >   In a test that switches between 25 apps, with the same RAM given to zram, launches were not
 >   slower, and because `seqlz` stores pages smaller every app stayed in memory, where `lz4` lost some
 >   ([Apps on the phone](explored-designs.md#apps-on-the-phone-with-the-same-ram-no-cold-launch-in-6-runs-of-seqlz-54-in-3-runs-of-lz4)).
-> * **16 KiB pages.** Android is moving to them, and there `seqlz-2` needs 32 784 bytes of
->   work memory per CPU, twice `lz4`'s, a cost in
->   [the score](plan.md#11-the-score-memory-against-time-not-bars). A way around it is built and
->   measured, but not kept, see [explored-designs.md](explored-designs.md). Their
->   tables are trained on a zram dump of the Android 17 emulator with 16 KiB pages and measured on a
->   second one ([explored-designs.md](explored-designs.md#android-17-in-the-emulator-the-4-kib-tables-fit-the-16-kib-ones-trained-again-26-smaller)); there is
->   no phone with 16 KiB pages yet, and the format for 16 KiB pages is not fixed
->   ([format.md](format.md#status)).
+> * **16 KiB pages.** Android is moving to them, and seqlz has no format for them: it compresses
+>   blocks of 4 KiB with any page size. A 16 KiB page as four blocks of 4 KiB took 7.0% to 8.6% more
+>   memory on the pages of the Android 17 emulator than one block with tables of its own, which seqlz
+>   had until 1st November 2026
+>   ([explored-designs.md](explored-designs.md#16-kib-pages-as-four-blocks-of-4-kib-70-to-86-more-memory-than-one-block-of-16-kib-measured));
+>   there is no phone with 16 KiB pages yet ([format.md](format.md#status)).
 > * **Writes at p99** take 1.21 and 1.19 times `lz4`'s time.
 
 ## The choices, with their numbers

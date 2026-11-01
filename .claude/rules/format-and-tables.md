@@ -17,17 +17,17 @@ paths:
   and both reference decoders, `tools/seqlz-ref/seqlz_ref.py` and `tools/seqlz-ref/seqlz_ref.c`.
   Status = the format as it is now, never a change log (history goes to `docs/explored-designs.md`).
 - Reference decoders are written from `docs/format.md` only; never copy from `src/`.
-- `tools/seqlz-ref/seqlz_ref.py` parses `docs/format.md` rows ``| `TOK_4k` | `<sha256>` |``: keep
-  them exact. Retrained tables need new hashes there (else `check.sh` fails) and new
-  `bench/seqlz_counts_*.txt` (`seqlz-train --counts`, else test `seqlz_train` fails).
-- `src/seqlz_lengths.h` and `_16k.h`: the kernel's `seqlz_lengths.h`, without `static`; not
-  format-checked (`src/.clang-format-ignore`), never clang-format or hand-edit. Written by
-  `tools/kernel-port/gen-seqlz-lengths.py --extern` from `bench/seqlz_counts_*.txt` (command in each
-  file's head); `tools/seqlz-ref/check.sh` fails if they differ from its output.
-- Retrain: `tools/retrain-tables.py --page-bits 12|14 --train <Release build> --corpus <base>
-  --name <name>` (counts, lit lines in committed order, `seqlz_lengths*.h`, SHA-256 rows of format.md). 4 KiB:
-  `~/seqlz-corpus/phone-dump/train-mix`, name `train-mix-1012`, 11 min; 16 KiB:
-  `~/seqlz-corpus/emu-a17-16k-a-train`, 20 s. Then by hand: format.md example (`ab` 2048 times
+- `tools/seqlz-ref/seqlz_ref.py` parses `docs/format.md` rows ``| `TOK` | `<sha256>` |``: keep
+  them exact. Retrained tables need new hashes there (else `check.sh` fails) and a new
+  `bench/seqlz_counts.txt` (`seqlz-train --counts`, else test `seqlz_train` fails).
+- `src/seqlz_lengths.h`: the kernel's `seqlz_lengths.h`, without `static`; not format-checked
+  (`src/.clang-format-ignore`), never clang-format or hand-edit. Written by
+  `tools/kernel-port/gen-seqlz-lengths.py --extern` from `bench/seqlz_counts.txt` (command in the
+  file's head); `tools/seqlz-ref/check.sh` fails if it differs from its output.
+- Blocks are 4 KiB only since 1 Nov 2026; the 16 KiB tables are in git history (last in `9ce7148`).
+- Retrain: `tools/retrain-tables.py --train <Release build> --corpus <base> --name <name>` (counts,
+  lit lines in committed order, `seqlz_lengths.h`, SHA-256 rows of format.md):
+  `~/seqlz-corpus/phone-dump/train-mix`, name `train-mix-1012`, 11 min. Then by hand: format.md example (`ab` 2048 times
   through `tools/seqlz-compress/compress.c`), its bytes in `test/seqlz_ref_test.cpp`, the book.
 - `docs/format.md` is also the kernel's `Documentation/staging/seqlz.rst` via
   `tools/kernel-port/format_rst.py`. HTML comments mark repo-only and kernel-only parts. The converter

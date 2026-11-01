@@ -11,14 +11,8 @@
 #ifndef _LINUX_SEQLZ_H
 #define _LINUX_SEQLZ_H
 
-/*
- * the bytes of a block, whatever PAGE_SIZE is; outside the kernel also 16 KiB,
- * with SEQLZ_PAGE_BITS 14
- */
-#ifndef SEQLZ_PAGE_BITS
-#define SEQLZ_PAGE_BITS 12
-#endif
-#define SEQLZ_BLOCK_SIZE (1U << SEQLZ_PAGE_BITS)
+/* the bytes of a block, whatever PAGE_SIZE is */
+#define SEQLZ_BLOCK_SIZE 4096U
 /* room at dst with which seqlz_compress() never fails */
 #define SEQLZ_COMPRESS_BOUND (2 * SEQLZ_BLOCK_SIZE)
 
@@ -27,7 +21,7 @@
  * holds the literals and the work of a block's own literal table once the
  * matcher is done
  */
-#define SEQLZ_MEM_COMPRESS (SEQLZ_PAGE_BITS == 12 ? 8192 : 16384)
+#define SEQLZ_MEM_COMPRESS 8192
 /*
  * the work memory of seqlz_decompress(): the decoded literals of a block, 16
  * bytes more for the 16-byte copies that read past the last one, and before
