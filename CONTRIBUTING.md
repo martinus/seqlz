@@ -33,7 +33,6 @@ cmake --build build
 | `-DSEQLZ_WERROR=ON` | warnings are errors, as in CI |
 | `-DSEQLZ_SANITIZE=ON` | ASan and UBSan |
 | `-DSEQLZ_KERNEL_TREE=<linux>` | builds zram's `lz4`, `lzo` and `zstd` from a Linux tree with the kernel's flags, and with them `seqlz-bench-*` and the kernel codec tests |
-| `-DSEQLZ_PAGE_BITS=14` | seqlz for 16 KiB pages. The tests run with it, except the kernel codecs', so configure it without a kernel tree |
 | `-DSEQLZ_FUZZ=ON` | the fuzz targets, needs clang or AFL++'s `afl-clang-lto` |
 | `-DSEQLZ_ALIGN_FUNCTIONS=ON` | every kernel codec function aligned to 64 bytes, for A/B comparisons of two builds |
 
@@ -98,7 +97,7 @@ AFL=$HOME/AFLplusplus fuzz/afl.sh out 30    # 30 AFL++ instances in the backgrou
 ```
 
 `seqlz-train` trains the tables, and `src/seqlz_lengths.c` says on which pages. With
-`--counts bench/seqlz_counts_4k.txt` (or `_16k.txt`) it also writes the counts the tables are built
+`--counts bench/seqlz_counts.txt` it also writes the counts the tables are built
 from; the test `seqlz_train` fails until the counts in `bench/` give the tables in `src/`.
 
 ## Measuring
@@ -126,7 +125,7 @@ starts with its SPDX line:
 ```
 
 CI has one required check, `ci-ok`. It needs these to pass: the format check, the tests with gcc and
-clang on x86-64 and arm64, the fuzz smoke run with 4 KiB pages, with MSan and with 16 KiB pages, the
+clang on x86-64 and arm64, the fuzz smoke run with ASan and UBSan and with MSan, the
 kernel port built for x86-64, arm64, 32-bit arm and s390 with its KUnit tests, the same compressed bytes
 on x86-64, 32-bit x86 and big-endian s390x, and the docs: `tools/seqlz-ref/check.sh` and
 `tools/check-links.py`, both quick to run before a push.

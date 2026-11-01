@@ -43,14 +43,10 @@ decoder decodes all of them.
 > kernel that wrote them, so a change needs no new name in zram, see
 > [No version in the block](#no-version-in-the-block).
 
-The format for 16 KiB pages is not fixed yet. Its tables, the literal tables included, are its own,
-trained on a zram dump of the Android 17 emulator with 16 KiB pages
+There is no format for blocks of 16 KiB. The library compresses blocks of 4 KiB with any page size,
+and the zram backend is for 4 KiB pages only. Until 1st November 2026 this file also had blocks of
+16 KiB, with tables of their own trained on a zram dump of the Android 17 emulator
 ([explored-designs.md](explored-designs.md#android-17-in-the-emulator-the-4-kib-tables-fit-the-16-kib-ones-trained-again-26-smaller)).
-That is one emulator, no real phone with 16 KiB pages yet. And with 16 KiB pages `seqlz-2`
-asks for 32 784 bytes of work memory per CPU, twice `lz4`'s
-([seqlz.md](seqlz.md#what-is-not-known-yet)). So it is not in the first series for the kernel:
-`tools/kernel-port/` builds the library for blocks of 4 KiB, with any page size, and the zram backend
-for 4 KiB pages only.
 <!-- end -->
 
 ## The idea
@@ -76,26 +72,14 @@ codes) from fixed tables that are part of the format and not in the compressed b
 
 ## Block size
 
-<!-- not in the kernel's copy -->
-seqlz is defined for blocks of 4 KiB and of 16 KiB; the block size is not stored in the compressed block,
-the decoder has to know it. Some numbers depend on it:
-
-| name | 4 KiB pages | 16 KiB pages | what it is |
-| --- | --- | --- | --- |
-| `P` | 12 | 14 | log2 of the block size |
-| `BLOCK` | 4096 | 16384 | bytes of the uncompressed block |
-| `LEN_SYMBOLS` | 24 | 26 | symbols of a length value, `12 + P`, see [Length values](#length-values) |
-<!-- end -->
-<!-- in the kernel's copy:
-Linux has seqlz for blocks of 4 KiB, whatever its page size is. The block size is not stored in the
-compressed block, the decoder has to know it. Some numbers depend on it:
+seqlz is defined for blocks of 4 KiB, whatever the page size is. The block size is not stored in the
+compressed block. Some numbers depend on it:
 
 | name | value | what it is |
 | --- | --- | --- |
 | `P` | 12 | log2 of the block size |
 | `BLOCK` | 4096 | bytes of the uncompressed block |
 | `LEN_SYMBOLS` | 24 | symbols of a length value, `12 + P`, see [Length values](#length-values) |
--->
 
 The compressed block is a byte string of length `len`. Its length is not stored in it either: zram
 stores it and gives it to the decoder.
@@ -190,13 +174,13 @@ is a list of code lengths, one byte per symbol, symbol 0 first:
 | a block's own literal table, `OWN` | 19 | 8 bits | `seqlz_own_lengths` |
 -->
 <!-- not in the kernel's copy -->
-| table | symbols | longest code | 4 KiB pages | 16 KiB pages |
-| --- | --- | --- | --- | --- |
-| tokens and escape, `TOK` | 3073 | 11 bits | `src/seqlz_lengths.h`, `seqlz_default_lengths.token` | `src/seqlz_lengths_16k.h`, the same |
-| literal length values, `LL` | `LEN_SYMBOLS` | 8 bits | the same, `.ll` | the same, `.ll` |
-| match length values, `ML` | `LEN_SYMBOLS` | 8 bits | the same, `.ml` | the same, `.ml` |
-| literal tables 0 to 7 | 256 each | 10 bits | the same, `seqlz_lit_sets[0]` to `[7]` | the same |
-| a block's own literal table, `OWN` | 19 | 8 bits | the same, `seqlz_own_lengths` | the same, `seqlz_own_lengths` |
+| table | symbols | longest code | in `src/seqlz_lengths.h` |
+| --- | --- | --- | --- |
+| tokens and escape, `TOK` | 3073 | 11 bits | `seqlz_default_lengths.token` |
+| literal length values, `LL` | `LEN_SYMBOLS` | 8 bits | `seqlz_default_lengths.ll` |
+| match length values, `ML` | `LEN_SYMBOLS` | 8 bits | `seqlz_default_lengths.ml` |
+| literal tables 0 to 7 | 256 each | 10 bits | `seqlz_lit_sets[0]` to `[7]` |
+| a block's own literal table, `OWN` | 19 | 8 bits | `seqlz_own_lengths` |
 <!-- end -->
 
 `LL` and `ML` are not the literal tables: they code the lengths `ll` and `ml` of a sequence when they
@@ -216,53 +200,36 @@ can't give those back: they are sums over all pages, each literal table's over 1
 they don't say which symbol came after which or on which page.
 -->
 <!-- not in the kernel's copy -->
-Every table is built from counts that are in this repository:
-[`bench/seqlz_counts_4k.txt`](../bench/seqlz_counts_4k.txt) and
-[`bench/seqlz_counts_16k.txt`](../bench/seqlz_counts_16k.txt). They have how often each token, `ll` and
+Every table is built from counts that are in this repository,
+[`bench/seqlz_counts.txt`](../bench/seqlz_counts.txt). They have how often each token, `ll` and
 `ml` symbol occurred on the training pages, for each literal table, how often each byte occurred as
 a literal on the pages that table codes best, and how often each symbol of `OWN` occurred in the
 descriptions of the pages that level 3 gives a table of their own. `tools/kernel-port/gen-seqlz-lengths.py` turns the counts
 into the tables in `src/`, and `tools/seqlz-ref/check.sh` checks in CI that they are its output, byte for
 byte. `seqlz-train --from-counts <file>` does the same in C++, see `bench/seqlz_train.cpp`, and
-the test `seqlz_train` checks that it gives the same tables, for both block sizes. The kernel gets the
-generator as `scripts/gen-seqlz-lengths.py` and the 4 KiB counts.
+the test `seqlz_train` checks that it gives the same tables. The kernel gets the generator as
+`scripts/gen-seqlz-lengths.py` and the counts.
 
-The 4 KiB tables are counted on 1 091 983 pages: three sessions of a Xiaomi Mi 9T under memory
-pressure, the resident pages of a desktop and 200 000 pages of its zram dump of 28th September 2026. The
-16 KiB tables are counted on 26 933 pages of a zram dump of the
-Android 17 emulator with 16 KiB pages. Those pages are not published, because memory dumps hold keys
-and passwords. The counts can't give those back: they are sums over all pages, each literal table's over
-10 590 pages or more for 4 KiB and 453 or more for 16 KiB, and they don't say which symbol came after which
-or on which page. `seqlz-train --corpus <pages> --counts <file>` counts other pages the same
+The tables are counted on 1 091 983 pages: three sessions of a Xiaomi Mi 9T under memory pressure, the
+resident pages of a desktop and 200 000 pages of its zram dump of 28th September 2026. Those pages are
+not published, because memory dumps hold keys and passwords. The counts can't give those back: they are
+sums over all pages, each literal table's over 10 590 pages or more, and they don't say which symbol came
+after which or on which page. `seqlz-train --corpus <pages> --counts <file>` counts other pages the same
 way.
 <!-- end -->
 
 The SHA-256 of each table's lengths, as bytes in symbol order (the literal tables one after the other),
 so that a decoder can check that it has the right ones:
 
-<!-- not in the kernel's copy -->
-4 KiB blocks:
-
-<!-- end -->
 | table | SHA-256 |
 | --- | --- |
-| `TOK_4k` | `c5f97d70cd50ed0e3517c69231437fd534f5e772bb9ed70dc3769a3337b2d6e0` |
-| `LL_4k` | `ce0b70bdefdad678f22ef1139cf8284c48b61f720adb007b0a28b0ad3777bf16` |
-| `ML_4k` | `c39358b16a14c2462e092ee13b345e9b5002e59c5efc9521f0967063a7873289` |
-| `LIT_4k` | `43f552dca80dcdffd6dc21231555f1c938580650a1b90b94b8c515120ad9ad9e` |
-| `OWN_4k` | `96312d8701c3fa72a06db3dcdb982aab0075aaac91bc895cf1eed3ae88e00721` |
+| `TOK` | `c5f97d70cd50ed0e3517c69231437fd534f5e772bb9ed70dc3769a3337b2d6e0` |
+| `LL` | `ce0b70bdefdad678f22ef1139cf8284c48b61f720adb007b0a28b0ad3777bf16` |
+| `ML` | `c39358b16a14c2462e092ee13b345e9b5002e59c5efc9521f0967063a7873289` |
+| `LIT` | `43f552dca80dcdffd6dc21231555f1c938580650a1b90b94b8c515120ad9ad9e` |
+| `OWN` | `96312d8701c3fa72a06db3dcdb982aab0075aaac91bc895cf1eed3ae88e00721` |
 
 <!-- not in the kernel's copy -->
-16 KiB blocks:
-
-| table | SHA-256 |
-| --- | --- |
-| `TOK_16k` | `e33e3a2353fbc5c9296abb79034a3d118ce34344e059099e1c85afda996b7219` |
-| `LL_16k` | `5e9e225ea55c28a9b0f358101521c670e89cbd32cec5e7f02fe608648dabb8b2` |
-| `ML_16k` | `fe6a87649f4b95830e663270eefe4289561269420cba951931f95c5fe38ccfce` |
-| `LIT_16k` | `cc37c3ba7e7ffdb91ff873d7c9a19f04301efe79c4b2fd7202c137212a769db4` |
-| `OWN_16k` | `53a7c56537de2052791c0d016ff3c92467ef61bfb7be0ef33ad2b81f3bc58906` |
-
 `tools/seqlz-ref/seqlz_ref.py` checks them. How the tables were trained is in
 [explored-designs.md](explored-designs.md#the-tables-trained-again-4-less-on-one-desktop-dump-the-phone-the-same).
 <!-- end -->

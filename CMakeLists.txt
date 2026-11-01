@@ -8,14 +8,6 @@ if(NOT CMAKE_BUILD_TYPE AND NOT CMAKE_CONFIGURATION_TYPES)
     set(CMAKE_BUILD_TYPE Release CACHE STRING "Debug, Release, RelWithDebInfo or MinSizeRel" FORCE)
 endif()
 
-# The page size of seqlz: 12 for 4 KiB, 14 for 16 KiB. The tests of the kernel codecs need 4 KiB, the
-# others run with both.
-set(SEQLZ_PAGE_BITS 12 CACHE STRING "log2 of the page size of seqlz")
-if(NOT SEQLZ_PAGE_BITS EQUAL 12)
-    add_compile_definitions(SEQLZ_PAGE_BITS=${SEQLZ_PAGE_BITS})
-endif()
-
-
 # Tools and the benchmark harness are C++20. The codec core will be C11, see docs/plan.md §4.
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -80,7 +72,6 @@ set(SEQLZ_TABLES ${CMAKE_BINARY_DIR}/seqlz_tables.c)
 file(GLOB SEQLZ_HEADERS CONFIGURE_DEPENDS src/*.h src/linux/*.h)
 add_custom_command(OUTPUT ${SEQLZ_TABLES}
     COMMAND ${CMAKE_SOURCE_DIR}/tools/gen-tables/gen-tables.sh ${SEQLZ_TABLES}
-        -DSEQLZ_PAGE_BITS=${SEQLZ_PAGE_BITS}
     DEPENDS tools/gen-tables/gen-tables.sh tools/gen-tables/gen_seqlz_tables.c src/seqlz_codes.c
         src/seqlz_lengths.c ${SEQLZ_HEADERS}
     COMMENT "seqlz's tables"

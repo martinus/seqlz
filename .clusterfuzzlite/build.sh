@@ -1,8 +1,8 @@
 #!/bin/bash -eu
 # SPDX-License-Identifier: MIT OR GPL-2.0-only
 # The fuzz targets of fuzz/ for ClusterFuzzLite, with its compiler, sanitizer flags and libFuzzer, into
-# $OUT, with make_seeds.c's seeds and the input lengths fuzz/afl.sh gives them. 4 KiB pages only; the
-# fuzz job in ci.yml has 16 KiB pages and MSan too.
+# $OUT, with make_seeds.c's seeds and the input lengths fuzz/afl.sh gives them. The fuzz job in ci.yml
+# has MSan too.
 # the tables, generated with clang for the build machine, without the sanitizer flags
 HOSTCC=clang tools/gen-tables/gen-tables.sh "$WORK/seqlz_tables.c"
 # the codec: every src/seqlz_*.c, a glob that $codec expands where it is used

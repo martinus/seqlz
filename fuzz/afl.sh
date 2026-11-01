@@ -32,8 +32,8 @@ mkdir -p "$OUT"/seeds-{decode,roundtrip}
 # diff takes compressed pages, as decode does
 ln -sfn seeds-decode "$OUT/seeds-diff"
 
-# the longest input each target takes, from the page size the build has
-page=$((1 << $(sed -n 's/^SEQLZ_PAGE_BITS:STRING=//p' "$OUT/build-plain/CMakeCache.txt")))
+# the longest input each target takes, from the page size
+page=4096
 declare -A max_len=([decode]=$((2 * page)) [roundtrip]=$((page + 1)) [diff]=$((2 * page)))
 
 export AFL_SKIP_CPUFREQ=1 AFL_NO_UI=1 AFL_TRY_AFFINITY=1

@@ -445,9 +445,7 @@ static void lit_sizes(u8 *p, const unsigned int *sizes, unsigned int width)
  * less than its coarser sample costs in bytes. Where the sample says the
  * literals stay raw by LIT_SAMPLE_MARGIN bytes or more, they do, and the
  * streams are not written: most blocks that stay raw are far from the rule, and
- * a block the sample misjudges by more is rare. The slots fit the state for
- * blocks of 4 KiB; for larger blocks every literal is priced, as for a block
- * that tries deltas or a table of its own.
+ * a block the sample misjudges by more is rare.
  */
 #define LIT_SAMPLE_STEP 7U
 #define LIT_SAMPLE_MARGIN 8U
@@ -456,9 +454,9 @@ static void lit_sizes(u8 *p, const unsigned int *sizes, unsigned int width)
  * with the longest code, and 8 more for lit_flush()'s 8-byte stores
  */
 #define LIT_SLOT(n) (((n) / SEQLZ_LIT_STREAMS + 1U) * SEQLZ_LIT_BITS / 8U + 9U)
-#define LIT_SLOTS                                          \
-	(SEQLZ_LIT_STREAMS * LIT_SLOT(SEQLZ_BLOCK_SIZE) <= \
-	 sizeof(struct seqlz_state))
+static_assert(SEQLZ_LIT_STREAMS * LIT_SLOT(SEQLZ_BLOCK_SIZE) <=
+		      sizeof(struct seqlz_state),
+	      "the streams' slots fit the matcher's state");
 /* and only where it saves this many bytes against the best fixed table */
 #define OWN_SAVES_MIN 32U
 
@@ -795,7 +793,7 @@ static unsigned int size_width(const unsigned int *sizes)
  * The coded literals are written over the raw ones in d, which are read from
  * raw if the caller has them elsewhere, else from d. Without own and with a
  * spare, the streams are first written into spare, the matcher's state, see
- * LIT_SLOTS, and moved over the raw literals once all are read. Else spare, at
+ * LIT_SLOT, and moved over the raw literals once all are read. Else spare, at
  * least a block, gets a copy of the raw literals once it is clear they get
  * coded, and the streams are written into d from it; with raw given, spare may
  * be NULL. The bitstream stays behind the raw literals until it moves down
@@ -826,12 +824,12 @@ code_literals(u8 *d, unsigned int len, const u8 *raw, u8 *spare,
 	if (own &&
 	    (n_literals < OWN_LITERALS_MIN || n_literals > OWN_LITERALS_MAX))
 		own = NULL;
-	if (LIT_SLOTS && !own && spare) {
+	if (!own && spare) {
 		/*
 		 * The table from every LIT_SAMPLE_STEP-th literal: the bits of
 		 * each in all tables, in the lanes as lit_sums() has them. The
 		 * streams then go into slots in spare, and their sizes come
-		 * from where they end, see LIT_SLOTS.
+		 * from where they end, see LIT_SLOT.
 		 */
 		const unsigned int slot = LIT_SLOT(n_literals);
 		u64 x = 0, s_even = 0, s_odd = 0;

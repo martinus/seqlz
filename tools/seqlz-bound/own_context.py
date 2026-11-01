@@ -17,7 +17,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."
 import seqlz_ref  # noqa: E402
 
 NSYM, RUN0, MAXBITS = 19, 10, 8
-OWN = seqlz_ref.load_tables(12)[-1]
+OWN = seqlz_ref.load_tables()[-1]
 OWN_LEN = [0] * NSYM
 PEEK = [None] * 256
 for (l, c), s in OWN.items():

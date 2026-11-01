@@ -5,9 +5,10 @@
 #include <linux/types.h>
 
 /*
- * seqlz compresses one block at a time, a memory page for zram. Like lz4, a
- * block is a list of sequences: some literal bytes, copied as they are, then a
- * match, a copy of bytes that came earlier in the same block. lz4 writes the
+ * seqlz compresses one block of SEQLZ_BLOCK_SIZE bytes at a time, for zram,
+ * whatever the kernel's PAGE_SIZE is. Like lz4, a block is a list of sequences:
+ * some literal bytes, copied as they are, then a match, a copy of bytes that
+ * came earlier in the same block. lz4 writes the
  * numbers of a sequence in whole bytes. seqlz writes them with Huffman codes,
  * and the code tables are fixed: trained once on real memory pages and compiled
  * in, so a block carries no table but at level 3, which may give it a literal
@@ -61,14 +62,11 @@
  */
 
 /*
- * A block is what seqlz compresses at a time, a memory page for zram: 1 <<
- * SEQLZ_BLOCK_BITS bytes, 12 for 4 KiB and 14 for 16 KiB, the page size the
- * build is for.
+ * A block is what seqlz compresses at a time: SEQLZ_BLOCK_SIZE bytes of the
+ * interface, a memory page for zram with 4 KiB pages, whatever the kernel's
+ * PAGE_SIZE is. SEQLZ_BLOCK_BITS is its log2.
  */
-#ifndef SEQLZ_PAGE_BITS
-#define SEQLZ_PAGE_BITS 12
-#endif
-#define SEQLZ_BLOCK_BITS SEQLZ_PAGE_BITS
+#define SEQLZ_BLOCK_BITS 12U
 /*
  * The longest code of a length value: its decode table has 256 entries, 1 KiB.
  * A table twice as large made cold reads slower.
@@ -138,7 +136,7 @@
 #define SEQLZ_HEADER 2U
 /*
  * Set in that u16 when the literals are Huffman coded. A block has at most
- * 16 KiB of literals, so the top bit is free.
+ * 4 KiB of literals, so the top bit is free.
  */
 #define SEQLZ_LIT_CODED 0x8000U
 
@@ -242,7 +240,7 @@ static inline unsigned int seqlz_off_class(unsigned int off, unsigned int last,
  *
  * w is the fewest bits that hold the largest size, but at least 5. A stream
  * holds every 8th literal of at most 10 bits, at most 640 bytes in a 4 KiB
- * block and 2560 in a 16 KiB block, so w is at most 12. Sizes of 2 bytes each
+ * block, so w is at most 10 here; the format allows 12. Sizes of 2 bytes each
  * made blocks larger; widths of 3 and 4 bits are left out, few blocks would use
  * them.
  */

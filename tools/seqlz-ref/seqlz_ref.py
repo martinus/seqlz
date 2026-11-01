@@ -1,9 +1,8 @@
 #!/usr/bin/env python3
 # SPDX-License-Identifier: MIT OR GPL-2.0-only
 """seqlz_ref.py <compressed block>...: a decoder written from docs/format.md alone, slow on purpose, to check
-the spec against src/. Prints per file "invalid" or "valid <sha256 of the block>".
---block-bits 14 for 16 KiB blocks. The tables are read from the files docs/format.md names, and checked
-against the SHA-256 docs/format.md gives for them."""
+the spec against src/. Prints per file "invalid" or "valid <sha256 of the block>". The tables are read
+from the file docs/format.md names, and checked against the SHA-256 docs/format.md gives for them."""
 
 import argparse
 import hashlib
@@ -11,6 +10,8 @@ import re
 from pathlib import Path
 
 REPO = Path(__file__).resolve().parent.parent.parent
+# docs/format.md "Block size": log2 of the block size
+P = 12
 
 
 class Invalid(Exception):
@@ -26,10 +27,9 @@ def spec_hashes():
     return dict(re.findall(r"^\| `(\w+)` \| `([0-9a-f]{64})` \|", (REPO / "docs" / "format.md").read_text(), re.MULTILINE))
 
 
-def load_tables(block_bits):
+def load_tables():
     """canonical codes of TOK, LL, ML, the 8 literal tables and OWN, after checking the lengths' SHA-256"""
-    size = f"{4 if block_bits == 12 else 16}k"
-    src = (REPO / "src" / ("seqlz_lengths.h" if size == "4k" else f"seqlz_lengths_{size}.h")).read_text()
+    src = (REPO / "src" / "seqlz_lengths.h").read_text()
 
     def field(name):
         return numbers(re.search(r"\." + name + r"\s*=\s*\{([^}]*)\}", src).group(1))
@@ -38,13 +38,12 @@ def load_tables(block_bits):
     own_at = src.index("seqlz_own_lengths[SEQLZ_OWN_SYMBOLS] =")
     lit = numbers(src[src.index("seqlz_lit_sets[SEQLZ_LIT_SETS][256] =") : own_at].split("=", 1)[1])
     own = numbers(src[own_at:].split("=", 1)[1])
-    assert len(tables["TOK"]) == 3073 and len(tables["LL"]) == len(tables["ML"]) == 12 + block_bits
+    assert len(tables["TOK"]) == 3073 and len(tables["LL"]) == len(tables["ML"]) == 12 + P
     assert len(lit) == 8 * 256 and len(own) == 19
     hashes = spec_hashes()
     for name, lengths in [*tables.items(), ("LIT", lit), ("OWN", own)]:
-        key = f"{name}_{size}"
-        if hashlib.sha256(bytes(lengths)).hexdigest() != hashes[key]:
-            raise SystemExit(f"{key}: the table is not the one docs/format.md names")
+        if hashlib.sha256(bytes(lengths)).hexdigest() != hashes[name]:
+            raise SystemExit(f"{name}: the table is not the one docs/format.md names")
     return (
         canonical(tables["TOK"], 11),
         canonical(tables["LL"], 8),
@@ -125,10 +124,10 @@ def own_table(block, at, own_codes):
     return canonical(lengths, 10), d
 
 
-def decode(block, tables, block_bits):
+def decode(block, tables):
     tok_codes, ll_codes, ml_codes, lit_codes, own_codes = tables
-    size = 1 << block_bits
-    offset_bits = [0, 1, 8, block_bits, 5, 8]
+    size = 1 << P
+    offset_bits = [0, 1, 8, P, 5, 8]
     offset_scale = [1, 2, 1, 1, 8, 8]
     if len(block) < 2:
         raise Invalid
@@ -217,13 +216,12 @@ def decode(block, tables, block_bits):
 
 def main():
     ap = argparse.ArgumentParser(description=__doc__)
-    ap.add_argument("--block-bits", type=int, default=12, choices=[12, 14])
     ap.add_argument("files", nargs="+")
     args = ap.parse_args()
-    tables = load_tables(args.block_bits)
+    tables = load_tables()
     for f in args.files:
         try:
-            print(f"{f} valid {hashlib.sha256(decode(Path(f).read_bytes(), tables, args.block_bits)).hexdigest()}")
+            print(f"{f} valid {hashlib.sha256(decode(Path(f).read_bytes(), tables)).hexdigest()}")
         except Invalid:
             print(f"{f} invalid")
 

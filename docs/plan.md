@@ -3,7 +3,7 @@
 *Or how to get a new compressor into zram, which has worked once and failed once.*
 
 seqlz is a compression codec for memory pages, aimed at the Linux kernel's zram module: 4 KiB pages
-first, and 16 KiB pages as a parameter from the start (§3.5). This document is the goal, the evidence
+first, 16 KiB pages later (§3.5). This document is the goal, the evidence
 behind it, the phases with their gates, and where the project stands.
 
 > [!NOTE]
@@ -55,7 +55,7 @@ chosen by the score of §1.1, and these criteria are what the cover letter repor
 | C2 | p99 decompression latency against `lz4`, cold cache, on x86-64 **and** on an arm64 little core, latency statistic of §5.2 | guard, reported | decompression runs in the page fault (§3.2), and on a phone often on a little core | slower than `lz4`, see R10 |
 | C3 | p99 compression latency against `lz4`, same statistic as C2 | guard, reported | zram compresses more often than it decompresses | 1.21 and 1.19 times `lz4` |
 | C4 | Σ zsmalloc cost against `lz4` **with a trained dictionary**, not only bare `lz4` | reported | zram supports dictionaries, and Honor made `lz4` with a dictionary more than 50% faster in March 2026 (`f0f6f7871430`) | 20.4% less than `lz4` with a dictionary |
-| C5 | work memory per CPU, as `kmalloc()` and `vmalloc()` hand it out | cost | it is taken from every CPU whether zram holds anything or not, so it is memory like the pages (§1.1, §3.3) | 4 KiB pages: 8 KiB with one context, 16 KiB with the contexts split, `lz4` 20 KiB, `zstd` 3 188 KiB. 16 KiB pages: 32 KiB and 48 KiB, `lz4` 32 KiB (§3.3) |
+| C5 | work memory per CPU, as `kmalloc()` and `vmalloc()` hand it out | cost | it is taken from every CPU whether zram holds anything or not, so it is memory like the pages (§1.1, §3.3) | 4 KiB pages: 8 KiB with one context, 16 KiB with the contexts split, `lz4` 20 KiB, `zstd` 3 188 KiB. 16 KiB pages, with the 16 KiB blocks `src/` had until 1st November 2026: 32 KiB and 48 KiB, `lz4` 32 KiB (§3.3) |
 | C6 | the decompressor is fuzz-safe and bounded in time for any input | hard limit | an unsafe decoder is not a trade-off, and it is what stopped the last new codec (§2.2) | met: 3.2 billion fuzz inputs, the worst case measured |
 
 C1 and C2 together were meant to be the merge argument: *strictly better than the current default and
@@ -477,9 +477,9 @@ with 16 KiB pages. zram compresses one `PAGE_SIZE` page at a time, and zsmalloc 
 
 Which means that:
 
-- `PAGE_SIZE` is a parameter of the format, of the cost model and of the harness from the start. A
-  codec tuned by hand for 4096-byte inputs, e.g. with 12-bit offsets baked into the format, is a dead
-  end.
+- `PAGE_SIZE` is a parameter of the cost model and of the harness. The format had a second block
+  size, 16 KiB, from the start until 1st November 2026, when it went from `src/` (last in `9ce7148`):
+  for 16 KiB pages it comes back, or a page is four blocks of 4 KiB (below).
 - The corpus needs 16 KiB pages too (Phase 1). Four adjacent 4 KiB pages are a first approximation,
   but real kernels with 16 KiB pages allocate differently.
 - Larger inputs help `lz4` and `zstd` more than a word model, because their match window gets 4 times
@@ -496,7 +496,8 @@ memory at levels 1 to 3, level 3 then stores 2.4% more than `zstd` 3 instead of 
 compresses with 8% more instructions; its work memory, 16 instead of 48 KiB per CPU, makes up for that
 only with 32 CPUs and 64 MiB in zram
 ([explored-designs.md](explored-designs.md#16-kib-pages-as-four-blocks-of-4-kib-70-to-86-more-memory-than-one-block-of-16-kib-measured)).
-No phone with 16 KiB pages was measured yet.
+No phone with 16 KiB pages was measured yet. Since 1st November 2026 `src/` has blocks of 4 KiB
+only; the 16 KiB tables of the first way are in git history, last in `9ce7148`.
 
 The same argument holds for multi-page compression in zram, e.g. whole large folios (mTHP) compressed
 as one unit. Tangquan Zheng (OPPO) proposed it in March 2024, "mTHP-friendly compression in zsmalloc
@@ -856,9 +857,9 @@ passed. The p99 part did not, and the score of §1.1 replaced it as the target.
 This phase exists because of §2.2: everything Biggers asked for, before the first patch.
 
 - [x] The codec, `src/seqlz_*.c`, `src/seqlz.h` and `src/seqlz_internal.h`: C11, freestanding, no libc, no allocation, a
-  scratch buffer passed in by the caller. The page size is a parameter.
-- [x] The tests with 4 KiB and with 16 KiB pages (§3.5), both in CI. Not the tests of the kernel codecs:
-  zram's calls into them are built for 4 KiB pages.
+  scratch buffer passed in by the caller. The page size was a parameter until 1st November 2026;
+  the blocks are 4 KiB since, whatever the page size (§3.5).
+- [x] The tests in CI, until 1st November 2026 also with 16 KiB pages (§3.5).
 - [x] **[The format](format.md)**: a byte-exact specification, and two deliberately slow reference
   decoders written from the spec alone, `tools/seqlz-ref/seqlz_ref.py` and `tools/seqlz-ref/seqlz_ref.c`.
   The fast decoder is tested against them.
@@ -1035,7 +1036,7 @@ docs/                       this plan, the format, how seqlz works, measuring, e
 | R6 | **A fuzzing bug or a sleep in atomic context burns the maintainers' goodwill.** | Biggers's objection, Minchan's panic | Phase 4, and the gate of Phase 5 with KASAN and `DEBUG_ATOMIC_SLEEP`, exist for this. Continuous fuzzing with ClusterFuzzLite before the submission, OSS-Fuzz if it takes the project. |
 | R7 | **Time.** 3 to 8 hours a week against a path of 18 to 24 months. | lzo-rle: 4 months, v5, paid work, an existing codec | Each phase can be published on its own. Phase 2 alone is worth it. |
 | R8 | **Employer rules on open-source side projects**, especially kernel work with a `MAINTAINERS` entry. | checked on 23rd September 2026: side projects are fine | Resolved. |
-| R9 | **The input size changes under the codec.** Kernels with 16 KiB pages on Android, or zram compressing multi-page folios as one unit. Larger inputs favour LZ codecs with a larger window. | §3.5. Multi-page compression was proposed in 2024, is not merged at `986c24e0fe44`, and had no newer version in 2026. `zstd` 3 on blocks of 16 KiB needs 13% to 22% less than `seqlz-2` on 4 KiB pages | `PAGE_SIZE` is a parameter of the format, the cost model and the harness. Watch the zram and mm lists for multi-page compression. If it comes back, measure `seqlz-2` against `zstd` on whole folios, in time per page too, before more work on the codec. |
+| R9 | **The input size changes under the codec.** Kernels with 16 KiB pages on Android, or zram compressing multi-page folios as one unit. Larger inputs favour LZ codecs with a larger window. | §3.5. Multi-page compression was proposed in 2024, is not merged at `986c24e0fe44`, and had no newer version in 2026. `zstd` 3 on blocks of 16 KiB needs 13% to 22% less than `seqlz-2` on 4 KiB pages | `PAGE_SIZE` is a parameter of the cost model and the harness; the format has blocks of 4 KiB since 1st November 2026 (§3.5). Watch the zram and mm lists for multi-page compression. If it comes back, measure `seqlz-2` against `zstd` on whole folios, in time per page too, before more work on the codec. |
 | R10 | **No p99 decode win over `lz4`.** C2 rested on the argument about branch mispredictions in §3.2. | measured: `seqlz-2` decodes slower than `lz4`, 18% to 25% per swap-in, for 28% less memory | C2 is not met. The score of §1.1 replaced the bars as the target. The merge argument is memory at a small cost in time, not a faster read. |
 | R11 | **zram's backend interface goes away.** The zcomp API was to be replaced by the acomp crypto API. | Sergey Senozhatsky, March 2026 (§3.4). His series of October 2026 splits zcomp's streams instead (§3.2), Qualcomm posted a new zcomp backend in September 2026 (§3.4), and on 22nd October 2026 he wrote that zram is "currently not on a path to acomp" (§3.4) | The zcomp backend is the form. The codec has no kernel API dependency, so if acomp comes back, `lib/seqlz/` stays and only the glue changes. A crypto wrapper would also let zswap, which compresses 4 KiB pages through acomp, use the codec: a second user of the library, in a series of its own. |
 | R12 | **Hardware `lz4` on new Qualcomm SoCs.** It makes `lz4` faster, and if it writes the bytes of software `lz4` it moves `lz4` along the time axis of the score (§1.1), not along the memory axis. | Qualcomm's QPaCE series of 30th September 2026, [series 1177021](https://patchwork.kernel.org/series/1177021/): a zcomp backend `qpace-lz4`, synchronous, the CPU polls the engine, no speed numbers. | The argument stays memory. As a what-if with the VM's swap times, `lz4` with its own time at 0 still leaves `seqlz-2` the lowest score from 3.1 to 73 and from 10.3 to 72 bytes per µs, instead of up to 155 and 211; on the phone's big core from 0.9 to 25. A faster `lz4` only lowers the upper end; to push `seqlz-2` off the hull it would need a time below 0 ([explored-designs.md](explored-designs.md#lz4-in-hardware-a-what-if-seqlz-fast-lit-stays-on-the-hull-up-to-73-and-72-bytes-per-µs-instead-of-155-and-211)). Measure on a device if one becomes available. Open: does `qpace-lz4` write the lz4 block format at the ratio of `LZ4_compress_fast()` with acceleration 1? If it stores more, the gap to `seqlz-2` is larger than 28%. And does it take a dictionary? zram's `lz4` does (C4), patch 4 ignores `params->dict`. |
@@ -1057,7 +1058,7 @@ As of 22nd October 2026:
   codec of 9th October, no difference found. ASan and UBSan
   in CI, big-endian on s390x in CI. The worst case is measured: against its own p99,
   `seqlz-2`'s slowest pages cost 1.14 times to compress and 1.59 times to decode, the least of
-  it, `lz4`, `lzo-rle` and `zstd`. The tests run with 16 KiB pages too, in CI. MSan on the fuzz targets
+  it, `lz4`, `lzo-rle` and `zstd`. MSan on the fuzz targets
   and continuous fuzzing with ClusterFuzzLite since 9th October.
 - **Phase 5: done, the gate passed.** `tools/kernel-port/` writes `lib/seqlz/`, a minimal
   `include/linux/seqlz.h`, the zram backend and KUnit tests into a kernel tree; CI builds it for
@@ -1067,10 +1068,9 @@ As of 22nd October 2026:
   ([explored-designs.md](explored-designs.md#zrams-memory-against-the-model-exact-on-a-new-device-σ-zsmalloc-cost-035-to-047-below-it)). The kernel VM of `tools/zram-vm/` measures reads, writes and the whole
   page fault.
 - **Phase 6: half.** The Mi 9T, A76 and A55, 4 KiB pages, its own pages, in its own kernel as zram and
-  as swap: done. Open: 16 KiB pages and a current phone. The 16 KiB tables are trained on the pages
-  of the Android 17 emulator, and with 16 KiB pages `seqlz-2` asks for twice `lz4`'s work memory
-  per CPU, a cost in the score (§1.1). The first series is for 4 KiB pages only (Phase 7), so 16 KiB
-  pages are for the second one.
+  as swap: done. Open: 16 KiB pages and a current phone. The first series is for 4 KiB pages only
+  (Phase 7), and `src/` has no format for 16 KiB blocks since 1st November 2026, so 16 KiB pages are
+  for a later series (§3.5).
 - **Phase 7: the question to the maintainers is answered** (R3, R11). Sent on 9th October 2026 to
   linux-mm, linux-block and linux-kernel ([the thread](https://lore.kernel.org/linux-mm/CAAFOosa2WLf--T17cujJu5CUsN12NNjgTitOvno2LY7jAr1gfw@mail.gmail.com/)); Sergey Senozhatsky
   [answered](https://lore.kernel.org/linux-mm/atl35k5lvs34BIej@google.com/) on 22nd October: a codec in `lib/` zram can use, zram is not on a path to

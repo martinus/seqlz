@@ -2,11 +2,10 @@
 /*
  * The code lengths compiled in, of the tokens and length values and of the
  * literal tables. They are part of the format: a block decodes only with the
- * tables it was compressed with (docs/format.md). For blocks of 4 KiB they are
- * in seqlz_lengths.h, the kernel's but without static, for 16 KiB blocks in
- * seqlz_lengths_16k.h.
+ * tables it was compressed with (docs/format.md). They are in seqlz_lengths.h,
+ * the kernel's but without static.
  * tools/kernel-port/gen-seqlz-lengths.py makes them from the counts in
- * bench/seqlz_counts_4k.txt and _16k.txt, those of 4 KiB counted with
+ * bench/seqlz_counts.txt, counted with
  *   seqlz-train --corpus train-mix-1012 --counts
  * on pages that are not in the dumps the benchmarks measure. docs/format.md
  * says which pages, in "Where the tables come from".
@@ -24,8 +23,4 @@
  */
 #include "seqlz.h"
 
-#if SEQLZ_PAGE_BITS != 12
-#include "seqlz_lengths_16k.h"
-#else
 #include "seqlz_lengths.h"
-#endif

@@ -25,15 +25,15 @@
  * "ab" 2048 times, as the specification gives them
  */
 static const char *const sha256_tok =
-	"@TOK_4k@";
+	"@TOK@";
 static const char *const sha256_ll =
-	"@LL_4k@";
+	"@LL@";
 static const char *const sha256_ml =
-	"@ML_4k@";
+	"@ML@";
 static const char *const sha256_lit =
-	"@LIT_4k@";
+	"@LIT@";
 static const char *const sha256_own =
-	"@OWN_4k@";
+	"@OWN@";
 static const u8 example[] = {
 	@EXAMPLE@
 };

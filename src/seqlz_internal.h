@@ -63,10 +63,9 @@ static_assert((8U << SEQLZ_CLASS5_BITS) <= SEQLZ_BLOCK_SIZE,
 /*
  * The matcher's hash table has 1 << SEQLZ_HASH_BITS entries of 2 bytes, 8 KiB
  * for blocks of 4 KiB. With 2048 entries blocks were larger and the compressor
- * no faster; with 8192 in-order cores wrote blocks slower. For blocks of 16 KiB
- * it is 16 KiB, as lz4's table.
+ * no faster; with 8192 in-order cores wrote blocks slower.
  */
-#define SEQLZ_HASH_BITS (SEQLZ_BLOCK_BITS == 12 ? 12U : 13U)
+#define SEQLZ_HASH_BITS 12U
 /*
  * The levels of seqlz_compress_block(), 1 to SEQLZ_LEVEL_MAX, from the fastest
  * to the one with the smallest blocks. Level 1 keeps the literals raw. From

@@ -99,8 +99,8 @@ As of 22nd October 2026. The details, and what comes next, are in [the plan, §9
   [answered](https://lore.kernel.org/linux-mm/atl35k5lvs34BIej@google.com/): as a library in `lib/`, as the other
   compression libraries are
 - [ ] The library on blocks of 4 KiB instead of `PAGE_SIZE`, then the series to Andrew Morton
-- [x] 16 KiB pages: tables trained on the pages of the Android 17 emulator
-- [ ] 16 KiB pages: work memory within `lz4`'s, and a phone with 16 KiB pages
+- [ ] 16 KiB pages: a format for them, and a phone with 16 KiB pages. Until 1st November 2026 seqlz had
+  one, with tables trained on the pages of the Android 17 emulator
 - [x] The kernel port: `lib/` and a zram backend, swap thrash under KASAN, the zram selftests
 
 > [!WARNING]
