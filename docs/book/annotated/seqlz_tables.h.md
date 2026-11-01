@@ -244,8 +244,8 @@ byte 6 back equals the byte 3 back.
 At least 4, because the decoder undoes the deltas 4 bytes at a time: none of the 4 bytes it adds may lie
 in the word it is writing.
 @more {#ch-internal--delta-last} `seqlz_delta_last()` for offsets 1 to 8, and who calls it
-The encoder's `seqlz_delta_literals()` and the decoder's `undelta_literals()` and `undelta_fast()`
-call it, so it is in the header both include. What the deltas are for: [the deltas](#ch-header--deltas).
+The encoder's `seqlz_delta_literals()` and the decoder's `delta_dist()`, for `undelta_literals()` and
+`undelta_fast()`, call it, so it is in the header both include. What the deltas are for: [the deltas](#ch-header--deltas).
 
 | `last` | 1 | 2 | 3 | 4 | 5 | 8 |
 | --- | --- | --- | --- | --- | --- | --- |

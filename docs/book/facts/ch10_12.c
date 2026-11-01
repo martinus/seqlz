@@ -389,6 +389,11 @@ static void chapter11(void) {
     fact_num("ch11.coded_min", SEQLZ_LIT_CODED_MIN);
     fact_num("ch11.coded_min_own", SEQLZ_LIT_CODED_MIN_OWN);
     fact_num("ch11.save_min_own", SEQLZ_LIT_CODED_MIN_OWN - 1 - SEQLZ_SIZE_BITS_MAX);
+    /* the most bytes n literals may take coded, at each level's minimum */
+    fact_num("ch11.ex.1000.l2", 1000 - 1000 / 16 - SEQLZ_LIT_CODED_MIN - 1);
+    fact_num("ch11.ex.1000.l3", 1000 - 1000 / 16 - SEQLZ_LIT_CODED_MIN_OWN - 1);
+    fact_num("ch11.ex.100.l2", 100 - 100 / 16 - SEQLZ_LIT_CODED_MIN - 1);
+    fact_num("ch11.ex.100.l3", 100 - 100 / 16 - SEQLZ_LIT_CODED_MIN_OWN - 1);
     fact_num("ch11.slots", LIT_SLOTS);
     fact_num("ch11.slot", LIT_SLOT(SEQLZ_BLOCK_SIZE));
     fact_num("ch11.slots_bytes", SEQLZ_LIT_STREAMS * LIT_SLOT(SEQLZ_BLOCK_SIZE));

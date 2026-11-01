@@ -306,15 +306,16 @@ int main(void) {
      */
     {
         u8 buf[SEQLZ_BLOCK_SIZE];
-        const unsigned int dist = pick == SEQLZ_DELTA_4 ? 4U : pick == SEQLZ_DELTA_8 ? 8U : rec_dist[1];
+        /* the distance decode_block() picks once per page, 0 for SEQLZ_DELTA_LAST */
+        const unsigned int fixed = pick == SEQLZ_DELTA_4 ? 4U : pick == SEQLZ_DELTA_8 ? 8U : 0U;
+        const unsigned int dist = fixed ? fixed : rec_dist[1];
 
         n = rec_pos[1];
         memcpy(buf, page, n);
         memcpy(buf + n, deltas + rec_ll[0], 16);
         fact_hex("delta.ptr.fast.before", buf + n, 8);
         fact_hex("delta.ptr.fast.ref", buf + n - dist, 8);
-        undelta_fast(pick == SEQLZ_DELTA_4 ? 4U : pick == SEQLZ_DELTA_8 ? 8U : 0U, buf + n, buf,
-                     buf + SEQLZ_BLOCK_SIZE, rec_ll[1], rec_last[1]);
+        undelta_fast(fixed, buf + n, buf, buf + SEQLZ_BLOCK_SIZE, rec_ll[1], rec_last[1]);
         fact_hex("delta.ptr.fast.after", buf + n, 8);
         if (memcmp(buf + n, page + n, rec_ll[1]))
             fail("undelta_fast() does not give the page's bytes back");

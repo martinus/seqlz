@@ -40,7 +40,8 @@ back in the page ([the deltas](seqlz_decompress.c.html#b220)).
   once the code is complete, exactly 1024 entries, into the page.
 - **The deltas read and write only the page.** `undelta_literals()` writes the `nl` literals at `d`,
   which the loop over the sequences has checked against the room left, or for the last sequence are
-  the room left ([the end](#ch-decode--end)), and reads at least `dist` bytes
+  the room left ([the end](#ch-decode--end)), and up to 15 bytes past them only where
+  `d_end - d >= nl + 15`; it reads at least `dist` bytes
   back, never before `dst`, because the first literal it restores is at least `dist` bytes into the
   page. `undelta_fast()` writes the 16 bytes the fast path copied, inside its room, and reads at most
   `dist` bytes back only where `d - dst` is at least `dist`; nearer the page's start it calls
@@ -457,7 +458,11 @@ own, is behind byte 2, the delta's byte and the sizes: $3 + w + e$ in the terms 
 @@ 292-319
 Code 8: the page's own table, built into the output page from its first even address, since the
 entries are `u16` and a test decodes into a page at an odd address. The streams then start behind the
-table's description.
+table's description. Before the parse, the two tables it looks each step up in, `own.quad` and
+`own.decode`, are asked for as the fixed tables are below: each step waits for the lookup before, so on
+a cold read their misses came one after the other. With the prefetch level 3's cold reads got 0.55 µs
+faster on the Mi 9T's A55 on 31st October 2026
+([explored-designs.md](https://github.com/martinus/seqlz/blob/main/docs/explored-designs.md#the-own-literal-tables-lookup-tables-prefetched-before-its-parse-level-3s-cold-reads-055-µs-faster-on-the-a55-kept)).
 
 Codes 0 to 7: a fixed table. The `& (SEQLZ_LIT_SETS - 1U)` changes none of them and keeps the index
 inside the array for any value. The prefetch goes out before the sizes are read, so its cache misses

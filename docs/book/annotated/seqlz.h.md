@@ -90,7 +90,9 @@ zswap, the kernel's other compressed swap, a cache in RAM in front of a swap dev
 does not fit fails up to 32 bytes early: before each sequence the encoder checks for its literals plus
 `ENC_ROOM`, 32 bytes, not for the exact bytes.
 
-The literals are written raw first, so the page must fit raw even if coding would shrink it. Level 3
+The literals are written raw first, so the page must fit raw even if coding would shrink it; the coded
+ones then go over them, and meanwhile `st` holds the coded streams below level 3, the raw literals or
+their deltas at level 3 ([the coder](book:#ch-literals-enc--overview)). Level 3
 also needs a 6-byte record per sequence with literals, for its deltas
 ([records](book:#ch-encoder--records)); if they do not fit, it matches the page again without them.
 In the kernel copy it is `static`: the kernel's [`seqlz_compress()`](seqlz_compress.c.html#b98)

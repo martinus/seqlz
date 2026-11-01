@@ -97,7 +97,7 @@ BookAnim.define('undelta', function (ctx) {
       if (f.seq === 0) {
         var left = s.pos + s.ll - f.at;
         if (left >= 4) return head + '. ' + Bytes(f.src, 4) + ' are final, restored by the word before.' + (nth % 4 === 0 ? ' A new step of 16 bytes, undelta16(), starts here.' : '');
-        if (left > 0) return head + '. ' + (left === 1 ? 'Byte ' + f.at + ' is the last literal' : Bytes(f.at, left) + ' are the last literals') + '; the step of 16 goes on past them, as the page has room for 15 bytes more, so no byte loop is needed. The sums past the literals are garbage.';
+        if (left > 0) return head + '. ' + (left === 1 ? 'Byte ' + f.at + ' is the last literal' : Bytes(f.at, left) + ' are the last literals') + '; the step of 16 goes on past the literals, as the page has room for 15 bytes more, so no byte loop is needed. The sums past them are garbage.';
         return head + ': all 4 bytes are past the literals, garbage, which the match writes over. The step of 16 ends here.';
       }
       if (nth === 0)

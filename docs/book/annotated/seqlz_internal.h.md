@@ -41,15 +41,18 @@ the next refill. 64 bits minus up to 7 bits already used in the first byte, minu
 `56 / 10 = 5` literals per stream and round, 40 for all 8 streams.
 
 @@ 35-45
-The encoder's rule is `d + coded + 51 < n - n / 16`: `n` literals, `coded` the bytes of the 8
-streams, `d` the bytes of a page's own table (0 with a fixed table). E.g. 1000 literals with a fixed
-table may take at most 886 bytes coded, 100 literals must fit below 43 bytes.
+The encoder's rule is `d + coded + coded_min < n - n / 16`: `n` literals, `coded` the bytes of the 8
+streams, `d` the bytes of a page's own table (0 with a fixed table), and `coded_min`
+{{ch11.coded_min}} at level 2 and {{ch11.coded_min_own}} at level 3. E.g. 1000 literals with a fixed
+table may take at most {{ch11.ex.1000.l2}} bytes coded at level 2 and {{ch11.ex.1000.l3}} at level 3,
+100 literals at most {{ch11.ex.100.l2}} and {{ch11.ex.100.l3}}.
 
-The 51 bytes pay for a cost that does not shrink with the literals: a cold literal table and a second
-pass over a buffer. [Why 51 bytes](book:#ch-literals-enc--51) has the measurements behind the number.
-The 51 bytes also cover the larger header, at most 13 bytes more than the 2 of a page with raw literals, which
-a `static_assert` in `seqlz_compress_literals.c` checks, because the coded literals are written over
-the raw ones in place ([in place](book:#ch-literals-enc--in-place)).
+The minimum pays for a cost that does not shrink with the literals: a cold literal table and a second
+pass over a buffer. Level 3 trades more time for bytes, so its minimum is smaller.
+[Why these bytes](book:#ch-literals-enc--51) has the measurements behind the numbers. Both also cover
+the larger header, at most 13 bytes more than the 2 of a page with raw literals, which a
+`static_assert` in `seqlz_compress_literals.c` checks, because the coded literals are written over the
+raw ones in place ([in place](book:#ch-literals-enc--in-place)).
 
 @@ 46-52
 The scratch is part of the decoder's work memory, one per CPU: 4112 bytes for 4 KiB pages,

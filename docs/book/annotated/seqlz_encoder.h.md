@@ -225,6 +225,10 @@ once (it counted 40 bytes instead of 32), commit `75756b7`.
 
 `ENC_BITSTREAM_MAX` is 31 bits for every 4 bytes of the block, and the u16, a block of literals, that
 bitstream and `ENC_ROOM` fit `SEQLZ_COMPRESS_BOUND`, two pages.
+
+`ENC_SHIFT()` is [`SEQLZ_OFF_SHIFT()`](seqlz_format.h.html) with 15 for class 0: `| 15U` sets class 0's
+nibble, the lowest, and leaves the others. An offset is below $2^{15}$, so shifted by 15 it is 0, which
+is what class 0, the repeat offset, sends; the `static_assert` checks both facts.
 @more {#ch-encoder--asserts} The accumulator's 58 bits and the 8098 bytes the `static_assert`s check
 After a flush at most 7 bits are left, so token, offset and a match length value fit before the next
 one: $7 + 31 + 20 = 58$ bits, 60 on 16 KiB pages, where the comment counts 22 per value. The 20 has a
@@ -392,8 +396,11 @@ The last sequence (`ml == 0`) has only its literals and no bits. Until 11th Octo
 token and maybe an `ll` value, about 9 bits per page ([how a page ends](book:#ch-format--end)).
 
 @@ 210-231
-Token and offset in one put: the offset bits right after the token's code. `0U - (cls != 0)` is all
-ones for classes 1 to 5 and 0 for class 0 (the repeat offset), which sends no bits.
+Token and offset in one put: the offset bits right after the token's code. `ENC_SHIFT()` shifts the
+offset of class 0, the repeat offset, which sends no bits, down to 0, and for classes 1 to 5 it is the
+class's shift. Until 31st October 2026 a mask did that, `& (0U - (cls != 0))`; the shift alone took
+0.7% to 1.3% fewer instructions per page at level 1
+([explored-designs.md](https://github.com/martinus/seqlz/blob/main/docs/explored-designs.md#fewer-instructions-per-sequence-in-encode_seq-class-0s-offset-shifted-by-15-07-to-13-fewer-instructions-at-level-1-kept-the-literal-copy-the-escape-and-a-class-table-not-kept)).
 
 An `ll` value gets a flush of its own, and every sequence ends with one, so the accumulator never
 overflows: at most 7 + 31 + 20 = 58 bits before a flush. `last` changes only after the record above
