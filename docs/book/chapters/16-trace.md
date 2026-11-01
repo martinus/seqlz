@@ -185,8 +185,10 @@ $2 + {{ch16.lits}} + {{ch16.bytes}} = {{ch16.raw.len}}$ bytes, the page as `seql
 
 ## seqlz_code_literals(): {{ch16.coded.saved}} bytes less {#ch-trace--literals}
 
-`seqlz_code_literals()` ([`code_literals()`](#ch-literals-enc)) prices the {{ch16.lits}} literals in all 8 tables,
-in chunks of {{ch16.lt.chunk}}. The trace program recomputes it one literal at a time:
+`seqlz_code_literals()` ([`code_literals()`](#ch-literals-enc)) prices every {{ch11.sample.step}}th of the
+{{ch16.lits}} literals in all 8 tables ([the sample](#ch-literals-enc--sample)). The trace program
+prices all of them, one literal at a time, as level 3 does on a page that may get a table of its own;
+on this page both pick the same table:
 
 @output ch16-trace 27-35
 
@@ -200,8 +202,8 @@ needs {{ch16.lt.width}} bits, a header of {{ch16.lt.header}} bytes.
 The rule `coded + {{ch11.coded_min}} < n - n / 16` is `{{ch16.lt.rule_l}} < {{ch16.lt.rule_r}}`, so the
 literals get coded. The page without the text would not: its {{ch16.nt.lits}} literals take
 {{ch16.nt.coded}} bytes in table {{ch16.nt.set}}, and `{{ch16.nt.rule_l}}` is not below
-`{{ch16.nt.rule_r}}`. Then the raw literals go into the matcher's table, the streams are written over
-them in `dst`, the u16 becomes `{{ch16.coded.u16}}`, byte 2 `{{ch16.coded.byte2}}` for code
+`{{ch16.nt.rule_r}}`. The streams go into 8 slots in the matcher's table, and from there over the raw
+literals in `dst`; the u16 becomes `{{ch16.coded.u16}}`, byte 2 `{{ch16.coded.byte2}}` for code
 {{ch16.lt.set}}, the fixed table {{ch16.lt.set}}, in bits 0 to 3 and width {{ch16.lt.width}} in bits 4 to 6, bytes 3 to 9 the sizes, `{{ch16.coded.sizes_hex}}`, and the
 bitstream moves down to byte {{ch16.lt.end}}: {{ch16.coded.len}} bytes.
 @assert ch16.lt.rule_l < ch16.lt.rule_r and ch16.nt.rule_l >= ch16.nt.rule_r and ch16.nt.kept_raw == 1

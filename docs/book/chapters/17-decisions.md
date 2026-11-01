@@ -345,20 +345,26 @@ page, and cold reads in the kernel from 2940 / 4810 to 2860 / 4531 ns at p50 / p
 1.8% slower with gcc and 0.7% with clang in the VM
 ([explored-designs.md](https://github.com/martinus/seqlz/blob/main/docs/explored-designs.md#five-simplifications-measured-in-the-vm-and-on-the-phone-the-literal-streams-as-arrays-kept-four-not)).
 
-### Coded only where it saves 1/16 and {{ch15.coded_min}} bytes
+### Coded only where it saves 1/16 and {{ch15.coded_min}} bytes, {{ch11.coded_min_own}} at level 3
 
-The coded streams plus {{ch15.coded_min}} bytes must be less than $n - n/16$ for $n$ literals
-([the rule](#ch-literals-enc--rule)). Coding wherever it saves anything gave less than 0.1 points more
+The coded streams plus {{ch15.coded_min}} bytes at level 2, {{ch11.coded_min_own}} at level 3, must be
+less than $n - n/16$ for $n$ literals ([the rule](#ch-literals-enc--rule)). Coding wherever it saves anything gave less than 0.1 points more
 ([explored-designs.md](https://github.com/martinus/seqlz/blob/main/docs/explored-designs.md#seqlz-fast-lit-one-of-8-literal-tables-per-page)),
 and a coded page costs the decoder a fixed time, large on the in-order A55: its literal table from memory,
-and the literals through a buffer. Raising the minimum from 19 to {{ch15.coded_min}} bytes cost 7.9 bytes
-per page on the phone and saved 2.7 µs per page written on the A55 and 1.1 µs on the A76, with the 0.34
-reads per write of then; on the PC, 11 bytes for 0.1 µs
+and the literals through a buffer. Raising the minimum from 19 to 51 bytes on 5th October 2026 cost 7.9
+bytes per page on the phone and saved 2.7 µs per page written on the A55 and 1.1 µs on the A76, with the
+0.34 reads per write of then; on the PC, 11 bytes for 0.1 µs
 ([explored-designs.md](https://github.com/martinus/seqlz/blob/main/docs/explored-designs.md#coded-literals-only-where-they-save-51-bytes-27-µs-per-page-written-less-on-the-a55-kept)).
-It is the best of 19, 51 and 115, not a measured optimum, and with the prefetches added later the gain
+It was the best of 19, 51 and 115, not a measured optimum, and with the prefetches added later the gain
 shrank to 0.4 µs on the A76 and 0.8 µs on the A55
 ([explored-designs.md](https://github.com/martinus/seqlz/blob/main/docs/explored-designs.md#9-the-51-bytes-of-coded-literals-only-where-they-save-51-bytes-again-with-item-4s-and-7s-prefetches)).
-@assert ch15.coded_min == 51
+51 was chosen for level 2's reads, and level 3 took it as it was. On 31st October 2026 each level got
+its own: {{ch15.coded_min}} at level 2 stores 3.27 bytes per page less on ten samples of 20 000 pages, for
+the same write time on the Mi 9T's A76 and 0.12 µs more on its A55; {{ch11.coded_min_own}} at level 3,
+together with 32 bytes for a table of the page's own instead of 16, stores 4.92 bytes less, writes 0.07
+to 0.14 µs faster, and reads warm pages 0.13 µs slower on the A76 and 0.25 µs on the A55
+([explored-designs.md](https://github.com/martinus/seqlz/blob/main/docs/explored-designs.md#the-literal-coding-thresholds-per-level-35-bytes-at-level-2-19-at-level-3-own-tables-from-32-33-and-49-bytes-per-page-less-kept)).
+@assert ch15.coded_min == 35 and ch11.coded_min_own == 19
 
 ### Stream sizes in `w` bits
 
@@ -369,15 +375,22 @@ needs, {{ch17.width_min}} to {{ch17.width_max}}, with $w - 5$ in byte 2: a heade
 Letting the smaller header code more pages would have saved 2.2 bytes more on the desktop, but on the
 phone those pages were worth 2 bytes for 251 ns more per page written on the A55, with the 0.34 reads per
 write of then, so the rule kept the old
-header's 19 bytes, which later became the minimum of {{ch15.coded_min}}.
+header's 19 bytes, which became 51 on 5th October 2026, and {{ch15.coded_min}} and
+{{ch11.coded_min_own}} per level on 31st October.
 
 ### Pricing all 8 tables at once
 
 Each byte's code lengths in the 8 tables are one 64-bit word, so one add per literal prices all 8, and
 every {{ch17.lit_cost_run}} literals the sums move into wider lanes ([the pricing](#ch-literals-enc--pricing)).
-In the kernel that costs 30 to 40 ns per write; writing the streams is what costs, and pricing a sample
-could save 400 cycles at most, since the exact stream sizes are needed anyway
+In the kernel that cost 30 to 40 ns per write in September 2026; writing the streams is what costs, and
+pricing a sample could save 400 cycles at most, as long as the exact stream sizes come from the pricing
 ([explored-designs.md](https://github.com/martinus/seqlz/blob/main/docs/explored-designs.md#seqlz-fast-lit-one-of-8-literal-tables-per-page)).
+On 31st October 2026 level 2 stopped taking them from there: it prices every {{ch11.sample.step}}th
+literal, writes the streams into slots in the matcher's state and takes their sizes from where they
+end. The pass over every literal had become 34% of `code_literals()`' instructions at level 2, and
+level 2 now writes a page 1.4% to 1.8% faster on the Mi 9T, for 0.5 bytes per page
+([explored-designs.md](https://github.com/martinus/seqlz/blob/main/docs/explored-designs.md#the-literal-table-from-a-sample-the-streams-into-slots-level-2-writes-14-to-18-faster-on-the-mi-9t-for-05-bytes-per-page-kept-the-sample-before-the-pass-level-3-from-the-counts-and-four-counts-not-kept)). Level 3 still prices every literal where a page may get
+deltas or a table of its own: the same pass counts the bytes for it.
 One stream after the other waited on its accumulator, about 3.5 cycles per literal, so the encoder writes
 several side by side
 ([explored-designs.md](https://github.com/martinus/seqlz/blob/main/docs/explored-designs.md#numbers-that-were-only-in-the-codecs-comments-until-10th-october-2026)).
@@ -671,7 +684,7 @@ bench's model of zsmalloc, level 3 stored 0.30% more than `zstd` 3 on average an
 | one lazy step, only for matches below 20 bytes | a lazy step at every match, or a hash chain | a longer match one byte later is rare after a long one, and looking takes time ([level 3](#ch-matcher--lazy-measured)) |
 | matches extended backwards, at level 3 only | the step back at every level | at levels 1 and 2 it cost writes 1% to 7% ([no step back](#ch-matcher--hit)) |
 | the same format and decoder at every level | a format per level | one decoder and one specification for all levels |
-| a table of the page's own, only from 512 literals on and where it saves 16 bytes | a table on every page | the description costs bytes, and building a decode table for every read costs time |
+| a table of the page's own, only from 512 literals on and where it saves {{own.enc.saves_min}} bytes | a table on every page, or from 16 bytes saved | the description costs bytes, and building a decode table for every read costs time; 32 instead of 16 bytes gave up 1.07 bytes per page for writes 0.19 µs faster on the A76 and 0.47 µs on the A55, 31st October 2026 ([the thresholds](https://github.com/martinus/seqlz/blob/main/docs/explored-designs.md#the-literal-coding-thresholds-per-level-35-bytes-at-level-2-19-at-level-3-own-tables-from-32-33-and-49-bytes-per-page-less-kept)) |
 | the entropy first, then the code | building the code on every page | many pages leave after one pass over 256 counts ([the estimate](#ch-literals-enc--entropy)) |
 | code lengths from $f \cdot 2^l \ge n$, repaired in 16 buckets | a Huffman code | no sort and no tree; a few bits more on some pages |
 | the description in byte order, in a fixed code `OWN` | 256 lengths, or the bytes and their lengths | a byte value costs no bits, only its length ([chapter 4](#ch-format--own)) |
@@ -772,17 +785,20 @@ within the noise
 | the same three choices: 4 back, 8 back, the last offset | other distances, more choices, Paeth and gradient predictors | of 131 transforms, each counted on every page, all 131 with the same pricing saved 7.6 bytes per page against the XOR, the three subtractions 7.4 |
 | one choice per page, in a byte of the header | a XOR per literal lane, with a literal table per lane ("format 3", 8 streams of lanes) | the lanes gave less, 896.5 bytes per page on the same ten samples against 880.7, both as stored after a recompression from `seqlz-1`, for more code; the size came from the XOR, not from the lanes |
 | that byte right after byte 2, before the sizes | after the sizes, as the first form had it | the header reads in order: byte 2 says whether the byte is there, and it comes next; the same bytes per page, and one add in the decoder either way |
-| priced with the fixed tables' sums of `lit_cost`, every 5th literal | every literal | every literal made pages almost no smaller and the encoder slower ([`DELTA_STEP`](#f-seqlz_compress_literals-c-b17)) |
-| every 5th literal | every 4th | every 4th is the same byte of each 4- or 8-byte field, and made pages 1.0 byte larger |
+| priced with the fixed tables' sums of `lit_cost`, every {{delta.step}}th literal | every literal, every 5th | every literal made pages almost no smaller and the encoder slower; every 11th instead of every 5th made pages 0.08% larger and level 3's writes 2.5% to 3.1% faster on the Mi 9T, 31st October 2026 ([`DELTA_STEP`](#f-seqlz_compress_literals-c-b17), [explored-designs.md](https://github.com/martinus/seqlz/blob/main/docs/explored-designs.md#the-deltas-priced-on-every-11th-literal-instead-of-every-5th-008-more-bytes-level-3-writes-25-and-31-faster-on-the-mi-9t-kept)) |
+| a prime step | every 4th | every 4th is the same byte of each 4- or 8-byte field, and made pages 1.0 byte larger |
 | where the deltas stay raw, the literals stay raw | a second try of the literals as they are, with the fixed tables and a table of their own | it saved 0.71 bytes per page, for writes 0.39 µs slower on the A76 and 0.93 µs on the A55 in zram in the Mi 9T's kernel, 24th October 2026 ([`seqlz_code_own()`](#ch-literals-enc--code-own)) |
 | the records and the deltas in copies of the loops for level 3 | a test for every sequence in the loops all levels share | the test made levels 1 and 2 about 6% slower to write on the A76, and slower to read ([the two receivers](#ch-encoder--wrappers), [the two copies of the loop](#ch-decode--deltas)) |
 | records in `dst` | a second buffer | no byte of work memory; the matcher's state is its hash table until the page is matched ([the records](#ch-encoder--records)) |
 | for an offset below 4, the smallest multiple of it that is 4 or more, 4 or 6 | the offset as it is | the decoder adds 4 or 8 bytes at a time ([`seqlz_delta_last()`](#ch-internal--delta-last)) |
 
 The cost is in the code as much as in the time: a second copy of the decoder's loop, `undelta_literals()`,
-`undelta_fast()`, `add4()` and `add8()`, one more field of untrusted input, and in the encoder the
-records, `seqlz_delta_literals()`, `sub_bytes()` and a second matching pass for a page that does not fit with
-its records. zram in the phone's kernel has not measured the deltas yet.
+`undelta_fast()`, `undelta16()`, `add4()` and `add8()`, one more field of untrusted input, and in the
+encoder the records, `seqlz_delta_literals()`, `sub_bytes()` and a second matching pass for a page that
+does not fit with its records. Their branches cost reads too: on a page with deltas level 3
+mispredicted 49.5 more branches per page on the Mi 9T's A76 and 91.6 more on its A55 than on the same
+page without them, until on 31st October 2026 the deltas were undone 16 bytes at a time and their
+distance picked once per block, which left 27.2 and 61.4 ([the deltas](#ch-literals-dec--undelta)).
 
 ## Tried and not kept {#ch-decisions--not-kept}
 

@@ -108,7 +108,7 @@ first 3 bytes, and the decoder needs no level to read it:
 `dt` names one of three deltas ([below](#ch-format--deltas)). Raw literals are never deltas: where the
 deltas of a level 3 page do not code well enough, it keeps its literals as they are.
 
-How each level gets to its layouts: level 1 stops after the matcher, level 2 prices the 8 fixed tables,
+How each level gets to its layouts: level 1 stops after the matcher, level 2 prices the 8 fixed tables on a sample of the literals,
 level 3 also picks a delta and may build a table of the page's own. Each coded layout comes with a
 condition, and a page that does not meet it gets raw literals.
 
@@ -140,8 +140,8 @@ condition, and a page that does not meet it gets raw literals.
 <rect x="80" y="132" width="120" height="36" rx="4" class="fill-sheet" stroke="currentColor"/>
 <text x="140.0" y="154.0" font-size="11" text-anchor="middle">greedy matcher</text>
 <rect x="215" y="132" width="130" height="36" rx="4" class="fill-sheet" stroke="currentColor"/>
-<text x="280.0" y="147.5" font-size="11" text-anchor="middle">cheapest of the</text>
-<text x="280.0" y="160.5" font-size="11" text-anchor="middle">8 fixed tables</text>
+<text x="280.0" y="147.5" font-size="11" text-anchor="middle">cheapest of 8 fixed</text>
+<text x="280.0" y="160.5" font-size="11" text-anchor="middle">tables, by a sample</text>
 <rect x="360" y="125" width="120" height="50" rx="4" class="fill-paper" stroke="currentColor" stroke-dasharray="4 3"/>
 <text x="420.0" y="141.0" font-size="11" text-anchor="middle">coded if it</text>
 <text x="420.0" y="154.0" font-size="11" text-anchor="middle">saves 1/16 and</text>
@@ -165,7 +165,7 @@ condition, and a page that does not meet it gets raw literals.
 <rect x="436" y="245" width="112" height="50" rx="4" class="fill-paper" stroke="currentColor" stroke-dasharray="4 3"/>
 <text x="492.0" y="261.0" font-size="11" text-anchor="middle">coded if it</text>
 <text x="492.0" y="274.0" font-size="11" text-anchor="middle">saves 1/16 and</text>
-<text x="492.0" y="287.0" font-size="11" text-anchor="middle">{{ch11.coded_min}} bytes</text>
+<text x="492.0" y="287.0" font-size="11" text-anchor="middle">{{ch11.coded_min_own}} bytes</text>
 <path d="M180 270 L190 270" fill="none" stroke="currentColor" stroke-width="1.2" marker-end="url(#ch-format-lv-arrow)"/>
 <path d="M292 270 L302 270" fill="none" stroke="currentColor" stroke-width="1.2" marker-end="url(#ch-format-lv-arrow)"/>
 <path d="M424 270 L434 270" fill="none" stroke="currentColor" stroke-width="1.2" marker-end="url(#ch-format-lv-arrow)"/>

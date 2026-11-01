@@ -557,7 +557,7 @@ With the mask the check is gone, and the mask itself costs nothing: x86-64's shi
 written `<< (n & 63U)` even where `n` is never 64, and why `enc[]` in `struct value_table` has
 {{ch03.enc_len_symbols}} entries for {{const.LEN_SYMBOLS}} or {{k16.const.LEN_SYMBOLS}} symbols: a
 power of 2, so that `s & (ENC_LEN_SYMBOLS - 1U)` proves every index in range
-([the masks](#ch-internal--masks), [`put_len_value()`](#f-seqlz_encoder-h-b122)). Masked shifts and indices took the compressor
+([the masks](#ch-internal--masks), [`put_len_value()`](#f-seqlz_encoder-h-b130)). Masked shifts and indices took the compressor
 from 25 225 to 25 064 cycles per page, with 4.7% fewer instructions
 ([explored-designs.md](https://github.com/martinus/seqlz/blob/main/docs/explored-designs.md#the-compressor-second-round-fewer-instructions)).
 The decoder had 65 such checks in an early version, `lz4`'s 18, but not in its hot path: without them,

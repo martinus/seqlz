@@ -1035,7 +1035,10 @@ static void ch16(void) {
     if (n_raw != SEQLZ_HEADER + n_lit + (bits + 7) / 8)
         die("ch16: raw length");
 
-    /* the literal tables as seqlz_code_literals() weighs them */
+    /*
+     * the literal tables weighed on every literal, which gives the stream sizes; level 2 picks from
+     * every LIT_SAMPLE_STEP-th literal, and byte 2 of its page must name the same table
+     */
     for (k = 0; k < SEQLZ_LIT_SETS; k++) {
         unsigned int b = stream_bits(raw + SEQLZ_HEADER, n_lit, k, &bytes, NULL);
 
@@ -1096,6 +1099,8 @@ static void ch16(void) {
     kstr("ch16.coded.nlit_hex", "0x%04x", get_unaligned_le16(coded) & (SEQLZ_LIT_CODED - 1U));
     fact_hex("ch16.coded.u16_bytes", coded, 2);
     kstr("ch16.coded.byte2", "0x%02x", coded[2]);
+    if ((coded[2] & SEQLZ_LIT_CODE_MASK) != set)
+        die("ch16: level 2's sample picks another table than every literal");
     fact_num("ch16.coded.wfield", w - SEQLZ_SIZE_BITS_MIN);
     fact_hex("ch16.coded.sizes_hex", coded + SEQLZ_LIT_HEADER(0), w);
     fact_num("ch16.coded.saved", n_raw - n_coded);

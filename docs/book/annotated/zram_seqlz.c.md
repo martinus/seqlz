@@ -484,7 +484,8 @@ refuses one ([its setup](book:#ch-zram-glue--backend-params)).
 @more {#ch-zram-glue--head} The three levels, and why the tables are no dictionary
 `seqlz-2` lets `seqlz_code_literals()` ([the literal coder](#ch-literals-enc)) code the literals where
 that saves $\frac{1}{16}$ of them and {{ch15.coded_min}} bytes, `seqlz-3` adds the lazy matcher, a
-literal table of the page's own and the literals as deltas to earlier bytes of the page
+literal table of the page's own and the literals as deltas to earlier bytes of the page, and codes
+them from {{ch11.coded_min_own}} bytes on
 ([the levels](#ch-header--compressor)). In the kernel they are levels 1 to 3 of one backend, `seqlz`,
 with 2 the default; the harness names them as three codecs to compare them side by side.
 

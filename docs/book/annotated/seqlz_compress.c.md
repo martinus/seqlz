@@ -58,14 +58,14 @@ also with a table of the page's own. Both read the literals from a copy while th
 ones over the raw ones in `dst` ([in place](#ch-literals-enc--in-place)). Level 2's copy is
 `st->literals`, the matcher's 8 KiB table as bytes through the union in `struct seqlz_state`
 ([what lies where](#ch-header--state)); `seqlz_code_own()` also uses
-[`own_work(st)`](seqlz_compress_literals.c.html#b877), the upper half of the same 8 KiB.
+[`own_work(st)`](seqlz_compress_literals.c.html#b987), the upper half of the same 8 KiB.
 
 The text page of [chapter 4](#ch-format--own) shows what the levels do to one page: {{words.len}}
 bytes at level 1, {{words.coded.len}} at level 2 and {{words.l3.len}} at level 3, without deltas; the
 page of pointers {{pointers.len}} bytes at level 1, {{delta.ptr.l2.len}} at level 2 and
 {{delta.ptr.l3.len}} at level 3, with them.
 @assert words.l3.delta == 0 and pointers.l3.delta == 1
-@assert pointers.len == delta.ptr.l2.len
+@assert delta.ptr.l2.len < pointers.len
 
 Every page fits into `SEQLZ_COMPRESS_BOUND` ([two pages](#ch-encoder--two-pages)), and until 24th
 October 2026 a larger `dst` was not cut: with a `dst` of 64 KiB the bitstream went 56 KiB past the

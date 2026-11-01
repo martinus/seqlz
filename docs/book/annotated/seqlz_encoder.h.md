@@ -79,7 +79,7 @@ It prints:
 @output ch10-ab
 
 With level 2 or 3 instead of 1 the result is the same: {{ab.lits}} literals are too few to save the
-{{ch11.coded_min}} bytes coded literals must save.
+{{ch11.coded_min}} bytes coded literals must save at level 2, or the {{ch11.coded_min_own}} of level 3.
 @assert ab.coded.len == ab.len == ab.l3.len
 :::
 @end

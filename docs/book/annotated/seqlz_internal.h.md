@@ -151,7 +151,7 @@ The records go into `dst` and not the state, because the state is the hash table
 done. The price is room: a page that does not fit with its records is matched again without them, and
 stored without deltas.
 @more {#ch-encoder--records} What the records hold, and what they cost on the page of pointers
-[`encode_seq()`](seqlz_encoder.h.html#b173) writes the records, and
+[`encode_seq()`](seqlz_encoder.h.html#b181) writes the records, and
 [`seqlz_delta_literals()`](#ch-literals-enc--deltas) reads them once the page is matched. Each field
 fits a `u16`, as a page of 16 KiB has positions, lengths and offsets below $2^{16}$. The cost is room
 in `dst`: on [the page of pointers](#ch-matcher--back), level 3 finds {{delta.ptr.n_lit}} literals in
