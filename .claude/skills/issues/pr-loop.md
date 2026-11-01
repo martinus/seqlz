@@ -30,4 +30,6 @@ Part of the `issues` skill (SKILL.md). The same commands every time.
    its number alone.
 8. Back onto main: `git switch main`, `git fetch -q origin main`, `git merge --ff-only origin/main`,
    then `git branch -d <branch>` and `git push origin --delete <branch>`. A finished worktree, merged
-   and clean: `gra -y done <name>`, never the session's own.
+   and clean: `gra -y done <name>`, never the session's own. In auto mode the classifier refuses the
+   branch deletion and `gra -y done` as destructive (three times on 31 Oct): do not retry, name the
+   branch and the worktree left in the report.
