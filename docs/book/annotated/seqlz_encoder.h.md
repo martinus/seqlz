@@ -14,9 +14,9 @@ the front and the bitstream backwards from the back, and turns the bitstream aro
 A reading order that follows the call:
 
 1. The layout: [the comment on both ends](#b16) and [why two pages always fit](#b55).
-2. The matcher calls [`encode_seq()`](#b150) for each sequence: the room check, the literals, then the
-   bits through [`enc_put()`](#b83) and [`enc_flush()`](#b108).
-3. [`encoder_init()`](#b225) starts a page, [`encoder_finish()`](#b235) turns the bitstream around
+2. The matcher calls [`encode_seq()`](#b158) for each sequence: the room check, the literals, then the
+   bits through [`enc_put()`](#b91) and [`enc_flush()`](#b116).
+3. [`encoder_init()`](#b232) starts a page, [`encoder_finish()`](#b242) turns the bitstream around
    behind the literals.
 @more {#ch-encoder--example} The page of `ab`, bit by bit
 [The format chapter](#ch-format--example) takes the {{ab.len}} bytes `{{ab.hex}}` of a page of `ab`
@@ -79,7 +79,7 @@ It prints:
 @output ch10-ab
 
 With level 2 or 3 instead of 1 the result is the same: {{ab.lits}} literals are too few to save the
-{{ch11.coded_min}} bytes coded literals must save.
+{{ch11.coded_min}} bytes coded literals must save at level 2, or the {{ch11.coded_min_own}} of level 3.
 @assert ab.coded.len == ab.len == ab.l3.len
 :::
 @end
@@ -218,13 +218,17 @@ records: at level 3 they take {{delta.rec}} bytes more per sequence, and a page 
 them is matched again without them ([`compress_own()`](seqlz_compress.c.html#b34)).
 @end
 
-@@ 55-68
+@@ 55-76
 The comment above, checked by the compiler. A change of a table or a constant that breaks the
 argument now stops the build; until 23rd October 2026 it was only in the comment, which had been wrong
 once (it counted 40 bytes instead of 32), commit `75756b7`.
 
 `ENC_BITSTREAM_MAX` is 31 bits for every 4 bytes of the block, and the u16, a block of literals, that
 bitstream and `ENC_ROOM` fit `SEQLZ_COMPRESS_BOUND`, two pages.
+
+`ENC_SHIFT()` is [`SEQLZ_OFF_SHIFT()`](seqlz_format.h.html) with 15 for class 0: `| 15U` sets class 0's
+nibble, the lowest, and leaves the others. An offset is below $2^{15}$, so shifted by 15 it is 0, which
+is what class 0, the repeat offset, sends; the `static_assert` checks both facts.
 @more {#ch-encoder--asserts} The accumulator's 58 bits and the 8098 bytes the `static_assert`s check
 After a flush at most 7 bits are left, so token, offset and a match length value fit before the next
 one: $7 + 31 + 20 = 58$ bits, 60 on 16 KiB pages, where the comment counts 22 per value. The 20 has a
@@ -242,7 +246,7 @@ bitstream and `ENC_ROOM` take $2 + 4096 + {{ch10.bound.bytes.tex}} + 32 = 8098$ 
 @assert F("ch10.bound.total") + ch10.enc_room == 8098 and F("ch10.bound.two") == 8192 and ch10.enc_room == 32
 @end
 
-@@ 69-82
+@@ 77-90
 @anchor ch-encoder--state
 `acc` holds the bits not yet written, `cnt` of them count; bits above them may be old ones already
 written, and are shifted out before they matter. `p` is where the bitstream ends at the bottom, `lit`
@@ -257,13 +261,13 @@ starts in the page.
 
 ## Bits
 
-@@ 83-90
+@@ 91-98
 Appends `n` bits at the bottom of the accumulator. `v` has no bits above `n`, and `n < 64 - cnt`
 keeps the bits that count from falling out of the top. The `& 63U` changes no value; it lets the
 compiler drop the check that `CONFIG_UBSAN_SHIFT` would add before a shift it cannot prove in range
 ([the masks](book:#ch-internal--masks)).
 
-@@ 91-107
+@@ 99-115
 A code from an `enc[]` entry (`code | length << 16`) and its extra bits in one put, the code in the
 higher bits, since the decoder reads the most significant bit first. `& 31U` is for UBSan again.
 @more {#ch-encoder--put} The `ml` value of the page of `ab`, through these lines
@@ -282,7 +286,7 @@ the length value ${{ch10.ab.s1.ml4}} - 31 = {{ch10.ab.s1.mlv.v}}$: symbol {{ch10
 The top bit of 4059, the 2048, is not sent: the symbol says it.
 @end
 
-@@ 108-121
+@@ 116-129
 Whole bytes of the accumulator go below `p`. The shift puts the `cnt` valid bits on top of the word,
 and a little-endian store writes the top byte last, at `p - 1`, so read from the end of `dst`
 backwards the bits come in the order the decoder wants.
@@ -313,14 +317,14 @@ of [chapter 5](#ch-trace)'s page; its values come from the encoder's own helpers
 
 A flush with `cnt` 0 does happen: a sequence with an `ll` value and no `ml` value flushes twice, the
 second time possibly with no bits. Before commit `66aab11` the bitstream went forwards and the flush
-swapped the bytes of each word; now the swap is in [`encoder_finish()`](#b261), once per page.
+swapped the bytes of each word; now the swap is in [`encoder_finish()`](#b268), once per page.
 @end
 
-@@ 122-132
+@@ 130-140
 A length value as its symbol's code plus extra bits. The symbol is masked to the 32 entries of `enc[]`
 for UBSan; `v` goes in whole, `enc_put_code()` keeps only its extra bits.
 
-@@ 133-149
+@@ 141-157
 A token's code. An entry of 0 means "no code of its own", since every code has a length of at least 1
 in the top bits. Then the token is escaped: the escape's code, then the token's number in 12 bits,
 together one code ([escape](book:#ch-format--token)).
@@ -339,7 +343,7 @@ offset, has none:
 
 ## encode_seq(), one sequence
 
-@@ 150-172
+@@ 158-180
 The room check before anything is written. A failed check sets `p` to `lit`, and that sticks: every
 later sequence fails it too, and `encoder_finish()` sees `p == lit` and returns 0. The matcher runs on
 to the end of the page anyway, which costs nothing with zram's two pages, where it never happens.
@@ -358,7 +362,7 @@ below `lit`, because all three callers, `compress_block()`, `compress_own()` and
 at `p == lit`.
 @end
 
-@@ 173-180
+@@ 181-188
 Level 3 only: a record of 6 bytes before the literals, with where the sequence starts in the page, how
 many literals it has, and the offset before it. Level 3's deltas need those, and they are not in the
 literals; `seqlz_delta_literals()` reads the records once the page is matched
@@ -381,7 +385,7 @@ bytes from 8 back, so the second starts at {{delta.ptr.rec.1.pos}} with `last` 8
 @assert delta.ptr.rec[0].pos == 0 and delta.ptr.rec[0].last == 1 and delta.ptr.rec[1].pos == delta.ptr.rec[0].ll + 7 and delta.ptr.rec[1].last == 8
 @end
 
-@@ 181-201
+@@ 189-209
 The literals: one 16-byte copy without a loop, since most sequences have few literals (1 in the page
 of pointers) and a loop's exit branch could mispredict, then more 16-byte copies, and bytes only near
 the end of the input. The bytes past `ll` land in `ENC_ROOM`, and the next sequence's literals
@@ -391,9 +395,12 @@ with `CONFIG_FORTIFY_SOURCE` ([why the builtin](seqlz_internal.h.html#b20)).
 The last sequence (`ml == 0`) has only its literals and no bits. Until 11th October 2026 it had a
 token and maybe an `ll` value, about 9 bits per page ([how a page ends](book:#ch-format--end)).
 
-@@ 202-224
-Token and offset in one put: the offset bits right after the token's code. `0U - (cls != 0)` is all
-ones for classes 1 to 5 and 0 for class 0 (the repeat offset), which sends no bits.
+@@ 210-231
+Token and offset in one put: the offset bits right after the token's code. `ENC_SHIFT()` shifts the
+offset of class 0, the repeat offset, which sends no bits, down to 0, and for classes 1 to 5 it is the
+class's shift. Until 31st October 2026 a mask did that, `& (0U - (cls != 0))`; the shift alone took
+0.7% to 1.3% fewer instructions per page at level 1
+([explored-designs.md](https://github.com/martinus/seqlz/blob/main/docs/explored-designs.md#fewer-instructions-per-sequence-in-encode_seq-class-0s-offset-shifted-by-15-07-to-13-fewer-instructions-at-level-1-kept-the-literal-copy-the-escape-and-a-class-table-not-kept)).
 
 An `ll` value gets a flush of its own, and every sequence ends with one, so the accumulator never
 overflows: at most 7 + 31 + 20 = 58 bits before a flush. `last` changes only after the record above
@@ -458,10 +465,11 @@ match at offset {{ch10.ab.s1.off}}, with `last` 1: class {{ch10.ab.s1.cls}}, {{c
 token $2 + 16 \times 31 + 512 \times 1 = {{ch10.ab.s1.tok}}$.
 @assert ch10.ab.s1.ll == 2 and ch10.ab.s1.cls == 1 and ch10.ab.s1.raw == 1 and ch10.ab.s1.tok == 2 + 16 * 31 + 512
 
-The offset is shifted right by `SEQLZ_OFF_SHIFT(cls)` and ANDed with `0U - (cls != 0)`. Without the
-mask, class 0 would OR the offset into the low bits of the token's code. The other classes need no
-mask: `seqlz_off_class()` picks a class whose bits hold the offset. Masking only class 0, instead of
-every offset to `raw_bits` bits, came with commit `996248b`, with no number of its own. One put instead
+The offset is shifted right by `ENC_SHIFT(cls)`, which is 15 for class 0 and shifts its offset to 0.
+Without that, class 0 would OR the offset into the low bits of the token's code. The other classes
+need nothing more: `seqlz_off_class()` picks a class whose bits hold the offset. Clearing only class 0's
+offset, instead of masking every offset to `raw_bits` bits, came with commit `996248b`, with no number
+of its own, as a mask `0U - (cls != 0)` that the shift replaced on 31st October 2026. One put instead
 of two took 21 786 to 21 233 cycles per page on x86-64
 ([explored-designs.md](https://github.com/martinus/seqlz/blob/main/docs/explored-designs.md#the-compressor-second-round-fewer-instructions)).
 For the page of `ab`: `{{ch10.ab.s1.codehex}} << {{ch10.ab.s1.raw}} | ({{ch10.ab.s1.off}} >> 1) = {{ch10.ab.s1.put}}`,
@@ -484,14 +492,14 @@ $7 + 31 + 20 + 20 = 78$ bits.
 
 ## Start and finish
 
-@@ 225-234
+@@ 232-241
 @anchor ch-encoder--init
 The compound literal zeroes every field it does not name: `acc`, `cnt`, `rec` and `pos` start at 0.
 `p` starts at the end of `dst`, `lit` behind the 2 bytes of the u16, which is written last. Level 3
 sets `rec` after the call; a second `encoder_init()`, for a page that did not fit with its records,
 clears it again.
 
-@@ 235-260
+@@ 242-267
 `p == lit` only after a failed room check. The bits left over are in memory already: the last flush
 wrote them on top of the byte below `p`, with zeros below them, exactly the zero padding the format
 wants. So `p` only moves down by one to count that byte. Then the u16, the number of raw literals.
@@ -507,7 +515,7 @@ The u16 for [the page of pointers](#ch-matcher--back) is {{pointers.lits}} liter
 coded.
 @end
 
-@@ 261-286
+@@ 268-293
 Byte `k` of the bitstream is at `end - 1 - k`. A little-endian load and a big-endian store reverse 8
 bytes at once, a load, a byte swap and a store on x86-64.
 

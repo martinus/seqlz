@@ -42,7 +42,7 @@ A sequence is "copy `ll` literals, then copy `ml` bytes from `offset` bytes back
 all three into one Huffman symbol so that one table lookup in the decoder gives all three. E.g. 1
 literal, a match of 7 at the repeat offset (class 0) is token `1 + 16 * 3 + 0 = 49`, the typical
 sequence of an array of pointers. The formula in line 24 is exactly what
-[`seqlz_token()`](seqlz_internal.h.html#b80) computes.
+[`seqlz_token()`](seqlz_internal.h.html#b83) computes.
 
 "1 to the bytes before it": a match can reach back to the block's first byte and no further, so 4095
 is the largest offset in a 4 KiB block, which is what class 3's 12 bits hold
@@ -554,12 +554,13 @@ before them is 8, and its price is the same; the encoder keeps the first of equa
 ([the four prices](#ch-literals-enc--delta-prices)). Of the {{delta.ptr.n_lit}} literals,
 {{delta.ptr.distinct.plain}} different byte values as they are become {{delta.ptr.distinct.deltas}}
 as deltas, and {{delta.ptr.h.10}} of them are `0x10`. Level 2 stores the page in {{delta.ptr.l2.len}}
-bytes with raw literals, as coding them saves too little; level 3 without deltas would store it in
+bytes, its literals coded with a fixed table, against {{pointers.len}} with raw literals at level 1;
+level 3 without deltas would store it in
 {{delta.ptr.l3plain.len}} bytes, with them in {{delta.ptr.l3.len}}. Its byte 2 is
 `{{delta.ptr.l3.t}}`: code {{delta.ptr.l3.code}}, the page's own table, $w = {{delta.ptr.l3.w}}$,
 bit 7 set, and byte {{delta.ptr.l3.dt_at}}, right before the sizes, is {{delta.ptr.l3.dt}},
 `SEQLZ_DELTA_8`.
-@assert delta.ptr.l3.dt == ch06.DELTA_8 and delta.ptr.price[2] == delta.ptr.price[3] and delta.ptr.recs_last8 == delta.ptr.recs - 1 and delta.ptr.l3.code == own.lit_own and delta.ptr.l3.len < delta.ptr.l3plain.len < delta.ptr.l2.len and delta.ptr.l3.dt_at == 3
+@assert delta.ptr.l3.dt == ch06.DELTA_8 and delta.ptr.price[2] == delta.ptr.price[3] and delta.ptr.recs_last8 == delta.ptr.recs - 1 and delta.ptr.l3.code == own.lit_own and delta.ptr.l3.len < delta.ptr.l3plain.len < delta.ptr.l2.len < pointers.len and delta.ptr.l3.dt_at == 3
 
 This page shows why a delta and not a XOR. A XOR of the same literals with the same bytes, which
 level 3 wrote before the deltas, gives {{delta.ptr.xor.distinct}} values: only {{delta.ptr.xor.h.10}}

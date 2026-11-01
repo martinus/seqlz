@@ -84,13 +84,15 @@ raw sequences). Nothing checks that `block` matches the sequences: a wrong one g
 a page that decodes to something else. 0 can mean failure because every page has at least its 2-byte
 header.
 
-@@ 91-117
+@@ 91-118
 What the harness's zram glue calls, and the kernel's `seqlz_compress()`. A `dst` smaller than two blocks also works, e.g. the single page of
 zswap, the kernel's other compressed swap, a cache in RAM in front of a swap device. But a page that
 does not fit fails up to 32 bytes early: before each sequence the encoder checks for its literals plus
 `ENC_ROOM`, 32 bytes, not for the exact bytes.
 
-The literals are written raw first, so the page must fit raw even if coding would shrink it. Level 3
+The literals are written raw first, so the page must fit raw even if coding would shrink it; the coded
+ones then go over them, and meanwhile `st` holds the coded streams, or at level 3 mostly a copy of
+the raw literals or their deltas ([the coder](book:#ch-literals-enc--overview)). Level 3
 also needs a 6-byte record per sequence with literals, for its deltas
 ([records](book:#ch-encoder--records)); if they do not fit, it matches the page again without them.
 In the kernel copy it is `static`: the kernel's [`seqlz_compress()`](seqlz_compress.c.html#b98)

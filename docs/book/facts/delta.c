@@ -6,7 +6,7 @@
  *   delta.sub.*, delta.add.*               sub_bytes() and add8() on one example, step by step
  *   delta.lane.<row>.<byte>, delta.lane.*  sub_bytes() lane by lane on a word of chapter 13's page of
  *                                          counters, and which lanes borrow or have bit 7 set
- *   delta.step, delta.penalty, delta.rec   DELTA_STEP, the 8 bits of the delta's byte in sums of
+ *   delta.step, delta.penalty, delta.rec   DELTA_STEP, DELTA_HDR_BITS: the delta's byte in sums of
  *                                          every DELTA_STEP-th literal, LIT_REC
  *   delta.last.N                           seqlz_delta_last(N)
  *   delta.ptr.*                            chapter 9's page of pointers at level 3: its records, the
@@ -66,7 +66,7 @@ int main(void) {
     u8* p;
 
     fact_num("delta.step", DELTA_STEP);
-    fact_num("delta.penalty", 8U / DELTA_STEP);
+    fact_num("delta.penalty", DELTA_HDR_BITS);
     fact_num("delta.rec", LIT_REC);
     {
         /*
@@ -215,7 +215,7 @@ int main(void) {
         for (x = 0; x < 4; x++) {
             price[x] = ~0U;
             for (k = 0; k < SEQLZ_LIT_SETS; k++) {
-                unsigned int b = sum[x][k] + (x ? 8U / DELTA_STEP : 0U);
+                unsigned int b = sum[x][k] + (x ? DELTA_HDR_BITS : 0U);
 
                 if (b < price[x]) {
                     price[x] = b;
@@ -306,14 +306,16 @@ int main(void) {
      */
     {
         u8 buf[SEQLZ_BLOCK_SIZE];
-        const unsigned int dist = pick == SEQLZ_DELTA_4 ? 4U : pick == SEQLZ_DELTA_8 ? 8U : rec_dist[1];
+        /* the distance decode_block() picks once per page, 0 for SEQLZ_DELTA_LAST */
+        const unsigned int fixed = pick == SEQLZ_DELTA_4 ? 4U : pick == SEQLZ_DELTA_8 ? 8U : 0U;
+        const unsigned int dist = fixed ? fixed : rec_dist[1];
 
         n = rec_pos[1];
         memcpy(buf, page, n);
         memcpy(buf + n, deltas + rec_ll[0], 16);
         fact_hex("delta.ptr.fast.before", buf + n, 8);
         fact_hex("delta.ptr.fast.ref", buf + n - dist, 8);
-        undelta_fast(pick, buf + n, buf, rec_ll[1], rec_last[1]);
+        undelta_fast(fixed, buf + n, buf, buf + SEQLZ_BLOCK_SIZE, rec_ll[1], rec_last[1]);
         fact_hex("delta.ptr.fast.after", buf + n, 8);
         if (memcmp(buf + n, page + n, rec_ll[1]))
             fail("undelta_fast() does not give the page's bytes back");

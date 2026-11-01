@@ -49,23 +49,25 @@ What zram calls. `dst_cap` is cut to `SEQLZ_COMPRESS_BOUND`, since the bitstream
 `dst`: with a larger `dst` it would land far from the page, in memory nothing else of it touches.
 
 Level 1 stops after `compress_block()`. Level 2 codes the literals with one of 8 fixed tables, using
-the matcher's 8 KiB hash table as the copy of the raw literals, so it needs no memory of its own.
+the matcher's 8 KiB hash table for the coded streams, so it needs no memory of its own.
 Level 3 hands the delta to `seqlz_code_own()`.
 @more {#ch-encoder--entry} Three levels on two pages, and a `dst` larger than two pages
 `seqlz_code_literals()` codes the literals with one of the 8 fixed literal tables if that saves
 enough, and returns the new length or `len` unchanged; `seqlz_code_own()` does the same at level 3,
-also with a table of the page's own. Both read the literals from a copy while they write the coded
-ones over the raw ones in `dst` ([in place](#ch-literals-enc--in-place)). Level 2's copy is
-`st->literals`, the matcher's 8 KiB table as bytes through the union in `struct seqlz_state`
-([what lies where](#ch-header--state)); `seqlz_code_own()` also uses
-[`own_work(st)`](seqlz_compress_literals.c.html#b877), the upper half of the same 8 KiB.
+also with a table of the page's own. Both use `st->literals`, the matcher's 8 KiB table as bytes
+through the union in `struct seqlz_state` ([what lies where](#ch-header--state)): level 2 writes the
+coded streams into slots there and copies them over the raw literals once all are read
+([the slots](seqlz_compress_literals.c.html#b859)), level 3 mostly reads the literals from a copy there
+while it writes the coded ones over the raw ones in `dst` ([in place](#ch-literals-enc--in-place)).
+`seqlz_code_own()` also uses
+[`own_work(st)`](seqlz_compress_literals.c.html#b987), the upper half of the same 8 KiB.
 
 The text page of [chapter 4](#ch-format--own) shows what the levels do to one page: {{words.len}}
 bytes at level 1, {{words.coded.len}} at level 2 and {{words.l3.len}} at level 3, without deltas; the
 page of pointers {{pointers.len}} bytes at level 1, {{delta.ptr.l2.len}} at level 2 and
 {{delta.ptr.l3.len}} at level 3, with them.
 @assert words.l3.delta == 0 and pointers.l3.delta == 1
-@assert pointers.len == delta.ptr.l2.len
+@assert delta.ptr.l2.len < pointers.len
 
 Every page fits into `SEQLZ_COMPRESS_BOUND` ([two pages](#ch-encoder--two-pages)), and until 24th
 October 2026 a larger `dst` was not cut: with a `dst` of 64 KiB the bitstream went 56 KiB past the

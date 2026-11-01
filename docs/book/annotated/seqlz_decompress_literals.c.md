@@ -13,7 +13,7 @@ which an out-of-order CPU works on at the same time ([chains](book:#ch-cpu--chai
 
 A reading order that follows the call:
 
-1. [`seqlz_decode_literals()`](#b311): the checks, the stream sizes, and the two loops over the streams.
+1. [`seqlz_decode_literals()`](#b320): the checks, the stream sizes, and the two loops over the streams.
 2. [`read_lit_header()`](#b256): byte 2 and the delta's byte, then a fixed table or the page's own.
 3. [`read_own_table()`](#b162), only for a page with its own table, and [`own_fill()`](#b113).
 4. The stream reader the loops use: [`lit_refill()`](#b37), [`lit_decode()`](#b54), and at the end
@@ -40,11 +40,12 @@ back in the page ([the deltas](seqlz_decompress.c.html#b220)).
   once the code is complete, exactly 1024 entries, into the page.
 - **The deltas read and write only the page.** `undelta_literals()` writes the `nl` literals at `d`,
   which the loop over the sequences has checked against the room left, or for the last sequence are
-  the room left ([the end](#ch-decode--end)), and reads at least `dist` bytes
+  the room left ([the end](#ch-decode--end)), and up to 15 bytes past them only where
+  `d_end - d >= nl + 15`; it reads at least `dist` bytes
   back, never before `dst`, because the first literal it restores is at least `dist` bytes into the
   page. `undelta_fast()` writes the 16 bytes the fast path copied, inside its room, and reads at most
   `dist` bytes back only where `d - dst` is at least `dist`; nearer the page's start it calls
-  `undelta_literals()` ([both](seqlz_decompress.c.html#b253)).
+  `undelta_literals()` ([both](seqlz_decompress.c.html#b270)).
 - **The work is bounded.** No loop depends on the codes: `n_lit / 40` rounds and one tail. The loop of
   `read_own_table()` depends on them, and ends anyway: every step takes a code, and every 8 bits past the
   input are two lengths of 9 bits, which fill the code space after at most 512 of them.
@@ -63,7 +64,8 @@ of a step first saved 2.8% of the A55's decode cycles, and was not built into th
 
 The fixed cost per page counts more there: the 2 KiB table comes from memory, and the literals go
 through the scratch before the sequences copy them. That is why the encoder codes literals only where
-they save {{ch11.coded_min}} bytes and $\frac{1}{16}$ of themselves ([the rule](#ch-literals-enc--51)). Decoding the
+they save {{ch11.coded_min}} bytes and $\frac{1}{16}$ of themselves at level 2, {{ch11.coded_min_own}}
+bytes at level 3 ([the rule](#ch-literals-enc--51)). Decoding the
 literals into the end of the output page instead, which saves the scratch, was built: on 4 KiB pages it
 made cold reads 0.08 to 0.22 µs slower in the kernel VM, and it was not kept
 ([explored-designs.md](https://github.com/martinus/seqlz/blob/main/docs/explored-designs.md#16-kib-pages-tuned-c5-does-not-hold-the-literals-in-the-page-would-fix-it-not-kept)).
@@ -164,11 +166,11 @@ the end of the whole page, not of the stream: a refill may load bytes of the nex
 at the end catches a stream that used them.
 @more {#ch-literals-dec--refill} The second refill of stream 0, bit by bit
 A stream starts with `bits = 1`, so its first refill loads from its start without a shift. On
-[the page of letters](#ch-literals-dec--sentinel), stream 0's first 8 bytes end in an odd byte, `| 1`
-changes nothing, and the bits are `{{ch13.s0.bits0}}`. 5 codes,
+[the page of letters](#ch-literals-dec--sentinel), stream 0's first 8 bytes end in an even byte, so
+`| 1` sets bit 0, the sentinel, and the bits are `{{ch13.s0.bits0}}`. 5 codes,
 `{{ch13.c.0.lit}}{{ch13.c.1.lit}}{{ch13.c.2.lit}}{{ch13.c.3.lit}}{{ch13.c.4.lit}}`, take
 {{ch13.c.bits}} bits, and the next refill is:
-@assert ch13.s0.odd == 1 and ch13.k.rounds == 5 and ch13.k.streams == 8 and ch13.k.lit_bits == 10
+@assert ch13.s0.odd == 0 and ch13.k.rounds == 5 and ch13.k.streams == 8 and ch13.k.lit_bits == 10
 
 ```text
 used   = ctz({{ch13.c.after}}) = {{ch13.r.used}}
@@ -195,7 +197,7 @@ One literal: the top 10 bits index the table (1024 entries, every index valid,
 
 `mask` is 63 or 0. With 63 the stream moves on by the code's length, and the mask tells the compiler
 that the shift is below 64. With 0 the literal is decoded and written but the stream stays where it
-is: "decode, but do not move on", without a branch. The last step of [the rest](#b363) needs that.
+is: "decode, but do not move on", without a branch. The last step of [the rest](#b372) needs that.
 @anchor ch-literals-dec--decode
 
 ## Sizes and ends
@@ -453,10 +455,14 @@ own, is behind byte 2, the delta's byte and the sizes: $3 + w + e$ in the terms 
 [the format](#ch-format--coded).
 @end
 
-@@ 292-310
+@@ 292-319
 Code 8: the page's own table, built into the output page from its first even address, since the
 entries are `u16` and a test decodes into a page at an odd address. The streams then start behind the
-table's description.
+table's description. Before the parse, the two tables it looks each step up in, `own.quad` and
+`own.decode`, are asked for as the fixed tables are below: each step waits for the lookup before, so on
+a cold read their misses came one after the other. With the prefetch level 3's cold reads got 0.55 µs
+faster on the Mi 9T's A55 on 31st October 2026
+([explored-designs.md](https://github.com/martinus/seqlz/blob/main/docs/explored-designs.md#the-own-literal-tables-lookup-tables-prefetched-before-its-parse-level-3s-cold-reads-055-µs-faster-on-the-a55-kept)).
 
 Codes 0 to 7: a fixed table. The `& (SEQLZ_LIT_SETS - 1U)` changes none of them and keeps the index
 inside the array for any value. The prefetch goes out before the sizes are read, so its cache misses
@@ -470,7 +476,7 @@ the delta's byte if there is one, which is the pointer the function returns.
 
 ## seqlz_decode_literals()
 
-@@ 311-330
+@@ 320-339
 The only function here that `decode_block()` calls. `noinline` on purpose: inlined into the loop over
 the sequences, the 8 streams took its registers, and pages with raw literals read slower too.
 `*delta` gets which delta level 3's literals are, which the loop over the sequences adds back
@@ -494,7 +500,7 @@ A55, within the noise of code placement in the kernel VM
 ([explored-designs.md](https://github.com/martinus/seqlz/blob/main/docs/explored-designs.md#five-simplifications-measured-in-the-vm-and-on-the-phone-the-literal-streams-as-arrays-kept-four-not)).
 @end
 
-@@ 331-347
+@@ 340-356
 `n_lit` was checked by the caller already. The check again here tells the compiler the bound, and the
 loops below take fewer instructions: moving it out, together with one more change, took 7% more to
 decode `seqlz-2` pages ([measured](#ch-literals-dec--the-sizes-checked-against-the-input)).
@@ -505,13 +511,13 @@ streams is long enough is the sequence loop's business. A stream starts with `bi
 refill loads from its start without a shift.
 @more {#ch-literals-dec--the-sizes-checked-against-the-input} The second check of `n_lit`, measured
 `n_lit` is at most a page, so the literals fit the scratch. `decode_block()` checks that already, for
-raw and coded literals alike ([its check](seqlz_decompress.c.html#b442)). Moving the check here out,
+raw and coded literals alike ([its check](seqlz_decompress.c.html#b451)). Moving the check here out,
 together with a check of the header's length before anything else, took 7% more instructions to
 decode `seqlz-2` pages, 2000 pages of a desktop dump with gcc 16.2 on x86-64, 23rd October 2026
 (commit `3ae2e09`).
 @end
 
-@@ 348-362
+@@ 357-371
 The main loop: per round, 8 refills, then 5 literals from each of the 8 streams. Stream `i` in step
 `j` holds literal `k + 8 * j + i`, so the literals land in page order, no shuffle. With constant
 bounds the compiler unrolls it into 8 refills and 40 lookups, 8 independent chains.
@@ -534,7 +540,7 @@ A format change for 2 to 3 bytes and no time is not worth it. That the format ha
 literal tables is a coincidence.
 @end
 
-@@ 363-390
+@@ 372-399
 Fewer than 40 literals are left. Every stream does the same steps; in the last one `(0U - (r > i)) &
 63U` is 63 for the `r` streams that still have a literal and 0 for the others. Those decode one too,
 write it behind the literals into the scratch's 16 spare bytes, and do not move on.

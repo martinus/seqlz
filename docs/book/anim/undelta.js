@@ -1,6 +1,6 @@
 /*
  * The deltas of a page's first two sequences turned back into literals, as seqlz_decode() does it at
- * level 3 with SEQLZ_DELTA_4: the copy, undelta_literals() word by word and its byte loop, the match,
+ * level 3 with SEQLZ_DELTA_4: the copy, undelta_literals() word by word in steps of 16 bytes, the match,
  * then undelta_fast() on the 16 bytes of the fast path. Data: anim/undelta.c, the real decoder with a
  * hook on add4(): every byte drawn is one the decoder had in the page at that step.
  */
@@ -95,8 +95,10 @@ BookAnim.define('undelta', function (ctx) {
         return 'add4() at byte ' + f.at + ' reads ' + bytes(f.src, 4) + ', which the word before has just restored. That is why a distance of 4 takes words of 4: add8() here would read ' +
           bytes(f.src, 8) + ', and ' + bytes(f.at, 4) + ' are still deltas.';
       if (f.seq === 0) {
-        var next = f.at + 4;
-        return head + '. ' + (next + 4 > s.pos + s.ll ? 'A word at byte ' + next + ' would end at byte ' + (next + 3) + ', past the last literal, byte ' + (s.pos + s.ll - 1) + ': the loop of words stops.' : Bytes(f.src, 4) + ' are final, restored by the word before.');
+        var left = s.pos + s.ll - f.at;
+        if (left >= 4) return head + '. ' + Bytes(f.src, 4) + ' are final, restored by the word before.' + (nth % 4 === 0 ? ' A new step of 16 bytes, undelta16(), starts here.' : '');
+        if (left > 0) return head + '. ' + (left === 1 ? 'Byte ' + f.at + ' is the last literal' : Bytes(f.at, left) + ' are the last literals') + '; the step of 16 goes on past the literals, as the page has room for 15 bytes more, so no byte loop is needed. The sums past them are garbage.';
+        return head + ': all 4 bytes are past the literals, garbage, which the match writes over. The step of 16 ends here.';
       }
       if (nth === 0)
         return 'undelta_fast() runs four add4() over the 16 bytes, with no loop and no look at nl. The first adds ' + bytes(f.src, 4) + ', the match before, which the loop copied in full: final bytes.';
