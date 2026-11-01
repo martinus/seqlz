@@ -286,7 +286,7 @@ One line per entry, by area, newest first: date measured, verdict, link, result,
 
 **Literals**
 
-- 2026-10-31 **kept** [The literal table from a sample, the streams into slots](#the-literal-table-from-a-sample-the-streams-into-slots-level-2-writes-14-to-18-faster-on-the-mi-9t-for-05-bytes-per-page-kept-the-sample-before-the-pass-level-3-from-the-counts-and-four-counts-not-kept): below level 3, 4 KiB blocks: the fixed table from every 7th literal, the 8 streams written into slots in the matcher's state and moved into place once their sizes are known, raw without writing where the sample says so by 8 bytes; no pass over every literal. Ten samples: level 2 +0.67 bytes per page, -2.0% compress instructions with every 7th literal (every 5th +0.51, -1.6%; 11 and 13 cost more bytes per instruction). Mi 9T p3, two copies each, with every 5th: level 2 writes -0.46 µs A55 (1.4%), -0.21 µs A76 (1.8%), `main`'s copies within 0.08. Kernel VM, clang, four samples: -0.07 to -0.12 µs per page written for +2.0 bytes of `mem_used`, swap-ins the same. Not kept: a sample before the exact pass (+1.7% to +3.4%, every 4th +5.3 bytes), level 3's table bits from the counts (+3.3%), four counts (+0.75%, Mi 9T +0.15 / +0.17 µs). The pricing pass was 5% of level 2's compress instructions. Code: `LIT_SLOTS`, `code_literals()`, `lit_streams()`; branch `lit-slots`; experiments `47b0a78`, `110fa61` on `lit-pricing`; #301. Now: current. Untried: 16 KiB blocks (the slots do not fit); gcc in the VM.
+- 2026-10-31 **kept** [The literal table from a sample, the streams into slots](#the-literal-table-from-a-sample-the-streams-into-slots-level-2-writes-14-to-18-faster-on-the-mi-9t-for-05-bytes-per-page-kept-the-sample-before-the-pass-level-3-from-the-counts-and-four-counts-not-kept): below level 3, 4 KiB blocks: the fixed table from every 7th literal, the 8 streams written into slots in the matcher's state and moved into place once their sizes are known, raw without writing where the sample says so by 8 bytes; no pass over every literal. Ten samples: level 2 +0.67 bytes per page, -2.0% compress instructions with every 7th literal (every 5th +0.51, -1.6%; 11 and 13 cost more bytes per instruction). Mi 9T p3, two copies each, with every 5th: level 2 writes -0.46 µs A55 (1.4%), -0.21 µs A76 (1.8%), `main`'s copies within 0.08. Kernel VM, clang, four samples: -0.07 to -0.12 µs per page written for +2.0 bytes of `mem_used`, swap-ins the same. Not kept: a sample before the exact pass (+1.7% to +3.4%, every 4th +5.3 bytes), level 3's table bits from the counts (+3.3%), four counts (+0.75%, Mi 9T +0.15 / +0.17 µs). The pricing pass was 5% of level 2's compress instructions. Code: `LIT_SLOTS`, `code_literals()`, `lit_streams()`; branch `lit-slots`; experiments `47b0a78`, `110fa61` on `lit-pricing`; #301. Now: level 2's copy without the pricing branch since 1 Nov ("Level 2's coder without the pricing of every literal"); 16 KiB blocks gone from `src/` (#318). Untried: gcc in the VM.
 - 2026-10-31 **not kept** [A page's most frequent literals moved to a fixed table's shortest codes](#a-pages-most-frequent-literals-moved-to-a-fixed-tables-shortest-codes-115-fewer-bytes-at-level-2-writes-19-µs-slower-on-the-a76-not-kept): literal code 9, a fixed table with up to 3 of the page's most frequent bytes moved to its shortest codes, 2 to 4 header bytes. Ten samples: level 2 -11.28 bytes per page (-1.15%), level 3 -2.78; level 2 compress +11.5% instructions. Kernel VM, clang, four samples: level 2 -9.7 bytes for +0.69 µs per page written, 14 bytes per µs against the hull's 26. Mi 9T p3, two copies each: level 2 writes +1.92 µs A76, +6.40 µs A55, 6.9 and 2.0 bytes per µs against 17.9 and 6.1. The encoder would have to cost a third. Counting every 8th literal loses a third of the gain. Code: `swap_try()`, `read_swaps()`, `SEQLZ_LIT_SWAP`, commit `12b40bb`, branch `hot-swap`; #299. Now: current. Untried: tables trained with the moves; an encoder at a third of the cost.
 - 2026-10-31 **not built** [Level 2's literals coded without their copy](#level-2s-literals-coded-without-their-copy-into-the-matchers-table-at-most-03-of-a-write-not-built): the copy into the matcher's table before coding: x86-64 `memcpy`/`memmove` 0.15% of level 2's compression; Mi 9T all kernel `memcpy` 1.07% / 2.02% (A55 / A76), zram's own in it; by estimate at most 0.3% of a write. Coding in place overwrites raw literals not read yet (stream 7 starts at 7/8 of the coded size); coding into the table and copying the coded literals back saves a third of the copy. Code: `code_literals()`, #293. Now: current. The copy is gone since the same day's slots ([the slots](#the-literal-table-from-a-sample-the-streams-into-slots-level-2-writes-14-to-18-faster-on-the-mi-9t-for-05-bytes-per-page-kept-the-sample-before-the-pass-level-3-from-the-counts-and-four-counts-not-kept)).
 - 2026-10-31 **kept** [The literal coding thresholds per level](#the-literal-coding-thresholds-per-level-35-bytes-at-level-2-19-at-level-3-own-tables-from-32-33-and-49-bytes-per-page-less-kept): `SEQLZ_LIT_CODED_MIN` 35 at level 2, `SEQLZ_LIT_CODED_MIN_OWN` 19 at level 3 (both were 51), `OWN_SAVES_MIN` 32 (was 16). Ten samples: level 2 -3.27 bytes per page (-0.33%), level 3 -4.92 (-0.55%). Mi 9T p2, 4 rounds, two copies each: level 2 same on the A76, A55 writes +0.12 µs; level 3 writes -0.07 to -0.14 µs, warm reads +0.13 µs A76, +0.25 A55. Code: `code_literals()` and `own_code()` take the minimum; branch coding-thresholds. Now: current. Untried: the kernel VM for level 3; level 2 from 19 measured 31 Oct, -2.93 bytes against 35, not taken ([levels between 2 and 3](#levels-between-2-and-3-with-the-deltas-greedy-with-an-own-table-on-the-hull-in-the-vm-and-on-the-mi-9t-greedy-with-fixed-tables-2-to-8-bytes-above-it-not-built)).
@@ -349,6 +349,7 @@ One line per entry, by area, newest first: date measured, verdict, link, result,
 
 **Kernel copy, zram glue, compilers**
 
+- 2026-11-01 **kept** [Level 2's coder without the pricing of every literal, the stream sizes without memcpy()](#level-2s-coder-without-the-pricing-of-every-literal-the-stream-sizes-without-memcpy-half-the-coders-text-level-2-writes-13-faster-on-the-a76-the-same-in-the-vm-kept): a constant `sampled` drops the dead pricing branch from `seqlz_code_literals()`, 14 896 to 7 350 bytes with gcc, 7 456 to 3 460 on arm64; the stream sizes with two fixed-size loads instead of a variable `__builtin_memcpy()`. Mi 9T p3, two copies each: level 2 writes 0.15 µs faster on the A76 (1.3%), copies 0.03, ~700 instructions per page fewer; A55 and reads within the copies; kernel VM gcc and clang within the control. gcc user space +155 instructions per page at level 2 (`lit_streams()` spills). Testing `raw` instead: gcc level 3 +0.58%, not kept. Code: `code_literals()`, `lit_stream_sizes()`, branch level2-coder. Now: current.
 - 2026-10-30 **not kept** [The matcher's first candidate as a constant](#the-matchers-first-candidate-as-a-constant-instead-of-a-load-from-the-cleared-table-levels-1-and-2-write-2-slower-with-clang-not-kept): `cand = 0` instead of `table[h]` after the table's clear; userspace folds the load, the kernel copy does not, and the matcher gets other registers. Same bytes. Mi 9T p2, 4 rounds: levels 1 and 2 write 0.5 to 0.6 µs slower on the A55, 0.3 to 0.4 on the A76 (1.8% to 3.4%, `main` twice within 0.10). Kernel VM, four samples, 3 boots: clang +2.7% / +2.2% / +0.5% at levels 1 / 2 / 3, gcc -1.4% / -1.4% / -0.8%, control within 0.8%. Code: `seqlz_match_block()`, a comment why the load stays. Now: current.
 - 2026-10-30 **kept** [The matcher calls encode_seq() itself](#the-matcher-calls-encode_seq-itself-as-in-the-kernel-copy-level-3-writes-06-faster-in-the-vm-with-clang-levels-1-and-2-the-same-kept): `src/` as the kernel copy since #284; kernel VM, clang 22.1.8, four VM samples, 3 boots: level 3 writes 0.6% faster (0.2% to 0.8% per sample, control -0.3% to +0.2%), levels 1 and 2 and swap-ins the same. `Code:` PR #284. `Now:` current.
 - 2026-10-25 **measurement** [Kernel copy on arm, riscv64 and powerpc](#the-kernel-copy-on-arm-riscv64-and-powerpc-with-gcc-and-clang-no-warning-frames-below-1024-bytes--os-no-deeper-on-32-bit-arm): 15 builds with gcc 16.2.0 and clang 22.1.8, W=1 without a warning, no libgcc division, deepest frame 896 bytes (riscv64 gcc). 32-bit arm -Os no deeper than -O3: gcc 472 vs 536, 768 vs 864 with KASAN+UBSan; clang 648 vs 600. The Makefile's -O3 keeps speed as its only reason. Code: tools/kernel-port/port.py MAKEFILE; branch os-frames. Now: -O3 only with CC_OPTIMIZE_FOR_PERFORMANCE since 25 Oct, -Os builds keep -Os.
@@ -6935,7 +6936,7 @@ times: `memcpy` 1.07% (A55) and 2.02% (A76) of the kernel's cycles, `seqlz_code_
 
 ## The literal table from a sample, the streams into slots: level 2 writes 1.4% to 1.8% faster on the Mi 9T for 0.5 bytes per page, kept; the sample before the pass, level 3 from the counts and four counts not kept
 
-Status: kept, 2026-10-31. Now: current.
+Status: kept, 2026-10-31. Now: level 2's copy without the branch that prices every literal since 1 Nov ([level 2's coder](#level-2s-coder-without-the-pricing-of-every-literal-the-stream-sizes-without-memcpy-half-the-coders-text-level-2-writes-13-faster-on-the-a76-the-same-in-the-vm-kept)).
 
 *`code_literals()` added every literal's code length in all 8 fixed tables, `lit_cost`, one `u64` per
 literal, and at level 3 counts the bytes in the same loop. On x86-64 that pass is 34% of
@@ -8115,6 +8116,85 @@ and clang and on arm64.
 
 Not measured: the kernel VM; the encoder taking the previous offset as an argument instead of
 `e->last`, which changes `encode_seq()` for the harness and the book's step-through too.
+
+## Level 2's coder without the pricing of every literal, the stream sizes without memcpy(): half the coder's text, level 2 writes 1.3% faster on the A76, the same in the VM, kept
+
+Status: kept, 2026-11-01. Now: current.
+
+*Two leftovers of the kernel copy's review of 1st November. `seqlz_code_literals()`, level 2, always
+has slots and no table of the block's own, so it always takes the table from a sample
+([the slots](#the-literal-table-from-a-sample-the-streams-into-slots-level-2-writes-14-to-18-faster-on-the-mi-9t-for-05-bytes-per-page-kept-the-sample-before-the-pass-level-3-from-the-counts-and-four-counts-not-kept)),
+but its copy of `code_literals()` kept the branch that prices every literal, as the compiler cannot know
+that `spare` is not NULL. A constant argument, `sampled`, drops it: 14 896 to 7 350 bytes of text with
+gcc, 7 456 to 3 460 on arm64. Testing `raw` instead of `spare` did the same for level 2 but made gcc's
+level 3 run 565 more instructions per page (0.58%), so level 3 keeps its test and its code. And
+`lit_stream_sizes()` copied the stream sizes with a `__builtin_memcpy()` of variable length, a call
+with clang and a chain of branches with gcc; two loads of a fixed size do it now, 12 to 18 fewer decode
+instructions per page. On the Mi 9T level 2 writes 0.15 µs faster on the A76 (1.3%), where two copies
+of the base differ by 0.03, and runs about 700 instructions per page fewer on both cores; the A55's
+writes and all reads move within the copies, and so does everything in the kernel VM with gcc and
+with clang. With gcc in user space level 2 compresses with 155 more instructions per page (0.26%): the
+loop of `lit_streams()` holds about 23 values, more than x86-64's 15 registers, and spills 3 more of
+them per pass. Kept: half the code, and no time lost where it is measured.* Code: `code_literals()`
+and `seqlz_code_literals()` in `src/seqlz_compress_literals.c`, `lit_stream_sizes()` in
+`src/seqlz_decompress_literals.c`; branch `level2-coder`. `lit_streams()` as `noinline`, so that it
+compiles the same for both levels: level 2 +164 and level 3 +318 instructions per page with gcc, not
+kept.
+
+**Setup.** Base: branch `drop-16k` (#318) at `eb87720`. Mi 9T: `tools/zram-phone/run.sh` with `BUS=1
+COOL=45 ROUNDS=4 COUNTS=1`, p3, modules of NDK r21e's clang 9 at -O3, two copies of each build (`a`,
+`a2` the base, `c`, `c2` the change). Kernel VM: `tools/zram-vm/run.sh` with `VARIANTS="base=<drop-16k>
+same=."`, `MODE=swap`, 3 boots, p3, p5, zram0 and zram0-2026-09-24, kernel built with gcc 16.2.1 and
+with clang (`LLVM=1`). Instructions in user space: `seqlz-worst --level N count`, p3, gcc 16.2.1, Ryzen
+9 7950X; where they go: callgrind on the first 2000 pages of p3. Text: `tools/samecode/samecode.sh`'s
+builds of the kernel copy.
+
+Mi 9T, µs per page, the two copies of each build:
+
+| level 2 | A76 write | A76 warm | A76 cold | A55 write | A55 warm | A55 cold |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| base | 11.53 / 11.56 | 4.65 / 4.61 | 8.17 / 8.41 | 31.20 / 31.37 | 13.11 / 13.13 | 33.43 / 33.84 |
+| kept | 11.39 / 11.40 | 4.67 / 4.65 | 8.26 / 8.27 | 31.11 / 31.08 | 13.13 / 13.17 | 32.54 / 34.07 |
+
+Kernel instructions per page, level 2: A76 402 826 / 402 840 to 402 190 / 402 139, A55 404 388 /
+404 414 to 403 690 / 403 737. Level 3: A76 write 18.36 / 18.33 to 18.29 / 18.30 µs, A55 48.63 /
+48.62 to 48.64 / 48.47, instructions within 150. A first run with the `raw` test: level 2 the same
+within 0.1 µs, A76 writes 0.06 µs faster.
+
+Kernel VM, level 2 swap-out, µs per page, the change against base and the control copy against the
+change:
+
+| | p3 | p5 | zram0 | zram0-2026-09-24 |
+| --- | ---: | ---: | ---: | ---: |
+| gcc: change | 7.504 | 7.551 | 8.039 | 8.872 |
+| gcc: base | +0.012 | -0.011 | +0.028 | +0.003 |
+| gcc: control | +0.016 | +0.020 | +0.026 | +0.028 |
+| clang: change | 7.124 | 7.165 | 7.637 | 8.363 |
+| clang: base | +0.021 | +0.029 | +0.017 | +0.048 |
+| clang: control | -0.015 | -0.029 | -0.043 | -0.074 |
+
+Swap-ins and level 3 within the control copy for both compilers. A first run with gcc and the `raw`
+test had the base 0.03 to 0.04 µs faster in level 2's swap-outs on all four dumps, the control 0.00 to
+0.04; the final code's run does not repeat it.
+
+User space, x86-64 gcc 16.2.1, p3, instructions per page:
+
+| | level 2 compress | level 3 compress | level 2 decode | level 3 decode |
+| --- | ---: | ---: | ---: | ---: |
+| base | 59 636.9 | 96 770.4 | 21 470.0 | 29 063.9 |
+| `raw` test | 59 790.9 | 97 335.5 | 21 458.5 | 29 045.7 |
+| `sampled` (kept) | 59 791.7 | 96 770.4 | | |
+| and `lit_streams()` `noinline` | 59 801.3 | 97 088.1 | | |
+
+Text of the kernel copy, bytes:
+
+| | x86-64 gcc | x86-64 clang | arm64 clang |
+| --- | ---: | ---: | ---: |
+| `seqlz_code_literals()` | 14 896 to 7 350 | 10 856 to 5 557 | 7 456 to 3 460 |
+| `seqlz_code_own()` | 17 476, the same code | 15 780 to 15 767 | 10 652 to 10 604 |
+| `seqlz_decode_literals()` | 5 854 to 5 797 | 5 388 to 5 464 | 5 064 to 5 088 |
+
+Not measured: the Pixel 9a; other dumps on the phone.
 
 ## The matcher calls encode_seq() itself, as in the kernel copy: level 3 writes 0.6% faster in the VM with clang, levels 1 and 2 the same, kept
 

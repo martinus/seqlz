@@ -70,20 +70,26 @@ static __always_inline u64 lit_decode(u8 *out, u64 bits, const u16 *lt,
 /*
  * The sizes of the 8 streams of coded literals, width bits each from p, and
  * where each starts, the first at q. Returns their sum. The sizes are copied
- * out of the block first: a 4-byte load at the last size's byte would read past
- * the header.
+ * out of the block first, to h + 8: a 4-byte load at the last size's byte would
+ * read past the header. Two loads of a fixed size copy them, the 4 bytes at p
+ * and the 8 that end with p's last, which start in the block, as p is at least
+ * SEQLZ_LIT_HEADER(0) bytes into it; a copy of width bytes was a call to
+ * memcpy() with clang.
  */
+static_assert(SEQLZ_LIT_HEADER(0) + SEQLZ_SIZE_BITS_MIN >= 8U,
+	      "the 8 bytes up to the sizes' last are in the block");
 static __always_inline u64 lit_stream_sizes(const u8 *p, unsigned int width,
 					    const u8 *q, unsigned int *sz,
 					    const u8 **start)
 {
-	u8 h[SEQLZ_SIZE_BITS_MAX + 4U] = { 0 };
+	u8 h[8U + SEQLZ_SIZE_BITS_MAX + 4U] = { 0 };
 	u64 total = 0;
 	unsigned int k;
 
-	__builtin_memcpy(h, p, width);
+	put_unaligned_le64(get_unaligned_le64(p + width - 8U), h + width);
+	put_unaligned_le32(get_unaligned_le32(p), h + 8U);
 	for (k = 0; k < SEQLZ_LIT_STREAMS; k++) {
-		sz[k] = (get_unaligned_le32(h + k * width / 8U) >>
+		sz[k] = (get_unaligned_le32(h + 8U + k * width / 8U) >>
 			 (k * width % 8U)) &
 			((1U << width) - 1U);
 		start[k] = q + total;

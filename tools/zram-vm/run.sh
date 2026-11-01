@@ -99,8 +99,8 @@ else
             "$dir/tools/gen-tables/gen-tables.sh" "$d/seqlz_tables.c"
         fi
         # backend_seqlz.c passes a level; a src/ from before the levels took a bool there, and would
-        # build and code the literals at every level
-        grep -qs "define SEQLZ_LEVELS" "$d"/*.h || { echo "variant $name: $dir/src has no levels, it is older than this run.sh" >&2; exit 1; }
+        # build and code the literals at every level. SEQLZ_LEVELS until #317, SEQLZ_LEVEL_MAX since
+        grep -qsE "define SEQLZ_LEVEL(S|_MAX) " "$d"/*.h "$d"/linux/*.h || { echo "variant $name: $dir/src has no levels, it is older than this run.sh" >&2; exit 1; }
         sed -i "s/^#define SZ_NAME \"seqlz-\"$/#define SZ_NAME \"$name-\"/" "$d/backend_seqlz.c"
         grep -q "^#define SZ_NAME \"$name-\"$" "$d/backend_seqlz.c" || { echo "variant $name: no backend name" >&2; exit 1; }
         # the global symbols of this build, renamed so that the builds do not clash: the codec's, from nm of
