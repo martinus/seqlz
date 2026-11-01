@@ -399,6 +399,10 @@ def port_gen():
     t = make_static(t, "seqlz_tables_build")
     gen = (REPO / "tools" / "gen-tables" / "gen_seqlz_tables.c").read_text()
     t = t.rstrip("\n") + "\n\n" + gen[gen.index("/* ---- the tables as C"):]
+    # the KUnit test, a module of its own, checks the codes in the tables
+    t = must(t, '"#include \\"seqlz_tables.h\\"\\n\\n"',
+             '"#include <kunit/visibility.h>\\n"\n\t       "#include <linux/export.h>\\n\\n"\n\t       "#include \\"seqlz_tables.h\\"\\n\\n"')
+    t = must(t, '\tprintf("};\\n");\n\treturn 0;', '\tprintf("};\\nEXPORT_SYMBOL_IF_KUNIT(seqlz_tables);\\n");\n\treturn 0;')
     return fix_comments(t)
 
 

@@ -58,9 +58,20 @@ build "${kmake[@]}" -j"$(nproc)" W=1 KCFLAGS=-fstack-usage lib/seqlz/ drivers/bl
 ls "$work/build/lib/seqlz/seqlz_decompress.o" "$work/build/lib/seqlz/tests/seqlz_kunit.o" \
     "$work/build/drivers/block/zram/backend_seqlz.o" >/dev/null || exit 1
 echo "build: no warnings"
-# the tables gen_seqlz_tables wrote in the build, against the ones userspace generates from src/
+# the whole kernel on x86-64, for modpost: the KUnit test is a module of its own, and building lib/seqlz/
+# alone never links it against what seqlz exports (on 1 Nov 2026 seqlz_tables was not exported). By
+# make's status, as file names like fserror.o fail a grep for errors.
+if grep -q '^CONFIG_X86_64=y' "$work/build/.config"; then
+    "${kmake[@]}" -j"$(nproc)" >"$work/modpost.log" 2>&1 ||
+        { grep -E 'ERROR|error:' "$work/modpost.log" >&2; echo "kernel build failed" >&2; exit 1; }
+    echo "modpost: the modules link"
+fi
+# the tables gen_seqlz_tables wrote in the build, against the ones userspace generates from src/, without
+# the kernel's export of them for the KUnit test and its includes (-B for the blank line they leave)
 "$here/../gen-tables/gen-tables.sh" "$work/tables.c"
-diff -q "$work/tables.c" "$work/build/lib/seqlz/seqlz_tables.c" >/dev/null ||
+grep -vE '^(#include <(kunit/visibility|linux/export)\.h>|EXPORT_SYMBOL_IF_KUNIT\(seqlz_tables\);)$' \
+    "$work/build/lib/seqlz/seqlz_tables.c" >"$work/tables-kernel.c"
+diff -q -B "$work/tables.c" "$work/tables-kernel.c" >/dev/null ||
     { echo "lib/seqlz/seqlz_tables.c is not the tables of src/" >&2; exit 1; }
 echo "tables: the same as src/'s"
 # a division of 64 bits that the compiler leaves to a library call: the kernel has none, and only the
