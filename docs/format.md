@@ -240,8 +240,10 @@ way.
 The SHA-256 of each table's lengths, as bytes in symbol order (the literal tables one after the other),
 so that a decoder can check that it has the right ones:
 
+<!-- not in the kernel's copy -->
 4 KiB blocks:
 
+<!-- end -->
 | table | SHA-256 |
 | --- | --- |
 | `TOK_4k` | `c5f97d70cd50ed0e3517c69231437fd534f5e772bb9ed70dc3769a3337b2d6e0` |
@@ -507,7 +509,7 @@ code, also the ones it wrote back to a backing device, and no page meets a newer
 the format needs a new kernel, not a new algorithm name in zram, which would be visible to users in
 `comp_algorithm` and in the Kconfig default. Two things would change that: another user of the codec
 that keeps pages longer, or zram's pages kept across a kexec by live update (`kernel/liveupdate/`),
-which zram does not do in 2026. The values of byte 2 with a code above 8, and the values of `dt` other
+which zram does not do. The values of byte 2 with a code above 8, and the values of `dt` other
 than 1 to 3, are invalid now and free for a format that has to tell itself apart.
 
 <!-- not in the kernel's copy -->

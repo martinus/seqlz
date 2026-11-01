@@ -407,8 +407,8 @@ def port_gen():
 # lib/seqlz/Makefile: the module, and its tables, which gen_seqlz_tables, a program for the build host,
 # writes from the code lengths, as lib/crc's gen_crc32table and lib/raid's mktables do
 MAKEFILE = """# SPDX-License-Identifier: GPL-2.0-only OR MIT
-# as lib/lz4: with -O2 seqlz compresses slower, on x86-64 and arm64; a kernel
-# built for size keeps -Os
+# -O3, as lib/lz4 builds with: with -O2 seqlz compresses slower, on x86-64
+# and arm64. Unlike lib/lz4, a kernel built for size keeps -Os.
 ccflags-$(CONFIG_CC_OPTIMIZE_FOR_PERFORMANCE) += -O3
 
 obj-$(CONFIG_SEQLZ) += seqlz.o
@@ -581,7 +581,8 @@ def main():
           "\t  seqlz compresses and decompresses one block of 4 KiB at a\n"
           "\t  time, for zram, whatever the page size. It is an LZ format\n"
           "\t  whose sequences and literals are Huffman coded with fixed\n"
-          "\t  tables, see Documentation/staging/seqlz.rst.\n\n", "config SEQLZ\n")
+          "\t  tables, and at level 3 a block's literals with a table of\n"
+          "\t  its own, see Documentation/staging/seqlz.rst.\n\n", "config SEQLZ\n")
     # with the other KUnit tests of lib/, in the runtime testing menu
     patch(tree / "lib/Kconfig.debug", "config PRANDOM_KUNIT_TEST\n",
           "config SEQLZ_KUNIT_TEST\n"
@@ -640,8 +641,9 @@ def main():
     patch(tree / "MAINTAINERS", "F:\tdrivers/iio/chemical/sps30_serial.c\n\nSERIAL DEVICE BUS\n",
           "F:\tdrivers/iio/chemical/sps30_serial.c\n\n" + MAINTAINERS_ENTRY + "\nSERIAL DEVICE BUS\n",
           "F:\tlib/seqlz/")
-    patch(tree / ZRAM_RST, "the value the lower the compression ratio).\n\n",
-          "the value the lower the compression ratio).\n\n" + ZRAM_DOC, "CONFIG_ZRAM_BACKEND_SEQLZ")
+    # after the two paragraphs about parameters of every algorithm, so the second stays about all of them
+    patch(tree / ZRAM_RST, "by the `algorithm_params` write that has configured them.\n\n",
+          "by the `algorithm_params` write that has configured them.\n\n" + ZRAM_DOC, "CONFIG_ZRAM_BACKEND_SEQLZ")
     apply_patch(tree, HERE / "x86-prefetcht0.patch")
     for path in out:
         print(path)
