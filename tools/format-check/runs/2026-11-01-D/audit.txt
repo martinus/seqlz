@@ -1,0 +1,20 @@
+  Bash: cat /room/BRIEF.md; ls -la /room
+  Bash: cat /room/format.md; ls -la /room/tables
+  Bash: cd /room/tables; sha256sum *.bin; python3 -c " import sys for f in ['TOK','LL','ML','OWN']: b=open(f+'.bin','rb').read() from fractions import Fraction as F print(f,len(b),max(b),sum(F(1,2**l) for l i
+  Write: /room/QUESTIONS.md
+  Bash: mkdir -p /room/tools && cat > /room/tools/gen_tables.py <<'EOF' #!/usr/bin/env python3 """Make cr_tables.h from tables/*.bin, after checking each against the SHA-256 in format.md.""" import hashlib, s
+  Write: /room/cr_decode.h
+  Write: /room/cr_decode.c
+  Bash: python3 - <<'EOF' src=open('cr_decode.c').read() dup_a=''' /* copy(ll), below, uses the last offset of the sequence before; do it first */ { size_t x = 0; if (e) x = dt == 1 ? 4 : dt == 2 ? 8 : (last 
+  Write: /room/test/test_decode.c
+  Bash: python3 - <<'EOF' s=open('test/test_decode.c').read() old_start=s.index(' unsigned x = dt == 1 ? 4 : 8;\n int ok = 1;') old_end=s.index(' CHECK(r == 0 && ok, "deltas dt %d: wrong bytes", dt);') s=s[:o
+  Bash: ./build/test_fast 2000 2>&1 | grep -v bench | head -30; wc -l test/test_decode.c
+  Bash: python3 - <<'EOF' s=open('test/test_decode.c').read() old=''' uint64_t S = 0; for (int j = 0; j < 8; j++) S |= (uint64_t)(s[j] & ((1u << w) - 1)) << (j * w); for (unsigned i = 0; i < w; i++) dst[pos++
+  Bash: sed -i 's|from tables/\*.bin. Do not edit.|from the files in tables/. Do not edit.|' tools/gen_tables.py && python3 - <<'EOF' s=open('test/test_decode.c').read() s=s.replace('unsigned char *c = malloc
+  Bash: sed -n 606,614p test/test_decode.c
+  Bash: sed -i '613s|CHECK(dec(blk, len - 1) == -1|CHECK(len > 0 \&\& dec(blk, len - 1) == -1|' test/test_decode.c && make build/test_fast 2>&1 | grep -i warn; ./build/test_fast 1000 | tail -1 cat > /tmp/seed
+  Bash: sed -n 290,350p cr_decode.c
+  Bash: python3 - <<'EOF' s=open('cr_decode.c').read() s=s.replace(''' for (;;) { size_t k; int final = (n - used == BLOCK - o); if (final) { k = n - used; } else { unsigned tok''',''' for (;;) { if (n - used
+  Bash: cat >> QUESTIONS.md <<'EOF' ## 14. The tables — "longest code" of `ML` > | match length values, `ML` | `LEN_SYMBOLS` | 8 bits | ... - `tables/ML.bin` (whose SHA-256 matches) has no code longer than 7 
+18 tool calls, 0 marked
+result: 19 turns, 10.4 min, 1.8447125999999998 USD

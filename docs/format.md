@@ -37,7 +37,7 @@ decoder decodes all of them.
 ## Status
 
 > [!IMPORTANT]
-> This is the format of 21st October 2026 for 4 KiB pages, and nobody uses it yet. Until seqlz has users
+> This is the format of 22nd October 2026 for 4 KiB pages, and nobody uses it yet. Until seqlz has users
 > it may still change, the tables included, and such a change updates this file: its rules, the hashes
 > of the tables and the example. Once seqlz is in a kernel, zram's pages still live only as long as the
 > kernel that wrote them, so a change needs no new name in zram, see
@@ -57,7 +57,8 @@ of `ml` bytes that starts `off` bytes back in the output, its **offset**. The la
 only, the ones left, and no bits: they fill the rest of the block, and that is how a decoder knows it is
 the last. The numbers `ll`, `ml` and `off` are stored with **prefix codes** (Huffman
 codes) from fixed tables that are part of the format and not in the compressed block. *Why:* a block of
-4 KiB is too small to carry tables of its own.
+4 KiB is too small to carry tables of its own for these numbers. Only its literals can have a table of
+the block's own, see [A block's own literal table](#a-blocks-own-literal-table).
 
 ## Notation
 
@@ -67,8 +68,8 @@ codes) from fixed tables that are part of the format and not in the compressed b
 - `a << b` is `a * 2^b`, `a >> b` is `a` divided by `2^b`, rounded down, `a & b` is the bitwise and,
   `a div b` and `a mod b` are the quotient and remainder, `c ? a : b` is `a` if `c` holds, else `b`.
 - A **bit string** like `110` is written in the order its bits are read, the first one leftmost. A
-  number like 6 is a number. `read(3)` of the bits 0, 1, 1 is the number 6; the same bits as a code are
-  the bit string `011`.
+  number like 6 is a number. `read(3)` of the bits 1, 1, 0 is the number 6; the same bits as a code are
+  the bit string `110`.
 
 ## Block size
 
@@ -112,8 +113,9 @@ layouts.
 | `3 + w + e + d` | `s[0] + ... + s[7]` | the 8 literal streams, one after the other |
 | `3 + w + e + d + s[0] + ... + s[7]` | up to `len` | `B`, the bitstream of the sequences |
 
-`code` 0 to 7 is one of the 8 fixed literal tables, `code` 8 a table of the block's own, and 9 to 15
-are invalid.
+`code` 0 to 7 is fixed literal table `code`, the 256 code lengths at bytes `256 * code` to
+`256 * code + 255` of `LIT`, see [The tables](#the-tables). `code` 8 is a table of the block's own, and
+9 to 15 are invalid.
 
 The `w` bytes from byte `3 + e` on are one number `S` of `8 * w` bits, little endian, and
 `s[j] = (S >> (j * w)) & ((1 << w) - 1)`: 8 sizes of `w` bits fill exactly `w` bytes; `w` is 5 to 12.
@@ -130,8 +132,8 @@ A block is invalid if
 
 - `len < 2`, or `n > BLOCK`;
 - with raw literals `2 + n > len`;
-- with coded literals `len < 3 + w + e`, `dt` is not 1, 2 or 3, `code > 8`, the block's own table is
-  invalid, or `3 + w + e + d + s[0] + ... + s[7] > len`.
+- with coded literals `len < 3`, which leaves no byte 2, or `len < 3 + w + e`, `dt` is not 1, 2 or 3,
+  `code > 8`, the block's own table is invalid, or `3 + w + e + d + s[0] + ... + s[7] > len`.
 
 ## Prefix codes
 
@@ -165,7 +167,7 @@ set of tables would be a new format, see [No version in the block](#no-version-i
 is a list of code lengths, one byte per symbol, symbol 0 first:
 
 <!-- in the kernel's copy:
-| table | symbols | longest code | in `lib/seqlz/seqlz_lengths.h` |
+| table | symbols | codes of at most | in `lib/seqlz/seqlz_lengths.h` |
 | --- | --- | --- | --- |
 | tokens and escape, `TOK` | 3073 | 11 bits | `seqlz_default_lengths.token` |
 | literal length values, `LL` | `LEN_SYMBOLS` | 8 bits | `seqlz_default_lengths.ll` |
@@ -174,7 +176,7 @@ is a list of code lengths, one byte per symbol, symbol 0 first:
 | a block's own literal table, `OWN` | 19 | 8 bits | `seqlz_own_lengths` |
 -->
 <!-- not in the kernel's copy -->
-| table | symbols | longest code | in `src/seqlz_lengths.h` |
+| table | symbols | codes of at most | in `src/seqlz_lengths.h` |
 | --- | --- | --- | --- |
 | tokens and escape, `TOK` | 3073 | 11 bits | `seqlz_default_lengths.token` |
 | literal length values, `LL` | `LEN_SYMBOLS` | 8 bits | `seqlz_default_lengths.ll` |
@@ -251,6 +253,9 @@ whole table. A decoder reads three kinds of things from it:
 - `symbol(table)`: the next bits, one by one, until they are a code of the table; the first bit read
   is the code's first bit. The result is the symbol of that code.
 - `value(table)`: a length value, see below.
+
+The literal streams and a block's own literal table are read the same way, each from its own bits:
+`read()` and `symbol()` there take the next bits of that stream or table, not of `B`.
 
 A valid block ends where its bits end: after the last bit it needs, fewer than 8 bits of `B` are left,
 all in its last byte, and they are 0. *Why:* zram stores no checksum, so this is what tells a damaged
@@ -374,9 +379,10 @@ the block's byte `start[j] + i div 8`. Stream `j` holds literal `j`, `j + 8`, `j
 each as one symbol of the literal table that `code` names, one after the other; a code's first bit is
 the first one read.
 
-The codes of stream `j`'s literals must end in its last byte: they take at most `8 * s[j]` bits and
-fewer than 8 less, and the bits after the last code are 0. A stream without literals has `s[j] = 0`.
-Else the block is invalid. A decoder may read past the end of a stream, as long as it checks this.
+If stream `j` has literals, their codes take `b` bits with `8 * s[j] - 8 < b <= 8 * s[j]`: they end in
+the stream's last byte, and the bits after the last code in that byte are 0. A stream without
+literals, stream `n` to 7 when `n < 8`, has `s[j] = 0`. Else the block is invalid. A decoder may read
+past the end of a stream, as long as it checks this.
 
 ## Literals as deltas
 
@@ -390,15 +396,19 @@ stored as it is. `x` depends on `dt`:
 - `dt = 1`: `x = 4`;
 - `dt = 2`: `x = 8`;
 - `dt = 3`: `x` the smallest multiple of `last` that is 4 or more, where `last` is the offset of the
-  sequence before, 1 for the first: `x = 4` for `last` 1 or 2, 6 for `last = 3`, else `last`.
+  sequence before, 1 for the first: `x = 4` for `last` 1 or 2, 6 for `last = 3`, else `last`. In
+  [Decoding](#decoding) `copy(ll)` comes before `last = off`, so a sequence's literals use the offset
+  of the sequence before, as class 0 does, and the last sequence's literals the offset of the last
+  match.
 
-`out[p - x]` is a byte already written, of the match before or a literal of the same sequence, as it is
-in the block. The last sequence is no different. *Why:* memory pages are full of 4- and 8-byte fields,
-whose bytes are often those of the field before or differ from them by a little, as counters, sizes and
-addresses of objects in a row do, and a literal after a match often differs only a little from the byte
-the match would have copied. As deltas, such literals are many zeros and few other values, which the
-literal tables code in fewer bits. With `x` at least 4, the bytes a word of 4 adds are all written
-before it, and a decoder can add 4 bytes at a time.
+`out[p - x]` is any byte already written, of a match or a literal, of this sequence or an earlier one,
+as it is in the block, i.e. a literal with its delta already added back. The last sequence is no
+different. *Why:* memory pages are full of 4- and 8-byte fields, whose bytes are often those of the
+field before or differ from them by a little, as counters, sizes and addresses of objects in a row do,
+and a literal after a match often differs only a little from the byte the match would have copied. As
+deltas, such literals are many zeros and few other values, which the literal tables code in fewer bits.
+With `x` at least 4, the bytes a word of 4 adds are all written before it, and a decoder can add 4 bytes
+at a time.
 
 ## A block's own literal table
 
@@ -408,23 +418,28 @@ of it is bit `7 - (i mod 8)` of byte `3 + w + e + i div 8`. It is a list of symb
 the code length of each byte value with a code, in the order of the byte values, from 0 on:
 
 - symbol `l - 1`, for `l` from 1 to 10: the next byte value has a code of `l` bits;
-- symbol `9 + k`, for `k` from 1 to 9, then `x = read(k - 1)`: the next `2^(k-1) + x` byte values
-  have no code. `k = 1` is one byte value, `read(0)` is 0.
+- symbol `9 + k`, for `k` from 1 to 9, then `x = read(k - 1)` from the table's bits: the next
+  `2^(k-1) + x` byte values have no code. `k = 1` is one byte value, `read(0)` is 0.
 
 The list ends as soon as the codes fill the code space: when `2^-l`, summed over the lengths so far,
 is exactly 1. Byte values after the last one with a code have none. The table's last byte is the one
 with its last bit, the bits after that one in it are 0, and `d` is its number of bytes. The codes
 follow from the lengths as in [Prefix codes](#prefix-codes), the byte value being the symbol.
 
-The block is invalid if the sum goes above 1, a byte value with a code is above 255, a bit after the
-last symbol in its byte is not 0, or `3 + w + e + d > len`. *Why:* the description is in the order of the
+The block is invalid if the sum goes above 1, a byte value with a code is above 255, a run of byte
+values without a code goes past 255, a bit after the last symbol in its byte is not 0, or
+`3 + w + e + d > len`. A run past 255 makes the block invalid at once, the list does not go on after it.
+Each symbol is for at least one byte value, so a table has at most 256 symbols, and a 257th always makes
+the block invalid: the list always ends. Bits past `len` are read as 0, and `3 + w + e + d > len` then
+makes the block invalid. Symbol 18 (`k = 9`), a run of 256 byte values or more, is in no valid block: a
+complete table has at least two byte values with a code. *Why:* the description is in the order of the
 byte values, so a byte value takes no bits of its own, and the long lengths, which most bytes of a
 block's own table have, get the shortest codes in `OWN`. A table takes 0.4 to 0.5 bytes per byte value
 with a code, 40 to 100 bytes on most blocks that have one.
 
 ## Example
 
-The 9 bytes `02 00 61 62 23 f2 ff fb 60` are a 4 KiB block of `ab` 2048 times, with the 4 KiB tables:
+The 9 bytes `02 00 61 62 23 f2 ff fb 60` are a 4 KiB block of `ab` 2048 times:
 
 - `02 00`: `h = 2`, raw literals, `n = 2`; then the literals `61 62`, `a` and `b`.
 - `B` is `23 f2 ff fb 60`, 40 bits, read most significant bit first:
@@ -460,9 +475,11 @@ with lz4 or zstd. For reference, `seqlz_compress()` writes:
 - at level 3, for blocks with 512 literals or more, a table of the block's own where that and its
   description take at least 32 bytes less than the best fixed table. Its code lengths are close to a
   Huffman code's, at most 10 bits;
-- at level 3, literals as deltas, with the `dt` whose deltas take the fewest bits in the best fixed
-  table, counted for every 11th literal of the block, with `dt`'s 8 bits scaled the same way, as 1, where
-  that is not `e = 0` and the deltas get coded; else the literals as they are.
+- at level 3, the literals as deltas or as they are, whichever takes fewer bits: it sums the code
+  lengths of every 11th literal of the block in each fixed literal table, once as it is and once as
+  the delta of each `dt`, adds 1 bit for the byte `dt` (its 8 bits scaled by 1/11 as the sums are, at
+  least 1), and takes the choice and table with the fewest bits. When that is a delta, but the
+  literals are then stored raw, they are stored as they are.
 
 The compressed block fits the buffer the compressor is given, or the compressor fails. zram gives it two
 pages, which every block fits, and stores a page that does not compress well enough as it is, so that

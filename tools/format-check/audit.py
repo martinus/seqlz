@@ -16,7 +16,8 @@ WEB_TOOLS = {"WebFetch", "WebSearch"}
 TOOLS = {"Bash", "Read", "Write", "Edit", "Glob", "Grep"}
 FILE_TOOLS = {"Read": "file_path", "Write": "file_path", "Edit": "file_path", "Glob": "path", "Grep": "path"}
 NETWORK = re.compile(r"\b(curl|wget|git|pip3?|npm|npx|gh|ssh|scp|nc|ncat|telnet|dnf|yum)\b|https?://|\bftp://")
-HOST_PATHS = re.compile(r"(?<![\w.~/-])(/(home|root|mnt|media|run|srv|opt|var|etc|proc)\b|~|\$HOME\b)")
+# ~ only as the home directory, ~/ or ~ alone, not C's bitwise not as in ~0U
+HOST_PATHS = re.compile(r"(?<![\w.~/-])(/(home|root|mnt|media|run|srv|opt|var|etc|proc)\b|~(?=/|\s|$)|\$HOME\b)")
 
 
 def check(name, args):
