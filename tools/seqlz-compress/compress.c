@@ -23,7 +23,7 @@ int main(int argc, char** argv) {
             return 1;
         }
         fclose(f);
-        for (level = 1; level <= SEQLZ_LEVELS; level++) {
+        for (level = 1; level <= SEQLZ_LEVEL_MAX; level++) {
             unsigned int n = seqlz_compress_block(&st, page, dst, sizeof dst, level);
             char name[4096];
 

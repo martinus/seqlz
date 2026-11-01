@@ -509,7 +509,7 @@ TEST_CASE("seqlz: only levels 1 to 3 compress") {
     auto c = std::vector<unsigned char>(2 * page_size);
     auto seq = std::vector<seqlz_sequence>(SEQLZ_MAX_SEQUENCES);
     auto const one = seqlz_sequence{static_cast<unsigned short>(page_size), 0, 0};
-    for (unsigned level : {0U, SEQLZ_LEVELS + 1U}) {
+    for (unsigned level : {0U, SEQLZ_LEVEL_MAX + 1U}) {
         CAPTURE(level);
         CHECK(seqlz_compress_block(st.get(), page.data(), c.data(), 2 * page_size, level) == 0);
         CHECK(seqlz_find(st.get(), page.data(), seq.data(), level) == 0);
@@ -518,7 +518,7 @@ TEST_CASE("seqlz: only levels 1 to 3 compress") {
     // level 3 needs the work memory of the state
     CHECK(seqlz_encode(nullptr, &one, 1, page.data(), page_size, nullptr, c.data(), 2 * page_size, 3) == 0);
     CHECK(seqlz_encode(st.get(), &one, 1, page.data(), page_size, page.data(), c.data(), 2 * page_size, 3) > 0);
-    for (unsigned level = 1; level <= SEQLZ_LEVELS; ++level) {
+    for (unsigned level = 1; level <= SEQLZ_LEVEL_MAX; ++level) {
         CHECK(seqlz_compress_block(st.get(), page.data(), c.data(), 2 * page_size, level) > 0);
     }
 }
@@ -706,7 +706,7 @@ TEST_CASE("seqlz: compress into a dst of any size, an error where the page does 
     for (auto const& page : pages) {
         auto raw = std::vector<unsigned char>(2 * page_size);
         auto const rlen = seqlz_compress_block(st.get(), page.data(), raw.data(), 2 * page_size, 1);
-        for (unsigned level = 1; level <= SEQLZ_LEVELS; ++level) {
+        for (unsigned level = 1; level <= SEQLZ_LEVEL_MAX; ++level) {
             auto two = std::vector<unsigned char>(2 * page_size);
             auto const len2 =
                 seqlz_compress_block(st.get(), page.data(), two.data(), static_cast<unsigned>(two.size()), level);
@@ -751,7 +751,7 @@ TEST_CASE("seqlz: compress and encode use no more of dst than SEQLZ_COMPRESS_BOU
     for (int round = 0; round < 40; ++round) {
         CAPTURE(round);
         auto const p = random_seqlz_page(rng, round % 4);
-        for (unsigned level = 1; level <= SEQLZ_LEVELS; ++level) {
+        for (unsigned level = 1; level <= SEQLZ_LEVEL_MAX; ++level) {
             CAPTURE(level);
             auto bound = std::vector<unsigned char>(SEQLZ_COMPRESS_BOUND);
             auto const len = seqlz_compress_block(st.get(), p.bytes.data(), bound.data(), SEQLZ_COMPRESS_BOUND, level);
@@ -1607,7 +1607,7 @@ TEST_CASE("seqlz: level 3 gives a page a literal table of its own where that sav
             page[k] = static_cast<unsigned char>(letters[rng() % n * (rng() % n) / n]);
         }
         auto sizes = std::array<unsigned, 4>{};
-        for (unsigned level = 1; level <= SEQLZ_LEVELS; ++level) {
+        for (unsigned level = 1; level <= SEQLZ_LEVEL_MAX; ++level) {
             CAPTURE(level);
             auto const len = seqlz_compress_block(st.get(), page.data(), c.data(), 2 * page_size, level);
             REQUIRE(len > 0);

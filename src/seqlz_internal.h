@@ -34,9 +34,9 @@
 #define SEQLZ_LIT_ROUNDS (56U / SEQLZ_LIT_BITS)
 /*
  * The encoder codes a block's literals only where that saves more than 1/16 of
- * them plus this many bytes, at SEQLZ_LEVEL_CODED. Decoding coded literals has a
- * cost that does not depend on how many there are: the literal table has to be
- * read from memory, and the literals decoded into a buffer first. A smaller
+ * them plus this many bytes, at SEQLZ_LEVEL_CODED. Decoding coded literals has
+ * a cost that does not depend on how many there are: the literal table has to
+ * be read from memory, and the literals decoded into a buffer first. A smaller
  * minimum made blocks a few bytes smaller and writes slower, most on in-order
  * cores.
  */
@@ -68,15 +68,14 @@ static_assert((8U << SEQLZ_CLASS5_BITS) <= SEQLZ_BLOCK_SIZE,
  */
 #define SEQLZ_HASH_BITS (SEQLZ_BLOCK_BITS == 12 ? 12U : 13U)
 /*
- * The levels of seqlz_compress_block(), 1 to SEQLZ_LEVELS, from the fastest to
- * the one with the smallest blocks. Level 1 keeps the literals raw. From
+ * The levels of seqlz_compress_block(), 1 to SEQLZ_LEVEL_MAX, from the fastest
+ * to the one with the smallest blocks. Level 1 keeps the literals raw. From
  * SEQLZ_LEVEL_CODED on they are Huffman coded where that saves enough, with one
  * of the fixed tables. SEQLZ_LEVEL_OWN looks one position ahead before it takes
  * a short match, extends matches backwards, gives a block a literal table of
  * its own where that saves enough, and codes the literals as deltas where that
  * looks like it saves bits, see SEQLZ_LIT_DELTA_AT.
  */
-#define SEQLZ_LEVELS SEQLZ_LEVEL_MAX
 #define SEQLZ_LEVEL_CODED 2U
 #define SEQLZ_LEVEL_OWN 3U
 
@@ -93,9 +92,10 @@ static inline unsigned int seqlz_token(unsigned int ll, unsigned int ml,
 
 /*
  * The matcher's hash table, one per CPU, cleared for each block. Once the
- * matcher is done it holds the raw literals or their deltas while they are
- * coded, and at SEQLZ_LEVEL_OWN, at its end, what the encoder needs for a
- * table of the block's own, see seqlz_code_own().
+ * matcher is done it holds what the coder of the literals needs: the slots of
+ * the coded streams, or a copy of the raw literals or their deltas while they
+ * are coded, and at SEQLZ_LEVEL_OWN, at its end, what the encoder needs for a
+ * table of the block's own; see code_literals() and seqlz_code_own().
  */
 struct seqlz_state {
 	union {
@@ -131,7 +131,7 @@ struct seqlz_state {
  */
 #define PREFETCH_STEP 512U
 
-static inline void prefetch_lines(const void *p, unsigned long size)
+static inline void seqlz_prefetch_lines(const void *p, unsigned long size)
 {
 	const u8 *q = (const u8 *)p; /* a cast for the C++ of the harness */
 	const u8 *const end = q + size;
@@ -143,7 +143,7 @@ static inline void prefetch_lines(const void *p, unsigned long size)
 	prefetch(end - 1);
 }
 
-/* prefetch_lines() takes multiples of PREFETCH_STEP */
+/* seqlz_prefetch_lines() takes multiples of PREFETCH_STEP */
 static_assert(sizeof_field(struct token_table, decode) % PREFETCH_STEP == 0,
 	      "the token table");
 static_assert(sizeof_field(struct value_table, decode) % PREFETCH_STEP == 0,
@@ -155,7 +155,6 @@ static_assert(sizeof_field(struct lit_table, decode) % PREFETCH_STEP == 0,
 unsigned int seqlz_delta_literals(u8 *d, u8 **lit_end, const u8 *block,
 				  u8 *deltas);
 unsigned int seqlz_code_literals(u8 *d, unsigned int len, u8 *spare);
-unsigned int seqlz_code_raw_literals(u8 *d, unsigned int len, const u8 *raw);
 unsigned int seqlz_code_own(u8 *d, unsigned int len, struct seqlz_state *st,
 			    unsigned int delta);
 

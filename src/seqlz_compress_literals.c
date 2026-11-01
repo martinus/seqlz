@@ -15,15 +15,16 @@
 #include "seqlz_internal.h"
 
 /*
- * seqlz_delta_literals() prices the deltas with every DELTA_STEP-th literal.
- * Every 11th instead of every 5th made blocks 0.08% larger, and level 3 wrote
- * them about 3% faster; every literal made them 0.05% smaller than every 5th,
- * for a fifth more instructions. A prime, so that it is not the same byte of
- * each field of 2, 3, 4 or 8 bytes: every 4th made blocks larger.
+ * seqlz_delta_literals() prices the deltas with every DELTA_STEP-th literal:
+ * pricing more of them made blocks hardly smaller and level 3's writes slower.
+ * A prime, so that it is not the same byte of each field of 2, 3, 4 or 8
+ * bytes: every 4th made blocks larger.
  */
 #define DELTA_STEP 11U
 /* a delta's byte in the header, 8 bits scaled as the sums are, at least 1 */
 #define DELTA_HDR_BITS (8U / DELTA_STEP ? 8U / DELTA_STEP : 1U)
+/* the choices pick_delta() prices: no delta, and SEQLZ_DELTA_4 to _LAST */
+#define DELTA_CHOICES (SEQLZ_DELTA_LAST + 1U)
 
 /*
  * The bits of sum j in literal table k, from its lane of 16 bits in even or
@@ -50,12 +51,12 @@ static __always_inline void lanes_spill(u64 x, u64 *even, u64 *odd)
 	*odd += x >> 8 & lanes;
 }
 
-/* lanes_spill() of the 4 sums s, which are cleared */
+/* lanes_spill() of the DELTA_CHOICES sums s, which are cleared */
 static __always_inline void delta_spill(u64 *s, u64 *even, u64 *odd)
 {
 	unsigned int x;
 
-	for (x = 0; x < 4; x++) {
+	for (x = 0; x < DELTA_CHOICES; x++) {
 		lanes_spill(s[x], &even[x], &odd[x]);
 		s[x] = 0;
 	}
@@ -97,9 +98,9 @@ static __always_inline void read_rec(const u8 *p, unsigned int *pos,
  */
 static unsigned int pick_delta(const u8 *d, const u8 *end, const u8 *block)
 {
-	u64 s[4] = { 0 };
-	u64 even[4] = { 0 };
-	u64 odd[4] = { 0 };
+	u64 s[DELTA_CHOICES] = { 0 };
+	u64 even[DELTA_CHOICES] = { 0 };
+	u64 odd[DELTA_CHOICES] = { 0 };
 	unsigned int best = ~0U;
 	unsigned int pick = 0;
 	unsigned int j = 0;
@@ -137,7 +138,7 @@ static unsigned int pick_delta(const u8 *d, const u8 *end, const u8 *block)
 		j = k - ll;
 	}
 	delta_spill(s, even, odd);
-	for (x = 0; x < 4; x++)
+	for (x = 0; x < DELTA_CHOICES; x++)
 		for (k = 0; k < SEQLZ_LIT_SETS; k++) {
 			unsigned int b = lit_bits(even, odd, x, k) +
 					 (x ? DELTA_HDR_BITS : 0U);
@@ -425,7 +426,7 @@ static void lit_sizes(u8 *p, const unsigned int *sizes, unsigned int width)
 /*
  * The room for the description. It takes at most 256 bytes, 8 bits for each of
  * the 256 byte values: a byte with a code takes a symbol of at most
- * SEQLZ_OWN_CODE_BITS, 8, and a run of r bytes before it 8 + bit_width(r) - 1
+ * SEQLZ_OWN_CODE_BITS, 8, and a run of r bytes before it 8 + fls(r) - 1
  * bits, at most 8 for each of the r + 1. A power of 2 above that, own_put()
  * masks its index with it, so that the compiler sees the bound.
  */
@@ -433,18 +434,20 @@ static void lit_sizes(u8 *p, const unsigned int *sizes, unsigned int width)
 /* a block's own table only for blocks with this many literals or more */
 #define OWN_LITERALS_MIN 512U
 /*
- * Below SEQLZ_LEVEL_OWN the fixed table is picked from every LIT_SAMPLE_STEP-th
- * literal, not from all of them, and the streams are written into slots in
- * the matcher's state, LIT_SLOT bytes each, then moved into place once their
- * sizes are known. Without the slots every literal had to be priced first,
- * since the header needs each stream's size. A prime step: every 4th or 8th
- * literal is the same byte of each 4- or 8-byte field; a larger step saves
- * less than its coarser sample costs in bytes. Where the sample says
- * the literals stay raw by LIT_SAMPLE_MARGIN bytes or more, they do, and the
- * streams are not written: most blocks that stay raw are far from the rule,
- * and a block the sample misjudges by more is rare. The slots fit the state
- * for blocks of 4 KiB; for larger blocks every literal is priced, as at
- * SEQLZ_LEVEL_OWN.
+ * Where a block tries neither deltas nor a table of its own, below
+ * SEQLZ_LEVEL_OWN and at it for blocks without deltas and with fewer than
+ * OWN_LITERALS_MIN literals, the fixed table is picked from every
+ * LIT_SAMPLE_STEP-th literal, not from all of them, and the streams are written
+ * into slots in the matcher's state, LIT_SLOT bytes each, then moved into place
+ * once their sizes are known. Without the slots every literal had to be priced
+ * first, since the header needs each stream's size. A prime step: every 4th or
+ * 8th literal is the same byte of each 4- or 8-byte field; a larger step saves
+ * less than its coarser sample costs in bytes. Where the sample says the
+ * literals stay raw by LIT_SAMPLE_MARGIN bytes or more, they do, and the
+ * streams are not written: most blocks that stay raw are far from the rule, and
+ * a block the sample misjudges by more is rare. The slots fit the state for
+ * blocks of 4 KiB; for larger blocks every literal is priced, as for a block
+ * that tries deltas or a table of its own.
  */
 #define LIT_SAMPLE_STEP 7U
 #define LIT_SAMPLE_MARGIN 8U
@@ -691,6 +694,7 @@ static unsigned int own_code(struct own_work *w, unsigned int n_literals,
 	 * many blocks it is not built.
 	 */
 	h = n_literals * log2_256(n_literals) - h;
+	/* h is in 1/256 bits: 256 * 8 per byte */
 	est = h / 2048U + n * 115U / 256U;
 	if (est + SEQLZ_LIT_HEADER(SEQLZ_SIZE_BITS_MIN) + OWN_SAVES_MIN >
 		    limit ||
@@ -779,7 +783,7 @@ static unsigned int size_width(const unsigned int *sizes)
  * Turns the block of len bytes in d, with raw literals as the encoder wrote it,
  * into one with Huffman coded literals, where that saves more than 1/16 of them
  * plus coded_min bytes, SEQLZ_LIT_CODED_MIN or SEQLZ_LIT_CODED_MIN_OWN, not
- * counting the header of the coded literals, 3 to 16 bytes. Decoding coded
+ * counting the header of the coded literals, 8 to 16 bytes. Decoding coded
  * literals costs time for every byte, and coding them wherever they save
  * anything at all saved almost no more memory. Returns the new length, or len
  * if the literals stay raw.
@@ -789,18 +793,18 @@ static unsigned int size_width(const unsigned int *sizes)
  * least OWN_SAVES_MIN bytes less.
  *
  * The coded literals are written over the raw ones in d, which are read from
- * raw if the caller has them elsewhere, else from d. Below SEQLZ_LEVEL_OWN the
- * streams are first written into spare, the matcher's state, see LIT_SLOTS,
- * and moved over the raw literals once all are read. Else spare, at least a
- * block, gets a copy of the raw literals once it is clear they get coded, and
- * the streams are written into d from it; with raw given, spare may be NULL.
- * The bitstream stays behind the raw literals until it moves down behind the
- * coded ones at the end. So d needs no room beyond len, and the block is coded
- * in any dst it fits into raw.
+ * raw if the caller has them elsewhere, else from d. Without own and with a
+ * spare, the streams are first written into spare, the matcher's state, see
+ * LIT_SLOTS, and moved over the raw literals once all are read. Else spare, at
+ * least a block, gets a copy of the raw literals once it is clear they get
+ * coded, and the streams are written into d from it; with raw given, spare may
+ * be NULL. The bitstream stays behind the raw literals until it moves down
+ * behind the coded ones at the end. So d needs no room beyond len, and the
+ * block is coded in any dst it fits into raw.
  *
- * With delta not 0, raw has the literals' deltas, see SEQLZ_LIT_DELTA_AT,
- * which are coded instead, and the header says so; if they stay raw, d keeps
- * them as they are.
+ * With delta not 0, raw has the literals' deltas, see SEQLZ_LIT_DELTA_AT, which
+ * are coded instead, and the header says so; if they stay raw, d keeps them as
+ * they are.
  */
 static __always_inline unsigned int
 code_literals(u8 *d, unsigned int len, const u8 *raw, u8 *spare,
@@ -1013,17 +1017,4 @@ unsigned int seqlz_code_own(u8 *d, unsigned int len, struct seqlz_state *st,
 unsigned int seqlz_code_literals(u8 *d, unsigned int len, u8 *spare)
 {
 	return code_literals(d, len, NULL, spare, NULL, 0, SEQLZ_LIT_CODED_MIN);
-}
-
-/*
- * The same for seqlz_encode(), whose caller has the raw literals at raw: its
- * state may be NULL, so the streams' slots are static here, for one thread,
- * which the tests and tools are
- */
-unsigned int seqlz_code_raw_literals(u8 *d, unsigned int len, const u8 *raw)
-{
-	/* room for the streams' slots, as the matcher's state has it */
-	static u8 slots[sizeof(struct seqlz_state)];
-
-	return code_literals(d, len, raw, slots, NULL, 0, SEQLZ_LIT_CODED_MIN);
 }

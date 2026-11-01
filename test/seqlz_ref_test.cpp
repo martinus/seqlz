@@ -234,7 +234,7 @@ TEST_CASE("seqlz_ref: the compressor's pages decode the same with both decoders,
     for (int round = 0; round < 300; ++round) {
         CAPTURE(round);
         auto const page = make_page(rng, round);
-        for (unsigned level = 1; level <= SEQLZ_LEVELS; ++level) {
+        for (unsigned level = 1; level <= SEQLZ_LEVEL_MAX; ++level) {
             auto const c = compress(page, level);
             coded += (c[1] & 0x80) != 0;
             REQUIRE(check_same(r.get(), c) == page);

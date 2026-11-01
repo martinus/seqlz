@@ -2,8 +2,9 @@
 /*
  * seqlz: compression of single blocks of 4 KiB, for zram, where a block is one
  * memory page with 4 KiB pages. An LZ format whose sequences and literals are
- * Huffman coded with tables that are part of the format, so a block carries
- * none. Documentation/staging/seqlz.rst specifies the format. It may change
+ * Huffman coded with tables that are part of the format; only at level 3 a
+ * block may carry a literal table of its own.
+ * Documentation/staging/seqlz.rst specifies the format. It may change
  * from one kernel to the next, so a compressed block is only for the kernel
  * that wrote it, not for storage.
  */
@@ -27,7 +28,11 @@
  * matcher is done
  */
 #define SEQLZ_MEM_COMPRESS (SEQLZ_PAGE_BITS == 12 ? 8192 : 16384)
-/* the work memory of seqlz_decompress(): the decoded literals of a block */
+/*
+ * the work memory of seqlz_decompress(): the decoded literals of a block, 16
+ * bytes more for the 16-byte copies that read past the last one, and before
+ * that the buckets of a block's own literal table while it is read
+ */
 #define SEQLZ_MEM_DECOMPRESS (SEQLZ_BLOCK_SIZE + 16)
 
 /*
@@ -70,8 +75,8 @@ int seqlz_compress(const void *src, void *dst, unsigned int dst_len,
  * @wrkmem: SEQLZ_MEM_DECOMPRESS bytes, or NULL if every block it gets was
  *          compressed at SEQLZ_LEVEL_MIN
  *
- * Safe for any input: it never reads outside @src and @src_len, and never
- * writes outside @dst and @wrkmem, and its time is bounded by the block size,
+ * Safe for any input: it reads only the @src_len bytes at @src, @dst and
+ * @wrkmem, writes only @dst and @wrkmem, and its time is bounded by the block size,
  * not by @src_len. After an error, @dst holds bytes of no meaning.
  *
  * Context: Any context. It does not sleep and allocates nothing.

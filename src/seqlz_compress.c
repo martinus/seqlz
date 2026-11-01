@@ -78,7 +78,7 @@ unsigned int seqlz_compress_block(struct seqlz_state *st, const void *src,
 {
 	unsigned int len, delta;
 
-	if (level < 1 || level > SEQLZ_LEVELS)
+	if (level < 1 || level > SEQLZ_LEVEL_MAX)
 		return 0;
 	/*
 	 * Not more room than every block fits into: the bitstream is written

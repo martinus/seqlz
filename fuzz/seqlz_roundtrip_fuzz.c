@@ -97,7 +97,7 @@ int LLVMFuzzerTestOneInput(const uint8_t* data, size_t size) {
         for (k = (unsigned int)size - 1U; k < SEQLZ_BLOCK_SIZE; k++)
             page[k] = page[k - (size - 1)];
 
-    for (level = 1; level <= SEQLZ_LEVELS; level++)
+    for (level = 1; level <= SEQLZ_LEVEL_MAX; level++)
         roundtrip(page, level);
     small_dst(page, SEQLZ_BLOCK_SIZE, 2 + (data[0] >> 2 & 1));
     small_dst(page, (unsigned int)(size * 2654435761U % (SEQLZ_BLOCK_SIZE + 64U)), 1 + (data[0] >> 1 & 3) % 3);

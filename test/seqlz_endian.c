@@ -93,7 +93,7 @@ int main(void) {
 
     for (k = 0; k < 600; k++) {
         make_page(page, k);
-        for (level = 1; level <= SEQLZ_LEVELS; level++) {
+        for (level = 1; level <= SEQLZ_LEVEL_MAX; level++) {
             unsigned int n = seqlz_compress_block(&st, page, dst, sizeof dst, level);
 
             if (!n || seqlz_decompress(dst, n, out, scratch) || memcmp(out, page, SEQLZ_BLOCK_SIZE))

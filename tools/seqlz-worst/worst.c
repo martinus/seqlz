@@ -581,8 +581,8 @@ static int count_streams(int n, char** paths) {
 int main(int argc, char** argv) {
     if (argc >= 3 && !strcmp(argv[1], "--level")) {
         level = (unsigned int)atoi(argv[2]);
-        if (level < 1 || level > SEQLZ_LEVELS) {
-            fprintf(stderr, "--level: 1 to %d\n", SEQLZ_LEVELS);
+        if (level < 1 || level > SEQLZ_LEVEL_MAX) {
+            fprintf(stderr, "--level: 1 to %d\n", SEQLZ_LEVEL_MAX);
             return 1;
         }
         argc -= 2;

@@ -51,8 +51,7 @@ SRC = REPO / "src"
 WIDTH = 80
 
 # what only the harness and the tests of src/ use, left out of the kernel's copy
-HARNESS_ONLY = re.compile(r"\bseqlz_find\b|\bseqlz_encode\b|\bseqlz_sequence\b|\bSEQLZ_MAX_SEQUENCES\b|"
-                          r"\bseqlz_code_raw_literals\b")
+HARNESS_ONLY = re.compile(r"\bseqlz_find\b|\bseqlz_encode\b|\bseqlz_sequence\b|\bSEQLZ_MAX_SEQUENCES\b")
 
 # the one reference to this repository the kernel's copy keeps, the project's page in MAINTAINERS
 PROJECT_URL = "https://github.com/martinus/seqlz"
@@ -345,7 +344,6 @@ def port_internal():
     t = must(t, "#define SEQLZ_HASH_BITS (SEQLZ_BLOCK_BITS == 12 ? 12U : 13U)\n", "#define SEQLZ_HASH_BITS 12U\n")
     # the cast is for C++, which src/ is compiled as too
     t = must(t, "\tconst u8 *q = (const u8 *)p; /* a cast for the C++ of the harness */\n", "\tconst u8 *q = p;\n")
-    t = must(t, "unsigned int seqlz_code_raw_literals(u8 *d, unsigned int len, const u8 *raw);\n", "")
     return fix_comments(t)
 
 
@@ -379,7 +377,7 @@ def port_compress():
     # kernel-doc, in include/linux/seqlz.h
     t = make_static(t, "seqlz_compress_block")
     t = put_doc(t, "seqlz_compress_block", "/* one block, for the interface below, which checked the level */\n")
-    t = must(t, "\tif (level < 1 || level > SEQLZ_LEVELS)\n\t\treturn 0;\n", "")
+    t = must(t, "\tif (level < 1 || level > SEQLZ_LEVEL_MAX)\n\t\treturn 0;\n", "")
     return fix_comments(t)
 
 
@@ -537,8 +535,7 @@ def main():
         "lib/seqlz/seqlz_tables.h": port_tables_h(),
         "lib/seqlz/seqlz_internal.h": port_internal(),
         "lib/seqlz/seqlz_compress.c": port_compress(),
-        "lib/seqlz/seqlz_compress_literals.c": fix_comments(cut(port_c("compress_literals"),
-                                                            r"\n/\*\n \* The same for seqlz_encode\(\).*?\n\}\n")),
+        "lib/seqlz/seqlz_compress_literals.c": fix_comments(port_c("compress_literals")),
         "lib/seqlz/seqlz_decompress.c": fix_comments(port_c("decompress")),
         "lib/seqlz/seqlz_decompress_literals.c": fix_comments(port_c("decompress_literals")),
         "lib/seqlz/gen_seqlz_tables.c": port_gen(),

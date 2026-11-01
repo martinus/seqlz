@@ -44,7 +44,7 @@ follows these rules; open gaps in existing code: issues #151 to #157 (review of 
   to keep its locals out of `seqlz_decode_literals()`.
 - `check.sh` builds only what `port.py` keeps; the VM's and the phone's backends build all of `src/`,
   the harness-only functions (`HARNESS_ONLY`) too, with the kernel's frame limit. Keep their locals
-  small: a 3.6 KB struct on the stack of `seqlz_code_raw_literals()` passed `check.sh` and failed the VM
+  small: a 3.6 KB struct on the stack of the harness's level 2 coder passed `check.sh` and failed the VM
   build (31 Oct).
 - The copy never names this repo, our machines, phones or dumps. `port.py` fails on names
   (`FORBIDDEN`), not on wording like "on pages of a phone"; also on a `REWRITES` entry that matches no
