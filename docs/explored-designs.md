@@ -240,9 +240,10 @@ One line per entry, by area, newest first: date measured, verdict, link, result,
 
 **Recompression**
 
+- 2026-10-31 **not built** [An optimal parse in today's format, the bound for a level for recompression only](#an-optimal-parse-in-todays-format-the-bound-for-a-level-for-recompression-only-56-bytes-per-page-under-level-3-half-of-it-matches-level-3s-matcher-does-not-find-not-built): `seqlz-opt`'s DP on today's tokens and length values, literal costs per page in 4 delta modes, coded by `seqlz_encode()` at level 3. Ten samples: 834.1 zsmalloc bytes per page against `seqlz-3`'s 890.0, -56 (-6.3%), #302's kill line 17. Chain 1 -2.9% (the pricing), chain 4 / 16 / 256 -5.3% / -6.0% / -6.4% (matches level 3's matcher does not find). One parse 380 µs on the Ryzen at chain 16, about 50 KB per CPU, 25 bytes per page on 8 CPUs and 64 MiB. Not built: 0.05 bytes per µs. Code: `opt_parse.c`, `opt302.cpp` in the research tools; #302. Now: current. Untried: level 3's lazy matcher with a hash chain at write time; the phone's time.
 - 2026-10-16 **measurement** [Recompression with level 3](#recompression-with-level-3-78-to-101-µs-per-page-level-3s-memory-at-level-1s-write-time-on-the-hull-where-idle-time-weighs-less-than-03): kernel VM, four samples, all pages recompressed: seqlz-1 writes plus seqlz-3 recompression end at seqlz-3's bytes (0 to 1.9 smaller) and read speed, at seqlz-1's write time, for 7.8 to 10.1 µs per page (zstd 3: 13.3 to 15.9). On the hull instead of level 3 where recompression weighs less than 0.29 to 0.32 of a write's µs. A zram setting, no seqlz change. Code: tools/zram-vm/init.c primary+secondary. Now: current. Untried: the phone; the kernel copy's single backend with its level via algorithm_params priority=1.
 - 2026-09-25 **not pursued** [Recompression of idle pages](#recompression-measured-not-pursued): Kernel VM, desktop dumps 1/2, written with seqlz-2: recompression with seqlz-opt takes 237 us per page for 59 and 106 bytes, 0.3 and 0.4 bytes per us, against 3 and 17 for the step to zstd 3 on every write. Needs a much cheaper recompression. Code: seqlz-opt removed in #42; seqlz-hc-lit no longer in src/ or bench/. Now: current; level 3 (15 Oct) stores about zstd 3's memory on every write: "Level 3, a lazy matcher and a literal table of the page's own"; recompression with level 3, 16 Oct: 7.8 to 10.1 µs per page, on the hull where it weighs less than 0.3 ([recompression with level 3](#recompression-with-level-3-78-to-101-µs-per-page-level-3s-memory-at-level-1s-write-time-on-the-hull-where-idle-time-weighs-less-than-03)). Untried: Neighbouring pages together (8% to 9% with zstd in 16 KiB blocks) or deltas against similar pages: zram's work.
-- 2026-09-24 **not kept** [seqlz-opt: optimal parser priced by seqlz's tables](#seqlz-opt-a-parser-that-knows-seqlzs-costs-zstds-memory-at-lz4s-read-speed): Kernel VM, seqlz-2's format: 2.6% less memory than zstd 3 on first desktop dump, 2.5% more on second; cold read p50 / p99 2720 / 4670 ns against lz4 2491 / 4730; about 0.25 ms per page to compress, only for recompression. Code: seqlz_parse_opt(), seqlz_default_opt (--codec opt); removed in #42. Now: Removed in #42, see "Recompression, measured, not pursued". Level 3 (15 Oct) gets near zstd 3's memory at write speed: "Level 3, a lazy matcher".
+- 2026-09-24 **not kept** [seqlz-opt: optimal parser priced by seqlz's tables](#seqlz-opt-a-parser-that-knows-seqlzs-costs-zstds-memory-at-lz4s-read-speed): Kernel VM, seqlz-2's format: 2.6% less memory than zstd 3 on first desktop dump, 2.5% more on second; cold read p50 / p99 2720 / 4670 ns against lz4 2491 / 4730; about 0.25 ms per page to compress, only for recompression. Code: seqlz_parse_opt(), seqlz_default_opt (--codec opt); removed in #42. Now: Removed in #42, see "Recompression, measured, not pursued". Level 3 (15 Oct) gets near zstd 3's memory at write speed: "Level 3, a lazy matcher"; rebuilt on today's format as a bound, 31 Oct: 56 bytes per page under level 3 ([an optimal parse in today's format](#an-optimal-parse-in-todays-format-the-bound-for-a-level-for-recompression-only-56-bytes-per-page-under-level-3-half-of-it-matches-level-3s-matcher-does-not-find-not-built)).
 
 **The page fault**
 
@@ -9799,6 +9800,72 @@ A much better ratio for idle pages would come from outside the codec: neighbouri
 to 9% with `zstd` in blocks of 16 KiB, or deltas against a similar page, 2.3 to 3.9 points (see the
 ideas of #29 and #31). Both are zram's work.
 
+## An optimal parse in today's format, the bound for a level for recompression only: 56 bytes per page under level 3, half of it matches level 3's matcher does not find, not built
+
+Status: not built, 2026-10-31. Now: current.
+
+*Could a level with no write-time budget, for zram's recompression only, take enough of what level 3
+leaves (#302)? The bound: `seqlz-opt`'s parser of 24th September, a forward DP priced by the code
+lengths, rebuilt on today's tokens, offset classes and length values, with a literal cost per byte value
+from the page's own literals in each of the 4 delta modes, every parse coded by `seqlz_encode()` at
+level 3 with the page, which picks the table and the delta itself. On the ten samples it stores 834.1
+zsmalloc bytes per page against `seqlz-3`'s 890.0, 56 less (6.3%), 43 to 76 per sample; #302's kill
+line was 17. I expected 12 to 25. Half of it is the pricing: with only the newest position of a hash
+and the last offset as candidates, which is what a one-slot matcher sees, the parse saves 2.9%. The
+other half is matches that a hash chain of 4 to 16 finds and level 3's matcher does not, 2.4% to 3.1%
+more. A second round of literal costs adds 0.1%, the best delta mode per page 6 to 9 bytes over one
+mode. The price is the time and the work memory: one parse 380 µs on the Ryzen at a chain of 16, 4
+modes 4 parses, and about 50 KB per CPU for the DP, which on 8 CPUs and 64 MiB of zram is 25 bytes per
+page, most of the gain. 56 bytes for about 1 ms is 0.05 bytes per µs, on the hull only where idle time
+costs next to nothing. Not built, by Martin.* Code: `opt_parse.c` and `opt302.cpp` in
+`~/seqlz-corpus/research/2026-10-31-tools/`, on `src/` at `bb24ac4`; the 24th September parser in git
+before #42 (`seqlz_parse_opt()` in `explore/seqlz.c`); #302.
+
+**Setup.** gcc 16.2.1 -O2, Ryzen 9 7950X. Per page that is not same-filled: `seqlz_compress_block()` at
+level 3, then per delta mode (plain, 4, 8, the last offset's) the DP: one state per position, the
+cheapest, with its literals since the last match and its last offset; candidates the last offset and a
+hash chain of 4 bytes; every length from 4 to the token's cap and above it only the longest; a match of
+256 bytes or more taken as it is. Prices in 1/16 bits: the token's code (escape and 12 bits without
+one), the offset's raw bits, length values, literals at -log2 of their count in the parse before
+(`seqlz-3`'s first) with 0.5 added, at most 12 bits. Every coded parse is decoded and compared with the
+page. zsmalloc cost by `bench/zsmalloc_cost.cpp`, the mean over the rows.
+
+| ten samples, chain 64, 2 rounds | zsmalloc bytes | compressed bytes |
+| --- | ---: | ---: |
+| `seqlz-3` | 890.03 | 866.25 |
+| the parse, best of the 4 modes | 834.12 | 811.18 |
+| the smaller of both | 833.95 | |
+
+Per sample, `seqlz-3` to the parse: p1 751.2 to 706.3, p2 876.6 to 822.4, p3 871.1 to 820.5, p4 865.2
+to 813.7, p5 843.2 to 783.4, `zram0` 939.7 to 882.3, `zram0-2026-09-24` 1157.3 to 1087.1,
+`zram0-2026-09-28` 1143.0 to 1066.6, `phone-mi9t-2026-10-03` 640.1 to 597.1, `phone-mi9t-2026-10-04`
+813.0 to 761.7.
+
+Every 10th page of the ten samples (`seqlz-3` 891.68 there):
+
+| chain | rounds | best mode | | plain only | the last offset's deltas only |
+| ---: | ---: | ---: | ---: | ---: | ---: |
+| 1 | 2 | 865.48 | -2.94% | 875.40 | 874.16 |
+| 4 | 2 | 844.50 | -5.29% | 853.79 | 851.64 |
+| 16 | 2 | 838.15 | -6.00% | 847.29 | 844.80 |
+| 64 | 1 | 836.71 | -6.16% | 846.05 | 843.92 |
+| 64 | 3 | 835.59 | -6.29% | 844.66 | 842.01 |
+| 256 | 2 | 834.71 | -6.39% | 843.78 | 841.18 |
+
+p3, every 10th page, chain 16: 152.3 to 148.6 sequences per page against `seqlz-3`'s 159.3; 758 to
+793 literals against 755, the most with the last offset's deltas, which make literals cheap. One parse:
+95 µs at chain 1, 380 at 16, 895 at 64, `seqlz_encode()` not counted.
+
+Not measured: the phone's time, the oracles of #302 on top (the transforms, the third repeat offset),
+level 3's lazy matcher with a hash chain at write time, which could take a part of the chain's half.
+
+```sh
+tools/gen-tables/gen-tables.sh t.c
+for f in src/seqlz_*.c t.c opt_parse.c; do gcc -O2 -std=gnu11 -Isrc -c $f; done
+g++ -O2 -std=c++20 -Isrc -Ibench -c opt302.cpp bench/zsmalloc_cost.cpp && g++ -o opt302 *.o
+opt302 ~/seqlz-corpus/<sample>-sample20000.pages <chain> <rounds> <stride>
+```
+
 ## Recompression with level 3: 7.8 to 10.1 µs per page, level 3's memory at level 1's write time, on the hull where idle time weighs less than 0.3
 
 Status: measurement, 2026-10-16. Now: current.
@@ -9864,7 +9931,7 @@ ALGOS=lz4,zstd,seqlz-1,seqlz-2,seqlz-3,seqlz-1+seqlz-3,seqlz-2+seqlz-3,seqlz-2+z
 
 ## seqlz-opt: a parser that knows seqlz's costs, zstd's memory at lz4's read speed
 
-Status: not kept, 2026-09-24. Now: Removed in #42, see "Recompression, measured, not pursued". Level 3 (15 Oct) gets near zstd 3's memory at write speed: "Level 3, a lazy matcher".
+Status: not kept, 2026-09-24. Now: Removed in #42, see "Recompression, measured, not pursued". Level 3 (15 Oct) gets near zstd 3's memory at write speed: "Level 3, a lazy matcher"; the parser rebuilt on today's format as a bound, 31 Oct: 56 bytes per page under level 3, "An optimal parse in today's format".
 
 *Removed in #42, see [Recompression, measured, not pursued](#recompression-measured-not-pursued).*
 
