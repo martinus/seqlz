@@ -129,8 +129,8 @@ test and told to follow this file, one phase at a time:
 | phase | steps | what to tell the runner | it stops with |
 | --- | --- | --- | --- |
 | 1 | 1 to 3 | "Run steps 1 to 3 of docs/format-check.md, D on `<model>`, R on `<model>`, W and I on `<model>`, then stop and show me the questions, sorted." | the questions of kind B and C, for the maintainer |
-| 2 | the tools | "Build the tools of steps 4 to 11 of docs/format-check.md, for the clean-room results in tools/format-check/runs/." | a pull request |
-| 3 | 4 to 6, 10 | "Run steps 4, 5, 6 and 10 of docs/format-check.md on the clean-room results in tools/format-check/runs/, then stop and show me every difference and every claim that does not hold." | the differences and the claims, for the maintainer |
+| 2 | the tools | "Build the tools of steps 4 to 11 of docs/format-check.md, for the clean-room results of phase 1's last round in <run directories>." | a pull request |
+| 3 | 4 to 6, 10 | "Run steps 4, 5, 6 and 10 of docs/format-check.md on the clean-room results of phase 1's last round, then stop and show me every difference and every claim that does not hold." | the differences and the claims, for the maintainer |
 | 4 | 7 | "Start step 7 of docs/format-check.md in the background and tell me how to see its state." | the fuzzers running |
 | 5 | 7, 8, 9, 11 | "Step 7 has run its time. Collect its results, run steps 8, 9 and 11 of docs/format-check.md, and write the entry in Runs." | the entry in [Runs](#runs) |
 
@@ -142,8 +142,8 @@ test and told to follow this file, one phase at a time:
 - The maintainer decides each question of kind B and each difference where format.md is clear and
   `src/` does something else, see step 3 and [What a difference means](#what-a-difference-means). A
   change of format.md ends the phase: back to phase 1, with new clean rooms.
-- A session can end between phases. What the next one needs is in `tools/format-check/runs/` and the
-  run's notes, so it starts from there and not from the old session's context. Phase 4 takes hours
+- A session can end between phases. What the next one needs is in the run directories and the run's
+  notes, so it starts from there and not from the old session's context. Phase 4 takes hours
   and all the CPUs it is given; no benchmark runs on the machine meanwhile.
 
 ## Step 1: the clean room
@@ -197,11 +197,14 @@ a network tool such as `curl`, `git` or `pip`, a URL, a path of the host. `clean
 run did not finish. The runner reads every marked call; one that reached outside, and the run does not
 count, it runs again in a new directory.
 
-What comes back is kept as written, in `tools/format-check/runs/<date>-<role>/`: the room without
-`format.md`, `seqlz.rst` and `tables/` (the code, the agent's `QUESTIONS.md`, `FEATURES.md` or
-`RULES.md` and `CLAIMS.md`), `meta.txt`, `audit.txt` and the transcript compressed with xz. A bug fix
-in a clean-room decoder later is its own commit, so that what the agent wrote stays visible in the
-history.
+Into the repository go per round only the record of why format.md changed: in
+`tools/format-check/runs/<date>-<role>/` the agent's `QUESTIONS.md`, `meta.txt` and `audit.txt`, and
+the runner's notes with every question and its kind, `<date>-notes.md`. The code, `FEATURES.md`,
+`RULES.md`, `CLAIMS.md` and the transcript stay in the run directory, outside the repository: a round
+whose questions change format.md is replaced by the next one, and git would keep its files forever.
+The last round's code and lists go in, as written, with the tools of steps 4 to 11 that use them. A
+bug fix in a clean-room decoder after that is its own commit, so that what the agent wrote stays
+visible in the history.
 
 ## Step 2: the briefs
 
@@ -513,8 +516,8 @@ text: it has the old reading in its context.
 
 A later change of the format, or a clearer sentence in format.md, needs at least: new D, W and I
 from step 1, steps 3 to 6, step 7 for 2 hours, and step 9 for the reject sites the change
-touched. The decoders of earlier runs stay in `tools/format-check/runs/` and in the diff
-target only as long as they are updated for the change, by someone who reads format.md, not `src/`.
+touched. The decoders of earlier runs stay in the repository and in the diff target only as long as
+they are updated for the change, by someone who reads format.md, not `src/`.
 
 ## What this does not show
 
@@ -552,8 +555,7 @@ the table's is 7, a false sentence on which byte a delta is added to, the end of
 after a run past 255, the date of the format, a left over "4 KiB tables", a *Why:* that contradicted
 `code = 8`, which literal table `code` names, `read()` on bits outside `B`, and one sentence of "What
 the compressor writes". Three questions of kind A were asked by three agents each, and format.md
-answers them more plainly now too. No question of kind C or D. The runs, the notes with every question
-and its kind, and the transcripts are in
-[`tools/format-check/runs/`](../tools/format-check/runs).
+answers them more plainly now too. No question of kind C or D. The questions, audits and the notes
+with every question and its kind are in [`tools/format-check/runs/`](../tools/format-check/runs).
 
 Steps 4 to 11 have not run. Next: phase 1 again, with new clean rooms on the changed format.md.
