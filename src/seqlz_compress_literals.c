@@ -798,7 +798,9 @@ static unsigned int size_width(const unsigned int *sizes)
  * coded, and the streams are written into d from it; with raw given, spare may
  * be NULL. The bitstream stays behind the raw literals until it moves down
  * behind the coded ones at the end. So d needs no room beyond len, and the
- * block is coded in any dst it fits into raw.
+ * block is coded in any dst it fits into raw. sampled says that own is NULL
+ * and spare is not, so that a copy of this function for such a caller has no
+ * code for the other way.
  *
  * With delta not 0, raw has the literals' deltas, see SEQLZ_LIT_DELTA_AT, which
  * are coded instead, and the header says so; if they stay raw, d keeps them as
@@ -806,7 +808,8 @@ static unsigned int size_width(const unsigned int *sizes)
  */
 static __always_inline unsigned int
 code_literals(u8 *d, unsigned int len, const u8 *raw, u8 *spare,
-	      struct own_work *own, unsigned int delta, unsigned int coded_min)
+	      struct own_work *own, unsigned int delta, unsigned int coded_min,
+	      bool sampled)
 {
 	const unsigned int n_literals = get_unaligned_le16(d);
 	const unsigned int bitstream = len - SEQLZ_HEADER - n_literals;
@@ -824,7 +827,7 @@ code_literals(u8 *d, unsigned int len, const u8 *raw, u8 *spare,
 	if (own &&
 	    (n_literals < OWN_LITERALS_MIN || n_literals > OWN_LITERALS_MAX))
 		own = NULL;
-	if (!own && spare) {
+	if (sampled || (!own && spare)) {
 		/*
 		 * The table from every LIT_SAMPLE_STEP-th literal: the bits of
 		 * each in all tables, in the lanes as lit_sums() has them. The
@@ -1004,15 +1007,18 @@ unsigned int seqlz_code_own(u8 *d, unsigned int len, struct seqlz_state *st,
 {
 	return code_literals(d, len, delta ? st->literals : NULL,
 			     delta ? NULL : st->literals, own_work(st), delta,
-			     SEQLZ_LIT_CODED_MIN_OWN);
+			     SEQLZ_LIT_CODED_MIN_OWN, false);
 }
 
 /*
  * The literals with the fixed tables only, below SEQLZ_LEVEL_OWN. Each entry
  * point has code_literals() inlined, compiled for its arguments: here without
- * the counts of a block's own table and without deltas.
+ * the counts of a block's own table and without deltas, so the table always
+ * comes from a sample of the literals, and the streams go into slots, never
+ * NULL, see LIT_SLOT.
  */
-unsigned int seqlz_code_literals(u8 *d, unsigned int len, u8 *spare)
+unsigned int seqlz_code_literals(u8 *d, unsigned int len, u8 *slots)
 {
-	return code_literals(d, len, NULL, spare, NULL, 0, SEQLZ_LIT_CODED_MIN);
+	return code_literals(d, len, NULL, slots, NULL, 0, SEQLZ_LIT_CODED_MIN,
+			     true);
 }
