@@ -13,7 +13,8 @@ paths:
   `lint.py`; job `pages` publishes it from `main` to https://martin.ankerl.com/seqlz/);
   `kernel-port` (`tools/kernel-port/check.sh` x86-64/arm64/arm/s390, arm64 also with 16/64 KiB pages,
   x86-64 also a tinyconfig kernel for modpost); `kunit` (`kunit.sh` UML x86-64 with KASAN+UBSan and
-  arm64 qemu with 64 KiB pages, next to `kernel-port`, not after it).
+  arm64 qemu with 64 KiB pages, next to `kernel-port`, not after it; kernel compiled through ccache,
+  whose cache only runs on `main` save, pull requests restore it).
 - `ci-ok` is the only required check. Jobs may be renamed; add each new job to `ci-ok`'s `needs` and
   its `test` lines. The test job greps doctest's assertion line: zero tests run = fail.
 - `.github/workflows/cflite.yml` (ClusterFuzzLite): daily 1 h each ASan/UBSan/MSan; 10 min ASan on PRs
