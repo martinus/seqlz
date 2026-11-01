@@ -209,21 +209,26 @@ jobs:
 
   # The KUnit tests of the kernel copy, a job of their own so that they run next to kernel-port's checks
   # instead of after them: in UML with KASAN and UBSan, and on arm64 in qemu with 64 KiB pages, where the
-  # library compresses blocks of 4 KiB that are not pages.
+  # library compresses blocks of 4 KiB that are not pages. The kernel is compiled through ccache. Its
+  # cache, 30 to 60 MB, is saved only by runs on main: pull requests restore main's and add no entry of
+  # their own next to the kernel tree's in the repository's 10 GB of caches.
   kunit:
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
       matrix:
         include:
-          - {name: x86_64, args: '--kconfig_add CONFIG_KASAN=y --kconfig_add CONFIG_UBSAN=y'}
-          - {name: arm64, args: '--arch=arm64 --make_options LLVM=1 --kconfig_add CONFIG_ARM64_64K_PAGES=y'}
+          - {name: x86_64, args: '--kconfig_add CONFIG_KASAN=y --kconfig_add CONFIG_UBSAN=y --make_options "CC=ccache gcc"'}
+          - {name: arm64, args: '--arch=arm64 --make_options LLVM=1 --make_options "CC=ccache clang" --kconfig_add CONFIG_ARM64_64K_PAGES=y'}
     name: kunit (${{ matrix.name }})
+    env:
+      CCACHE_DIR: ${{ github.workspace }}/.ccache
+      CCACHE_MAXSIZE: 500M
     steps:
       - uses: actions/checkout@v7
       - name: tools to build a kernel
         run: >-
-          sudo apt-get update -q && sudo apt-get install -y -q flex bison bc libelf-dev libssl-dev
+          sudo apt-get update -q && sudo apt-get install -y -q flex bison bc libelf-dev libssl-dev ccache
           ${{ matrix.name == 'arm64' && 'clang lld llvm qemu-system-arm' || '' }}
       - name: the kernel tree from the cache
         id: kernel
@@ -235,8 +240,23 @@ jobs:
         if: steps.kernel.outputs.cache-hit != 'true'
         timeout-minutes: 45
         run: .github/fetch-kernel.sh kernel ${{ env.KERNEL_COMMIT }}
+      - name: ccache from the cache
+        uses: actions/cache/restore@v6
+        with:
+          path: ${{ env.CCACHE_DIR }}
+          key: kunit-ccache-${{ matrix.name }}-${{ env.KERNEL_COMMIT }}-${{ github.run_id }}
+          restore-keys: kunit-ccache-${{ matrix.name }}-${{ env.KERNEL_COMMIT }}-
       - name: KUnit tests
-        run: tools/kernel-port/kunit.sh kernel ${{ matrix.args }}
+        run: |
+          ccache -z
+          tools/kernel-port/kunit.sh kernel ${{ matrix.args }}
+          ccache -s
+      - name: ccache to the cache
+        if: github.event_name == 'push'
+        uses: actions/cache/save@v6
+        with:
+          path: ${{ env.CCACHE_DIR }}
+          key: kunit-ccache-${{ matrix.name }}-${{ env.KERNEL_COMMIT }}-${{ github.run_id }}
 
   # The one required check. A job whose dependency failed is skipped, and a skipped required check
   # counts as passed, so this needs if: always() and has to look at every result itself.
