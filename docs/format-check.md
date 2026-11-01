@@ -3,8 +3,9 @@
 [format.md](format.md) says that a decoder can be written from it alone, and that it says which
 compressed blocks are valid. This file is the procedure that checks both claims, written so that
 anyone can run it again: who writes what, from which files, what runs against what, and when the check
-has passed. It is a plan; nothing of it has run yet, and the tools it names under
-`tools/format-check/` don't exist yet. Results go to [Runs](#runs) at the end.
+has passed. Nothing of it has run yet. Of the tools it names, only those of step 1 exist,
+[`tools/format-check/`](../tools/format-check); the others come after phase 1, see
+[How to run it](#how-to-run-it). Results go to [Runs](#runs) at the end.
 
 ## Contents
 
@@ -105,41 +106,56 @@ format.md.
 
 ## How to run it
 
-The tools come first. `tools/format-check/cleanroom.sh`, `all-decoders`, `claims.py`,
-`fuzz/seqlz_gen_fuzz.c`, `test/seqlz_rules_test.cpp` and the decoders added to the `diff` target are
-ordinary changes of the repository, made and reviewed as such, before any run. That change includes
-one trial of `cleanroom.sh` with a brief that tells the agent to fetch a web page and to read a file
-outside its directory: both have to fail, and the audit of step 1 has to name both.
+The tools come in two parts. Step 1's, `tools/format-check/cleanroom.sh`, exists. Before its first
+real run, and after a new version of claude or of the image, one trial:
+
+```sh
+tools/format-check/cleanroom.sh tools/format-check/trial-brief.md <dir> <model>
+```
+
+The trial's brief tells the agent to fetch a web page, to print a file of the host and its home
+directory, and to write a file. It passes when the agent has no web tool, sees no home directory but
+its own empty one, wrote `hello.txt` into its room, and `audit.txt` marks the fetch and the paths.
+
+The tools of steps 4 to 11 (`all-decoders`, `claims.py`, `fuzz/seqlz_gen_fuzz.c`,
+`test/seqlz_rules_test.cpp`, the decoders added to the `diff` target) come after phase 1, once
+format.md no longer changes: they link D's, R's and W's code and are built from I's lists, and each
+change of format.md in phase 1 replaces all of those. They are ordinary changes of the repository,
+made and reviewed as such.
 
 Then the runner is an agent session, e.g. Claude Code, started in a fresh checkout of the commit under
 test and told to follow this file, one phase at a time:
 
 | phase | steps | what to tell the runner | it stops with |
 | --- | --- | --- | --- |
-| 1 | 1 to 3 | "Run steps 1 to 3 of docs/format-check.md, then stop and show me the questions, sorted." | the questions of kind B and C, for the maintainer |
-| 2 | 4 to 6, 10 | "Run steps 4, 5, 6 and 10 of docs/format-check.md on the clean-room results in tools/format-check/runs/, then stop and show me every difference and every claim that does not hold." | the differences and the claims, for the maintainer |
-| 3 | 7 | "Start step 7 of docs/format-check.md in the background and tell me how to see its state." | the fuzzers running |
-| 4 | 7, 8, 9, 11 | "Step 7 has run its time. Collect its results, run steps 8, 9 and 11 of docs/format-check.md, and write the entry in Runs." | the entry in [Runs](#runs) |
+| 1 | 1 to 3 | "Run steps 1 to 3 of docs/format-check.md, D on `<model>`, R on `<model>`, W and I on `<model>`, then stop and show me the questions, sorted." | the questions of kind B and C, for the maintainer |
+| 2 | the tools | "Build the tools of steps 4 to 11 of docs/format-check.md, for the clean-room results in tools/format-check/runs/." | a pull request |
+| 3 | 4 to 6, 10 | "Run steps 4, 5, 6 and 10 of docs/format-check.md on the clean-room results in tools/format-check/runs/, then stop and show me every difference and every claim that does not hold." | the differences and the claims, for the maintainer |
+| 4 | 7 | "Start step 7 of docs/format-check.md in the background and tell me how to see its state." | the fuzzers running |
+| 5 | 7, 8, 9, 11 | "Step 7 has run its time. Collect its results, run steps 8, 9 and 11 of docs/format-check.md, and write the entry in Runs." | the entry in [Runs](#runs) |
 
 - The runner never starts D, R, W or I as its own subagents. They would share its files, `src/`
   included, and their prompt would come from a session that knows `src/`. It only calls
   `cleanroom.sh`, which gives the agent the brief and nothing else, and it does not talk to an agent
   while it runs.
-- The clean-room agent gets its credentials as an API key passed into the container, or as a login
-  copied into the container's empty home directory; nothing else of the host's home.
+- The runner's shell has the clean-room agents' credentials, see step 1.
 - The maintainer decides each question of kind B and each difference where format.md is clear and
   `src/` does something else, see step 3 and [What a difference means](#what-a-difference-means). A
   change of format.md ends the phase: back to phase 1, with new clean rooms.
 - A session can end between phases. What the next one needs is in `tools/format-check/runs/` and the
-  run's notes, so it starts from there and not from the old session's context. Phase 3 takes hours
+  run's notes, so it starts from there and not from the old session's context. Phase 4 takes hours
   and all the CPUs it is given; no benchmark runs on the machine meanwhile.
 
 ## Step 1: the clean room
 
-`tools/format-check/cleanroom.sh <role> <dir>` (to be written) makes the directory an agent works in
-and starts the agent there. The directory is outside any checkout of the repository, so that the
-agent finds no `.git`, no instruction file of the project (`CLAUDE.md`, `.claude/`) and no memory of
-earlier sessions from it.
+```sh
+tools/format-check/cleanroom.sh <role> <dir> <model>      # role D, R, W or I
+```
+
+makes the directory an agent works in, `<dir>/room`, with `make_room.py`, and starts the agent there.
+`<dir>` must be outside any checkout of the repository, so that the agent finds no `.git`, no
+instruction file of the project (`CLAUDE.md`, `.claude/`) and no memory of earlier sessions from it;
+the script refuses one inside.
 
 What is in it, and nothing else:
 
@@ -157,23 +173,31 @@ instead.
 
 How the agent runs:
 
-- In a container (e.g. podman or docker) that mounts only this directory, with a compiler (gcc and
-  clang with ASan, UBSan, MSan), make and python3, and no home directory of the host.
-- The agent reads no instruction files, memory, plugins or hooks of the user or the project, and has
-  no tools to search or fetch from the web, and no MCP servers. With Claude Code e.g. `claude --bare -p`
-  with an API key, and `--disallowedTools WebFetch WebSearch`. The repository is public on GitHub and
-  the book at <https://martin.ankerl.com/seqlz/> shows every line of `src/`, so any look outside the
-  directory spoils the run.
-- The whole transcript is kept next to the result (Claude Code: `--output-format stream-json`).
-- The model is named explicitly, and recorded.
+- In podman, in the image `seqlz-cleanroom` that `cleanroom.sh` builds from
+  [`Containerfile`](../tools/format-check/Containerfile) on its first run: Fedora with gcc and clang
+  and their sanitizers, make and python3. The container mounts the room as `/room`, an empty
+  directory as the agent's home and the host's `claude` binary, and nothing else of the host.
+- The agent has no web tools (`--disallowedTools WebFetch WebSearch`) and no MCP servers. Its home is
+  empty, so it reads no instruction files, memory, plugins or hooks of the user or the project.
+- Credentials: `ANTHROPIC_API_KEY` in the environment, and then claude also runs with `--bare`; or
+  `CLAUDE_CODE_OAUTH_TOKEN`, a token of the subscription from `claude setup-token`. Never the login of
+  the host's `~/.claude`: a refresh of its token in the container could log the host out.
+- The model is named on the command line, and recorded in `meta.txt` with the commit, the version of
+  claude and the image.
+- The whole transcript is kept, `transcript.jsonl` (`--output-format stream-json`).
 
-The container still has network access, the agent needs it for the API. So after the run the runner
-reads the transcript for every command that reaches outside the directory: `curl`, `wget`, `git`,
-`pip`, `npm`, `gh`, a path outside the directory, a package download. One of them, and the run does not
-count; it runs again in a new directory. The audit, with the list of commands, goes to the run's notes.
+The repository is public on GitHub and the book at <https://martin.ankerl.com/seqlz/> shows every line
+of `src/`, so any look outside the room spoils the run. The container is the boundary for files, not
+for the network, which the agent needs for the API. So after the run,
+[`audit.py`](../tools/format-check/audit.py) lists every tool call of the transcript in
+`audit.txt`, and marks those that may reach outside the room: a web tool, a network tool such as
+`curl`, `git` or `pip`, a URL, a path of the host. `cleanroom.sh` fails when it marked one, or when the
+run did not finish. The runner reads every marked call; one that reached outside, and the run does not
+count, it runs again in a new directory.
 
-What comes back is kept as written, in `tools/format-check/runs/<date>-<role>/`: the code, the agent's
-`QUESTIONS.md`, `FEATURES.md` or `RULES.md` and `CLAIMS.md`, the audit, and the model's name. A bug fix
+What comes back is kept as written, in `tools/format-check/runs/<date>-<role>/`: the room without
+`format.md`, `seqlz.rst` and `tables/` (the code, the agent's `QUESTIONS.md`, `FEATURES.md` or
+`RULES.md` and `CLAIMS.md`), `meta.txt`, `audit.txt` and the transcript compressed with xz. A bug fix
 in a clean-room decoder later is its own commit, so that what the agent wrote stays visible in the
 history.
 
