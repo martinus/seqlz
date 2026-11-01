@@ -1,0 +1,29 @@
+  Bash: cat /room/BRIEF.md
+  Bash: ls -la && echo "---TABLES---" && ls -la tables/ && echo "---WC---" && wc -l seqlz.rst
+  Bash: cat seqlz.rst
+  Bash: for f in TOK LL ML OWN; do printf "%s: " $f; sha256sum tables/$f.bin | cut -d' ' -f1; wc -c < tables/$f.bin; done echo "LIT:"; sha256sum tables/LIT.bin | cut -d' ' -f1; wc -c < tables/LIT.bin
+  Bash: echo "OWN bytes:" && xxd tables/OWN.bin && echo "LL bytes:" && xxd tables/LL.bin && echo "ML bytes:" && xxd tables/ML.bin && echo "TOK[0..32]:" && xxd -l 32 tables/TOK.bin && echo "TOK escape (sym3072
+  Bash: cat > /room/gen_tables.py << 'PYEOF' #!/usr/bin/env python3 # Generates seqlz_tables.h from the binary code-length tables in tables/. # Each table's bytes are verified against the SHA-256 that seqlz.r
+  Bash: cat > /room/cr_decode.c << 'CEOF' /* seqlz decoder, written from seqlz.rst alone. * * int cr_decode(const unsigned char *src, size_t len, unsigned char *out); * * Returns 0 if src[0..len) is a valid c
+  Bash: cat > /room/test_seqlz.c << 'CEOF' #include <stdio.h> #include <string.h> #include <stdlib.h> #include <stddef.h> int cr_decode(const unsigned char *src, size_t len, unsigned char *out); static int fa
+  Bash: sed -i 's#from tables/\*.bin#from the table binaries#' gen_tables.py && python3 gen_tables.py && head -1 seqlz_tables.h
+  Bash: cat > enc.h << 'CEOF' /* Test-only encoder helpers, built from the same code-length tables, to make * blocks by hand from the rules in seqlz.rst. Not part of the decoder. */ #ifndef ENC_H #define ENC_
+! Bash: cat > test_seqlz.c << 'CEOF' #include <stdio.h> #include <string.h> #include <stdlib.h> #include <stddef.h> #include "enc.h" int cr_decode(const unsigned char *src, size_t len, unsigned char *out); st   <- path of the host: ~
+  Bash: python3 - << 'PY' import re s=open('test_seqlz.c').read() # Use w=12 in the three coded tests (C,D,E) so stream sizes fit. s=s.replace('int n = 4096, w = 7, e = 0, code = 0;','int n = 4096, w = 12, e 
+  Bash: cat > dbg.c << 'CEOF' #include <stdio.h> #include "enc.h" int cr_decode(const unsigned char *src, size_t len, unsigned char *out); int main(void){ Canon lit0; canon(&lit0, seqlz_lit_len[0], 256); int 
+  Bash: cp cr_decode.c cr_dbg.c python3 - << 'PY' s=open('cr_dbg.c').read() s=s.replace('#include "seqlz_tables.h"','#include "seqlz_tables.h"\n#include <stdio.h>') s=s.replace(' if (start_j + sum_s > len) re
+  Bash: python3 - << 'PY' s=open('test_seqlz.c').read() # only the valid coded tests use "src[0] = 0x00; src[1] = 0x80;" with n=4096 s=s.replace('src[0] = 0x00; src[1] = 0x80; /* coded, n=4096 */', 'src[0] = 
+  Bash: rm -f dbg.c dbg dbg2 cr_dbg.c && ls
+  Bash: python3 - << 'PY' s=open('test_seqlz.c').read() anchor=' /* ---- misc invalid blocks ---- */' add = r''' Canon mlc, llc; canon(&mlc, seqlz_ml_len, 24); canon(&llc, seqlz_ll_len, 24); /* ---- F: match 
+  Bash: which clang; cat > fuzz_seqlz.c << 'CEOF' #include <stddef.h> int cr_decode(const unsigned char *src, size_t len, unsigned char *out); int LLVMFuzzerTestOneInput(const unsigned char *data, size_t size
+  Bash: clang -std=c11 -O1 -g -fsanitize=fuzzer,address,undefined cr_decode.c fuzz_seqlz.c -o fuzz_seqlz 2>&1 | grep -v 'within comment' | head echo "=== fuzz 20s ===" ./fuzz_seqlz -max_total_time=20 -max_len
+  Bash: mkdir -p corpus && cat > mkseed.c << 'CEOF' #include <stdio.h> #include "enc.h" static void dump(const char*f,const unsigned char*b,size_t n){FILE*fp=fopen(f,"wb");fwrite(b,1,n,fp);fclose(fp);} int ma
+  Bash: clang -std=c11 -O1 -g -fsanitize=fuzzer,memory -fsanitize-memory-track-origins cr_decode.c fuzz_seqlz.c -o fuzz_msan 2>&1 | grep -v 'within comment' | head echo "=== msan fuzz 15s ===" ./fuzz_msan -ma
+  Bash: cat > bench.c << 'CEOF' #include <stdio.h> #include <stdlib.h> #include <time.h> #include <string.h> int cr_decode(const unsigned char*,size_t,unsigned char*); static unsigned char* load(const char*f,
+  Bash: gcc -std=c11 -Wall -Wextra -O2 -c cr_decode.c -o /tmp/cr.o && echo "decoder compiles clean (no warnings)"
+  Write: /room/QUESTIONS.md
+  Bash: cat > build.sh << 'SH' #!/bin/sh # One command: regenerate the embedded tables (checking their SHA-256), # build the decoder and tests under ASan+UBSan, and run the tests. set -e cd "$(dirname "$0")" 
+  Bash: rm -f test_seqlz fuzz_seqlz fuzz_msan bench mkseed mkseed.c bench.c /tmp/cr.o && rm -rf corpus && ls -la
+  Bash: ./build.sh 2>&1 | tail -6 && echo "--- fuzz harness still builds ---" && clang -std=c11 -O1 -fsanitize=fuzzer,address cr_decode.c fuzz_seqlz.c -o /tmp/fz 2>&1 | grep -v 'within comment' | head -2 && e
+27 tool calls, 1 marked
+result: 29 turns, 18.1 min, 3.7190149999999997 USD
