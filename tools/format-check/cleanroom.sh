@@ -65,13 +65,16 @@ fi
 } > "$dir/meta.txt"
 
 # --dangerously-skip-permissions: nobody answers prompts, and the container is the boundary;
-# label=disable instead of :Z, which would relabel the host's claude binary
+# label=disable instead of :Z, which would relabel the host's claude binary. --tools: only the ones that
+# work on files and run commands; the default set also has tools that reach the account's other
+# sessions (RemoteTrigger, SendMessage), which may know src/
 status=0
 podman run --rm --userns=keep-id --security-opt label=disable \
     -v "$dir/room:/room" -v "$dir/home:/home/agent" -v "$claude_bin:/usr/local/bin/claude:ro" \
     -e HOME=/home/agent -e DISABLE_AUTOUPDATER=1 "${auth[@]}" -w /room seqlz-cleanroom \
     claude "${bare[@]}" -p "Read BRIEF.md in this directory and do what it says." \
-    --disallowedTools WebFetch WebSearch --strict-mcp-config --dangerously-skip-permissions \
+    --tools Bash,Read,Write,Edit,Glob,Grep --disallowedTools WebFetch WebSearch --strict-mcp-config \
+    --dangerously-skip-permissions \
     --model "$model" --output-format stream-json --verbose \
     > "$dir/transcript.jsonl" 2> "$dir/stderr.txt" || status=$?
 echo "end: $(date -u +%Y-%m-%dT%H:%M:%SZ), exit $status" >> "$dir/meta.txt"

@@ -114,8 +114,8 @@ tools/format-check/cleanroom.sh tools/format-check/trial-brief.md <dir> <model>
 ```
 
 The trial's brief tells the agent to fetch a web page, to print a file of the host and its home
-directory, and to write a file. It passes when the agent has no web tool, sees no home directory but
-its own empty one, wrote `hello.txt` into its room, and `audit.txt` marks the fetch and the paths.
+directory, and to write a file. It passes when the agent has only the six tools of step 1, sees no home
+directory but its own empty one, wrote `hello.txt` into its room, and `audit.txt` marks the fetch and the paths.
 
 The tools of steps 4 to 11 (`all-decoders`, `claims.py`, `fuzz/seqlz_gen_fuzz.c`,
 `test/seqlz_rules_test.cpp`, the decoders added to the `diff` target) come after phase 1, once
@@ -177,8 +177,10 @@ How the agent runs:
   [`Containerfile`](../tools/format-check/Containerfile) on its first run: Fedora with gcc and clang
   and their sanitizers, make and python3. The container mounts the room as `/room`, an empty
   directory as the agent's home and the host's `claude` binary, and nothing else of the host.
-- The agent has no web tools (`--disallowedTools WebFetch WebSearch`) and no MCP servers. Its home is
-  empty, so it reads no instruction files, memory, plugins or hooks of the user or the project.
+- The agent has only the tools Bash, Read, Write, Edit, Glob and Grep (`--tools`), and no MCP
+  servers: no web tools, and none of the default set that reach the account's other sessions, e.g.
+  RemoteTrigger and SendMessage, where a session that knows `src/` could answer. Its home is empty, so
+  it reads no instruction files, memory, plugins or hooks of the user or the project.
 - Credentials: `ANTHROPIC_API_KEY` in the environment, and then claude also runs with `--bare`; or
   `CLAUDE_CODE_OAUTH_TOKEN`, a token of the subscription from `claude setup-token`. Never the login of
   the host's `~/.claude`: a refresh of its token in the container could log the host out.
@@ -190,8 +192,8 @@ The repository is public on GitHub and the book at <https://martin.ankerl.com/se
 of `src/`, so any look outside the room spoils the run. The container is the boundary for files, not
 for the network, which the agent needs for the API. So after the run,
 [`audit.py`](../tools/format-check/audit.py) lists every tool call of the transcript in
-`audit.txt`, and marks those that may reach outside the room: a web tool, a network tool such as
-`curl`, `git` or `pip`, a URL, a path of the host. `cleanroom.sh` fails when it marked one, or when the
+`audit.txt`, and marks those that may reach outside the room: a tool `cleanroom.sh` does not give,
+a network tool such as `curl`, `git` or `pip`, a URL, a path of the host. `cleanroom.sh` fails when it marked one, or when the
 run did not finish. The runner reads every marked call; one that reached outside, and the run does not
 count, it runs again in a new directory.
 
