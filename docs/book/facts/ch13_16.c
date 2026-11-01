@@ -1233,9 +1233,9 @@ static void ch16(void) {
         }
         w3 = size_width(sz3);
         h3 = SEQLZ_LIT_HEADER(w3);
-        if (delta3 || own_code(ow, nl3, h3 + fixed3))
+        if (delta3 || own_code(ow, nl3, h3 + fixed3, SEQLZ_LIT_CODED_MIN_OWN))
             die("ch16: at level 3 the page takes deltas or a table of its own");
-        desc = own_code(ow, nl3, 1U << 20);
+        desc = own_code(ow, nl3, 1U << 20, SEQLZ_LIT_CODED_MIN_OWN);
         if (!desc)
             die("ch16: own_code() builds no table even without a limit");
         oc = own_sizes(ow, d3 + SEQLZ_HEADER, nl3);

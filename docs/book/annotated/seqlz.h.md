@@ -84,7 +84,7 @@ raw sequences). Nothing checks that `block` matches the sequences: a wrong one g
 a page that decodes to something else. 0 can mean failure because every page has at least its 2-byte
 header.
 
-@@ 91-117
+@@ 91-118
 What the harness's zram glue calls, and the kernel's `seqlz_compress()`. A `dst` smaller than two blocks also works, e.g. the single page of
 zswap, the kernel's other compressed swap, a cache in RAM in front of a swap device. But a page that
 does not fit fails up to 32 bytes early: before each sequence the encoder checks for its literals plus

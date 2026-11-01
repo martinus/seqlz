@@ -344,7 +344,7 @@ static void encoder_facts(const struct seqlz_tables* t) {
         fact_str("own.enc.pr.nibble", bin(m * 0x0001000200040008ULL >> 48 & 15U, 4));
     }
     /* own_code() itself */
-    d = own_code(w, n_lit, header + coded);
+    d = own_code(w, n_lit, header + coded, SEQLZ_LIT_CODED_MIN_OWN);
     if (!d)
         fail("own_code() gives the text page no table");
     for (k = 0; k < 256; k++)

@@ -13,7 +13,7 @@ which an out-of-order CPU works on at the same time ([chains](book:#ch-cpu--chai
 
 A reading order that follows the call:
 
-1. [`seqlz_decode_literals()`](#b311): the checks, the stream sizes, and the two loops over the streams.
+1. [`seqlz_decode_literals()`](#b320): the checks, the stream sizes, and the two loops over the streams.
 2. [`read_lit_header()`](#b256): byte 2 and the delta's byte, then a fixed table or the page's own.
 3. [`read_own_table()`](#b162), only for a page with its own table, and [`own_fill()`](#b113).
 4. The stream reader the loops use: [`lit_refill()`](#b37), [`lit_decode()`](#b54), and at the end
@@ -195,7 +195,7 @@ One literal: the top 10 bits index the table (1024 entries, every index valid,
 
 `mask` is 63 or 0. With 63 the stream moves on by the code's length, and the mask tells the compiler
 that the shift is below 64. With 0 the literal is decoded and written but the stream stays where it
-is: "decode, but do not move on", without a branch. The last step of [the rest](#b363) needs that.
+is: "decode, but do not move on", without a branch. The last step of [the rest](#b372) needs that.
 @anchor ch-literals-dec--decode
 
 ## Sizes and ends
@@ -453,7 +453,7 @@ own, is behind byte 2, the delta's byte and the sizes: $3 + w + e$ in the terms 
 [the format](#ch-format--coded).
 @end
 
-@@ 292-310
+@@ 292-319
 Code 8: the page's own table, built into the output page from its first even address, since the
 entries are `u16` and a test decodes into a page at an odd address. The streams then start behind the
 table's description.
@@ -470,7 +470,7 @@ the delta's byte if there is one, which is the pointer the function returns.
 
 ## seqlz_decode_literals()
 
-@@ 311-330
+@@ 320-339
 The only function here that `decode_block()` calls. `noinline` on purpose: inlined into the loop over
 the sequences, the 8 streams took its registers, and pages with raw literals read slower too.
 `*delta` gets which delta level 3's literals are, which the loop over the sequences adds back
@@ -494,7 +494,7 @@ A55, within the noise of code placement in the kernel VM
 ([explored-designs.md](https://github.com/martinus/seqlz/blob/main/docs/explored-designs.md#five-simplifications-measured-in-the-vm-and-on-the-phone-the-literal-streams-as-arrays-kept-four-not)).
 @end
 
-@@ 331-347
+@@ 340-356
 `n_lit` was checked by the caller already. The check again here tells the compiler the bound, and the
 loops below take fewer instructions: moving it out, together with one more change, took 7% more to
 decode `seqlz-2` pages ([measured](#ch-literals-dec--the-sizes-checked-against-the-input)).
@@ -511,7 +511,7 @@ decode `seqlz-2` pages, 2000 pages of a desktop dump with gcc 16.2 on x86-64, 23
 (commit `3ae2e09`).
 @end
 
-@@ 348-362
+@@ 357-371
 The main loop: per round, 8 refills, then 5 literals from each of the 8 streams. Stream `i` in step
 `j` holds literal `k + 8 * j + i`, so the literals land in page order, no shuffle. With constant
 bounds the compiler unrolls it into 8 refills and 40 lookups, 8 independent chains.
@@ -534,7 +534,7 @@ A format change for 2 to 3 bytes and no time is not worth it. That the format ha
 literal tables is a coincidence.
 @end
 
-@@ 363-390
+@@ 372-399
 Fewer than 40 literals are left. Every stream does the same steps; in the last one `(0U - (r > i)) &
 63U` is 63 for the `r` streams that still have a literal and 0 for the others. Those decode one too,
 write it behind the literals into the scratch's 16 spare bytes, and do not move on.

@@ -313,7 +313,8 @@ int main(void) {
         memcpy(buf + n, deltas + rec_ll[0], 16);
         fact_hex("delta.ptr.fast.before", buf + n, 8);
         fact_hex("delta.ptr.fast.ref", buf + n - dist, 8);
-        undelta_fast(pick, buf + n, buf, rec_ll[1], rec_last[1]);
+        undelta_fast(pick == SEQLZ_DELTA_4 ? 4U : pick == SEQLZ_DELTA_8 ? 8U : 0U, buf + n, buf,
+                     buf + SEQLZ_BLOCK_SIZE, rec_ll[1], rec_last[1]);
         fact_hex("delta.ptr.fast.after", buf + n, 8);
         if (memcmp(buf + n, page + n, rec_ll[1]))
             fail("undelta_fast() does not give the page's bytes back");
