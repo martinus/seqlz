@@ -3,8 +3,8 @@
  * undelta.c: the data of the animation "undelta" in chapter 13. The page of counters of pages.h, which
  * level 3 stores with SEQLZ_DELTA_4, decoded by the real seqlz_decompress(), with a hook on its stores of
  * 4 bytes: in seqlz_decompress.c only add4() makes them. Prints, as JSON, the first two sequences and
- * the first W bytes of the page step by step: the deltas as the copy left them, after each add4(), the
- * byte loop and the matches. Fails if the decoder took another path than the text says.
+ * the first W bytes of the page step by step: the deltas as the copy left them, after each add4() and
+ * the matches. Fails if the decoder took another path than the text says.
  */
 #include <stdio.h>
 #include <stdlib.h>
@@ -98,12 +98,13 @@ int main(void) {
     if (seqlz_decompress(comp, n, out, scratch) || memcmp(out, page, SEQLZ_BLOCK_SIZE))
         fail("the page does not decode to itself");
     /*
-     * the decoder's add4() calls in the first W bytes: the first sequence's words from byte 4 while
-     * one fits before its end, then undelta_fast()'s four at the second sequence, whatever its nl
+     * the decoder's add4() calls in the first W bytes: the first sequence's words from byte 4 in steps of
+     * 16 bytes up to the step that holds its last literal, as the page has room past them, then
+     * undelta_fast()'s four at the second sequence, whatever its nl
      */
-    for (k = 4; k + 4 <= seqs[0].ll; k += 4)
+    for (k = 4; k < 4 + (seqs[0].ll - 4 + 15) / 16 * 16; k += 4)
         if (h >= n_hook || hook_at[h++] != k)
-            fail("the first sequence's words are not add4() from byte 4 on");
+            fail("the first sequence's words are not add4() in steps of 16 from byte 4 on");
     for (k = 0; k < 16; k += 4)
         if (h >= n_hook || hook_at[h++] != seqs[1].pos + k)
             fail("the second sequence is not undelta_fast()'s four add4()");
@@ -145,11 +146,15 @@ int main(void) {
                 cur_b[at + i] = hook_val[h][i];
                 if (cur_c[at + i] == DELTA)
                     cur_c[at + i] = LIT;
+                else if (cur_c[at + i] == EMPTY)
+                    cur_c[at + i] = SPARE;
             }
             k = at + 4 - pos;
             frame("word", s, at, 4, (int)(at - dist));
         }
-        /* the byte loop, which only the slow path has */
+        /* the byte loop, which only the block's end takes now: none here */
+        if (k < ll)
+            fail("a literal is left for the byte loop");
         for (; k < ll; k++) {
             cur_b[pos + k] = out[pos + k];
             cur_c[pos + k] = LIT;

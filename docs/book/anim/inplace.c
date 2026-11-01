@@ -1,7 +1,8 @@
 // SPDX-License-Identifier: MIT OR GPL-2.0-only
 /*
  * inplace.c: the data of the animation "inplace" in chapter 11. Compresses chapter 16's page with raw
- * literals, then lets code_literals() code them in place as level 2 does, and runs lit_streams() again
+ * literals, then lets code_literals() code them at level 2, and runs lit_streams() again in place from the
+ * copy, as level 3 writes the pages it prices on every literal and level 2 wrote all until 31 Oct 2026
  * with the encoder's own lit_put() and lit_flush(), recording for each run of literals which literals
  * it reads from the copy and where each stream's flush stores in dst. Prints them as JSON with the
  * layout of dst before and after. Fails if the replay writes other bytes than code_literals(), if a

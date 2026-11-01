@@ -57,7 +57,7 @@ static unsigned int one_page(const char* id, void (*make)(u8*), int comma) {
         coded += sizes[j];
     }
     header = SEQLZ_LIT_HEADER(size_width(sizes));
-    if (!own_code(w, n_lit, header + coded))
+    if (!own_code(w, n_lit, header + coded, SEQLZ_LIT_CODED_MIN_OWN))
         fail(id, "own_code() builds no code");
     /* the bytes that are literals, which own_code() put in w->bytes[] in order, and summed counts */
     for (k = 0, n = 0; k < 256; k++)

@@ -484,7 +484,8 @@ refuses one ([its setup](book:#ch-zram-glue--backend-params)).
 @more {#ch-zram-glue--head} The three levels, and why the tables are no dictionary
 `seqlz-2` lets `seqlz_code_literals()` ([the literal coder](#ch-literals-enc)) code the literals where
 that saves $\frac{1}{16}$ of them and {{ch15.coded_min}} bytes, `seqlz-3` adds the lazy matcher, a
-literal table of the page's own and the literals as deltas to earlier bytes of the page
+literal table of the page's own and the literals as deltas to earlier bytes of the page, and codes
+them from {{ch11.coded_min_own}} bytes on
 ([the levels](#ch-header--compressor)). In the kernel they are levels 1 to 3 of one backend, `seqlz`,
 with 2 the default; the harness names them as three codecs to compare them side by side.
 
@@ -526,7 +527,8 @@ for every page.
 @more {#ch-zram-glue--cctx} What the hash table's memory holds
 `struct seqlz_state` is a union of the matcher's hash table and a page of bytes
 ([what lies where](#ch-header--state)): {{ch17.hash_slots}} entries of 2 bytes, {{size.state}} bytes, and
-`seqlz_code_literals()` copies the raw literals into the same memory once the matcher is done
+`seqlz_code_literals()` writes the coded streams into the same memory once the matcher is done, and
+level 3 mostly a copy of the raw literals
 ([in place](#ch-literals-enc--in-place)). `kzalloc()` zeroes in the kernel, and the harness does the same. The kernel builds without the warning about unused
 parameters below `W=3`, so its backend needs no `(void)p`.
 @assert ch17.hash_slots * 2 == size.state and size.state >= 4096

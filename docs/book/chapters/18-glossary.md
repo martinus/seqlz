@@ -15,7 +15,8 @@ sense given here.
 - **code, code length**: the bits written for one symbol, {{ch17.tok_shortest}} to {{ch17.tok_longest}}
   for tokens, and how many there are. A table is a list of code lengths. [Chapter 2](#ch-compression)
 - **coded literals**: literals written as Huffman codes of one literal table in 8 streams, from level 2
-  on where that saves $\frac{1}{16}$ of them plus {{ch15.coded_min}} bytes.
+  on where that saves $\frac{1}{16}$ of them plus {{ch15.coded_min}} bytes, at level 3
+  {{ch11.coded_min_own}}.
   [`code_literals()`](#ch-literals-enc)
 - **complete**: a prefix code whose codes use up every bit pattern, Kraft sum 1, so a decode table has no
   empty entry. [Chapter 2](#ch-compression--complete)

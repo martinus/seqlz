@@ -380,13 +380,24 @@ static void chapter11(void) {
     static const u8 four[4] = {0x65, 0x20, 0x65, 0x00};
     const u64 lanes = 0x00ff00ff00ff00ffULL;
     unsigned int total[SEQLZ_LIT_SETS], order[SEQLZ_LIT_SETS], sizes[SEQLZ_LIT_STREAMS], q[SEQLZ_LIT_STREAMS + 1];
-    unsigned int n, n_lit, raw_len, cod_len, letters, i, j, k, set, coded = 0, all = 0, width, cnt, sum, bits;
+    unsigned int n, n_lit, raw_len, cod_len, letters, i, j, k, set, coded = 0, all = 0, width, cnt, sum, bits, b_set;
     const u32* enc;
     u64 x = 0, acc;
     char* s;
 
     fact_num("ch11.lit_stream_max", LIT_STREAM_MAX);
     fact_num("ch11.coded_min", SEQLZ_LIT_CODED_MIN);
+    fact_num("ch11.coded_min_own", SEQLZ_LIT_CODED_MIN_OWN);
+    fact_num("ch11.save_min_own", SEQLZ_LIT_CODED_MIN_OWN - 1 - SEQLZ_SIZE_BITS_MAX);
+    /* the most bytes n literals may take coded, at each level's minimum */
+    fact_num("ch11.ex.1000.l2", 1000 - 1000 / 16 - SEQLZ_LIT_CODED_MIN - 1);
+    fact_num("ch11.ex.1000.l3", 1000 - 1000 / 16 - SEQLZ_LIT_CODED_MIN_OWN - 1);
+    fact_num("ch11.ex.100.l2", 100 - 100 / 16 - SEQLZ_LIT_CODED_MIN - 1);
+    fact_num("ch11.ex.100.l3", 100 - 100 / 16 - SEQLZ_LIT_CODED_MIN_OWN - 1);
+    fact_num("ch11.slots", LIT_SLOTS);
+    fact_num("ch11.slot", LIT_SLOT(SEQLZ_BLOCK_SIZE));
+    fact_num("ch11.slots_bytes", SEQLZ_LIT_STREAMS * LIT_SLOT(SEQLZ_BLOCK_SIZE));
+    fact_num("ch11.state_bytes", sizeof(struct seqlz_state));
     fact_num("ch11.coded_min_h", SEQLZ_HEADER + SEQLZ_LIT_CODED_MIN);
     fact_num("ch11.header_max", SEQLZ_LIT_HEADER(SEQLZ_SIZE_BITS_MAX));
     fact_num("ch11.save_min", SEQLZ_LIT_CODED_MIN - 1 - SEQLZ_SIZE_BITS_MAX);
@@ -453,36 +464,75 @@ static void chapter11(void) {
     str("ch11.odd", "0x%016llx", (unsigned long long)(x >> 8 & lanes));
     str("ch11.odd32", "0x%08llx", (unsigned long long)((x >> 8 & lanes) >> 32));
 
-    /* the pricing of the page, the table with the fewest bits, the sizes */
-    lit_sums(page, n_lit, even, odd, NULL);
-    for (k = 0; k < SEQLZ_LIT_SETS; k++) {
-        total[k] = 0;
-        for (j = 0; j < SEQLZ_LIT_STREAMS; j++)
-            total[k] += lit_bits(even, odd, j, k);
-        order[k] = k;
+    /*
+     * level 2's pricing of the page, as code_literals() does it below SEQLZ_LEVEL_OWN: every
+     * LIT_SAMPLE_STEP-th literal in all 8 tables, one sum per table, then the test with the margin
+     */
+    {
+        u64 sx = 0, s_even = 0, s_odd = 0;
+        unsigned int sn = 0, sampled = 0;
+
+        for (k = 0; k < n_lit; k += LIT_SAMPLE_STEP) {
+            if (sn == LIT_COST_RUN) {
+                lanes_spill(sx, &s_even, &s_odd);
+                sx = 0;
+                sn = 0;
+            }
+            sx += T->lit_cost[page[k]];
+            sn++;
+            sampled++;
+        }
+        lanes_spill(sx, &s_even, &s_odd);
+        fact_num("ch11.sample.step", LIT_SAMPLE_STEP);
+        fact_num("ch11.sample.margin", LIT_SAMPLE_MARGIN);
+        fact_num("ch11.sample.n", sampled);
+        for (k = 0; k < SEQLZ_LIT_SETS; k++) {
+            total[k] = lit_bits(&s_even, &s_odd, 0, k);
+            order[k] = k;
+        }
     }
     for (i = 0; i < SEQLZ_LIT_SETS; i++)
         for (k = i + 1; k < SEQLZ_LIT_SETS; k++)
-            if (total[order[k]] < total[order[i]]) {
+            if (total[order[k]] < total[order[i]] || (total[order[k]] == total[order[i]] && order[k] < order[i])) {
                 unsigned int o = order[i];
 
                 order[i] = order[k];
                 order[k] = o;
             }
     for (i = 0; i < 3; i++) {
-        s = scratch();
-        *s = 0;
-        for (j = 0; j < SEQLZ_LIT_STREAMS; j++)
-            sprintf(s + strlen(s), "%s%u", j ? " " : "", lit_bits(even, odd, j, order[i]));
         fact_num(key("ch11.rank.%u.table", i), order[i]);
-        str(key("ch11.rank.%u.bits", i), "%s", s);
-        fact_num(key("ch11.rank.%u.total", i), total[order[i]]);
+        fact_num(key("ch11.rank.%u.bits", i), total[order[i]]);
+        fact_num(key("ch11.rank.%u.est", i), (total[order[i]] * LIT_SAMPLE_STEP + 7U) / 8U);
     }
     fact_num("ch11.others.min", total[order[3]]);
     fact_num("ch11.others.max", total[order[SEQLZ_LIT_SETS - 1]]);
     set = order[0];
-    if ((cod[2] & 7U) != set)
-        fail("seqlz_code_literals() chose another table than the pricing");
+    fact_num("ch11.sample.lhs", (total[set] * LIT_SAMPLE_STEP + 7U) / 8U + SEQLZ_LIT_CODED_MIN);
+    fact_num("ch11.sample.rhs", n_lit - n_lit / 16 + LIT_SAMPLE_MARGIN);
+    if ((cod[2] & SEQLZ_LIT_CODE_MASK) != set)
+        fail("seqlz_code_literals() chose another table than the sample");
+    /* the same page priced on every literal, as level 3 prices: the stream sums of lit_sums() */
+    lit_sums(page, n_lit, even, odd, NULL);
+    {
+        unsigned int full = 0, best = ~0U;
+
+        for (k = 0; k < SEQLZ_LIT_SETS; k++) {
+            unsigned int b = 0;
+
+            for (j = 0; j < SEQLZ_LIT_STREAMS; j++)
+                b += lit_bits(even, odd, j, k);
+            if (b < best) {
+                best = b;
+                full = k;
+            }
+        }
+        fact_num("ch11.full.set", full);
+        fact_num("ch11.full.bits", best);
+        b_set = 0;
+        for (j = 0; j < SEQLZ_LIT_STREAMS; j++)
+            b_set += lit_bits(even, odd, j, set);
+        fact_num("ch11.full.set_bits", b_set);
+    }
     fact_num("ch11.set", set);
     q[0] = 0;
     for (j = 0; j < SEQLZ_LIT_STREAMS; j++) {
@@ -540,6 +590,7 @@ static void chapter11(void) {
     str("ch11.sizes.le", "0x%llx", (unsigned long long)(get_unaligned_le64(cod) >> 24 & ((1ULL << (8 * width)) - 1)));
     fact_num("ch11.rule.lhs", coded + SEQLZ_LIT_CODED_MIN);
     fact_num("ch11.rule.rhs", n_lit - n_lit / 16);
+    fact_num("ch11.rule.gap", n_lit - n_lit / 16 - coded - SEQLZ_LIT_CODED_MIN);
     fact_num("ch11.saves", raw_len - cod_len);
     fact_num("ch11.saves_pct", (200 * (raw_len - cod_len) + raw_len) / (2 * raw_len));
 
