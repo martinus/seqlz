@@ -315,6 +315,13 @@ Each of these cost a wrong result first. The measurements behind them are in
   benchmark of `tools/zram-vm/run.sh` reads every page 6 times in a row, the userspace harness takes
   the median of 5 decodes, so both make `seqlz` look faster than it is in a swap-in. `MODE=swap` decodes
   each page once per pass and is the one to trust ([explored-designs.md](explored-designs.md#the-decoder-in-a-fault-found-110-branch-mispredictions-per-page-that-a-decode-of-the-same-page-before-hides)).
+- **Branch misses by variant, not by the sampled line.** `simpleperf record -e branch-misses` on the
+  A76 puts the samples on the instructions after a mispredicted branch: in `add4()`, which has no
+  branch. That profile put level 3's deltas' misses in the loops of `undelta_literals()`; rewriting the
+  loops took 37% of them on the A76 and 22% on the A55, and the two branches per sequence that picked
+  the delta's distance took a further 8% and 11%
+  ([explored-designs.md](explored-designs.md#the-deltas-undone-16-bytes-at-a-time-their-distance-picked-once-per-block-22-to-30-fewer-branch-misses-per-page-with-deltas-level-3s-warm-reads-006-to-010-µs-faster-on-the-mi-9t-kept)).
+  Use the profile for the function, then count a build without each suspect branch with `misses.c`.
 - **On the phone, one codec per process for differences below 1 µs.** With all codecs in one zramphone
   process, the devices taking turns per page, a codec's time depends on the others whose calls run
   between its own: two copies of the same code differed by 0.44 µs, a change looked 0.6 to 1.0 µs slower
