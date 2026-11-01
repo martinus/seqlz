@@ -524,7 +524,7 @@ static void decoder_facts(const struct seqlz_tables* t, const u8* desc, unsigned
     fact_num("own.dec.step_max", OWN_STEP_MAX);
 }
 
-/* the counts OWN is built from, the line "own" of bench/seqlz_counts_4k.txt, and the pages they are from */
+/* the counts OWN is built from, the line "own" of bench/seqlz_counts.txt, and the pages they are from */
 static void counts_facts(void) {
     const char* at = strstr(__FILE__, "docs/book/facts/");
     char path[1024], line[4096];
@@ -534,10 +534,10 @@ static void counts_facts(void) {
 
     if (!at)
         fail("not in docs/book/facts/");
-    snprintf(path, sizeof path, "%.*sbench/seqlz_counts_4k.txt", (int)(at - __FILE__), __FILE__);
+    snprintf(path, sizeof path, "%.*sbench/seqlz_counts.txt", (int)(at - __FILE__), __FILE__);
     f = fopen(path, "r");
     if (!f)
-        fail("cannot read bench/seqlz_counts_4k.txt");
+        fail("cannot read bench/seqlz_counts.txt");
     while (fgets(line, sizeof line, f)) {
         const char* p = strstr(line, " pages that level 3");
 
@@ -572,7 +572,7 @@ static void counts_facts(void) {
     fclose(f);
     fact_num("ch04.format_lines", (n + 5) / 10 * 10);
     if (!pages || !all)
-        fail("no counts of own in bench/seqlz_counts_4k.txt");
+        fail("no counts of own in bench/seqlz_counts.txt");
     fact_num("own.counts.pages", pages);
     str("own.counts.share_7_10", "%.0f", 100.0 * long_lens / all);
 }

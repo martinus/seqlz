@@ -167,7 +167,7 @@ common. How many bits a number needs depends on how often each value occurs. A s
 numbers: seqlz sorts every offset into one of 6 **offset classes**. These are their shares of the
 sequences on the {{ch02.train_pages|grp}} pages seqlz's tables were trained on
 ([chapter 4](#ch-format--tables) says which pages), summed from the token counts in
-[`bench/seqlz_counts_4k.txt`](https://github.com/martinus/seqlz/blob/main/bench/seqlz_counts_4k.txt):
+[`bench/seqlz_counts.txt`](https://github.com/martinus/seqlz/blob/main/bench/seqlz_counts.txt):
 @assert ch02.OFF_CLASSES == 6
 
 | class | offset | share of the sequences |

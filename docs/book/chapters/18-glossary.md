@@ -47,7 +47,7 @@ sense given here.
   {{ch18.bits.token}}, {{ch18.bits.lit}} and {{ch18.bits.len}} bits. [Chapter 2](#ch-compression--huffman)
 - **k-means**: the trainer's clustering for the literal tables: each page goes to the table that codes it
   in the fewest bits, each table is rebuilt from its pages, until nothing moves.
-  [`seqlz_lengths.c`](#f-seqlz_lengths-c-b13)
+  [`seqlz_lengths.c`](#f-seqlz_lengths-c-b12)
 - **Kraft sum**: the sum of $2^{-l}$ over a table's code lengths, at most 1 for a prefix code, exactly 1
   for a complete one. [Chapter 2](#ch-compression--complete)
 - **length value**: the rest of `ll` or `ml` when it is too large for the token, a symbol of the `ll` or

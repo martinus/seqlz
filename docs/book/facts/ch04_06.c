@@ -3,10 +3,8 @@
  * ch04_06.c: the facts of chapter 4, the format, and chapter 6, seqlz.h. ch04.* are the made-up text
  * page with coded literals, the walk through the token table's canonical codes, the fields of the two
  * example pages as the spec reads them, offset classes and the SHA-256 of the 4 KiB tables. ch06.* are
- * the header's constants and the worked examples of its three functions. Built for 16 KiB pages too,
- * as k16.*.
+ * the header's constants and the worked examples of its three functions.
  */
-// facts: also 16k
 #include "facts.h"
 
 /* ---- SHA-256, for the tables' hashes that docs/format.md lists ---- */

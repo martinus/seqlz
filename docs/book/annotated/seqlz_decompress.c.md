@@ -10,9 +10,9 @@ C wants a helper before its caller, so the file reads bottom up. A reading order
 call:
 
 1. [`seqlz_decompress()`](#b624), the only function zram calls: it picks one of two copies of the loop.
-2. [`decode_block()`](#b405): the header, the literals, and the three limits of the fast path.
+2. [`decode_block()`](#b403): the header, the literals, and the three limits of the fast path.
 3. The loop: [escape](#b507), [offset](#b523), [fast path](#b535), [slow path](#b570), [end checks](#b604).
-4. The helpers, as the loop reaches them: [`next_token_fast()`](#b373),
+4. The helpers, as the loop reaches them: [`next_token_fast()`](#b372),
    [`copy_match_fast()`](#b316), [`copy_literals()`](#b35), [`copy_match()`](#b93), the
    [bit reader](#b152).
 
@@ -429,7 +429,7 @@ the CPU predicts. The example page of [chapter 4](#ch-format--example) has a bit
 
 @@ 192-198
 `(int)n` keeps the subtraction signed, so `count` can go negative. The largest drop is a token's code
-with its offset bits, 11 + 14 bits, never 64.
+with its offset bits, 11 + 12 bits, never 64.
 
 @@ 199-219
 A length value: one lookup with the top 8 bits gives the code's length `n`, the number of extra bits
@@ -453,7 +453,7 @@ One lookup with the next 8 bits gives three things packed into one entry, `code 
 `x`, and the base, `2^x` from symbol 16 on and the value itself below. The function returns the base plus
 the `x` bits right after the code, and drops `n + x` bits.
 
-The match length value of the example page, with the 4 KiB tables: after the escape's code, the token's
+The match length value of the example page, with the tables: after the escape's code, the token's
 12 bits and the offset, {{ch12.ab.tokdrop}} bits, the register is `{{ch12.ab.bits2}}` with
 `count = {{ch12.ab.count2}}`.
 
@@ -472,11 +472,10 @@ format's example says. A direct symbol: the code `{{ch12.ml0.code}}` gives
 {{ch12.ml0.base}}, the shift by 63 gives 0 for the extra bits.
 @assert ch12.ml0.x == 0 and ml.code[ch12.ml0.base] == ch12.ml0.code and ch12.ab.match == 4094
 
-The comment's bound, `SEQLZ_MAX_BITS + SEQLZ_BLOCK_BITS`, 20 or 22 bits, has a bit to spare: a code
-has at most 8 bits, a value at most {{ch10.len_extra_max}} extra bits with 4 KiB pages and
-{{k16.ch10.len_extra_max}} with 16 KiB pages, and the caller refills before, which leaves at least 56.
-The largest base, {{k16.ch12.base_max|grp}} with 16 KiB pages, fits the entry's 16 bits.
-@assert F("k16.ch12.base_max") < 65536
+The comment's bound, `SEQLZ_MAX_BITS + SEQLZ_BLOCK_BITS`, 20 bits, has a bit to spare: a code has at
+most 8 bits, a value at most {{ch10.len_extra_max}} extra bits, and the caller refills before, which
+leaves at least 56. The largest base, {{ch12.base_max|grp}}, fits the entry's 16 bits.
+@assert F("ch12.base_max") < 65536
 @end
 
 ## Deltas, level 3 only
@@ -675,20 +674,21 @@ slower in the kernel VM with gcc and clang
 ([explored-designs.md](https://github.com/martinus/seqlz/blob/main/docs/explored-designs.md#five-simplifications-measured-in-the-vm-and-on-the-phone-the-literal-streams-as-arrays-kept-four-not)).
 @end
 
-@@ 358-372
+@@ 358-371
 The token: the top 11 bits index a table of 2048 entries. Every index is valid because the token code
 is complete ([complete](book:#ch-compression--complete)). The entry has the lengths and the offset's
-class, so the offset's bits follow without a second lookup.
+class, so the offset's bits follow without a second lookup. The table is `seqlz_tables.token`, the
+kernel's one set; until 1st November 2026 both token functions took it as an argument, which every
+call passed the same.
 
 It refills only when fewer than 11 + 12 bits are left (a code and the longest offset), so most lookups
 use bits that are already in the register and do not wait for a load. Used for the first sequence and
 after a slow one.
 @more {#ch-decode--next-token} Why a refill only below 23 bits, measured
-11 + 12 bits are {{ch14.need}} bits with 4 KiB pages; with 16 KiB pages the longest offset is longer,
-and the limit is {{k16.ch14.need}}. The `(int)` keeps the compare signed, so a negative `count` reads as
-what it is. A refill puts a load in front of the lookup, whose index comes from `bits`; with the check,
-most lookups use bits already in the register, and the refill's load comes about every two or three
-sequences.
+11 + 12 bits are {{ch14.need}} bits, a token's longest code and the longest offset. The `(int)` keeps
+the compare signed, so a negative `count` reads as what it is. A refill puts a load in front of the
+lookup, whose index comes from `bits`; with the check, most lookups use bits already in the register,
+and the refill's load comes about every two or three sequences.
 
 ::: measured Refill below 23 bits instead of every sequence
 September 2026, `seqlz-1` in the kernel VM, Ryzen 9 7950X at 4.5 GHz: cold reads, with another page
@@ -700,7 +700,7 @@ The format of then had other tables and another bit order.
 :::
 @end
 
-@@ 373-395
+@@ 372-393
 Two tricks, both for a page the CPU decodes once (a swap-in):
 
 - The next token is looked up before this sequence's copies. No length value follows on the fast path,
@@ -708,7 +708,7 @@ Two tricks, both for a page the CPU decodes once (a swap-in):
   while the lookup is on its way ([in-order cores](book:#ch-cpu--in-order)).
 - The refill comes every second fast sequence, without checking the bits left. Whether the bits run
   short depends on the codes before, a branch the predictor cannot learn on a page it has not seen; a
-  branch that alternates it gets right. Two fast sequences take at most 2 × (11 + 14) = 50 bits, and a
+  branch that alternates it gets right. Two fast sequences take at most 2 × (11 + 12) = 46 bits, and a
   refill leaves 56.
 @more {#ch-decode--next-token-first} The next token before the copies, measured
 An out-of-order core would overlap the lookup and the copies anyway; an in-order core such as the A55
@@ -717,21 +717,20 @@ userspace harness, the little core's cold p50 against `lz4` went from 2169 to 20
 core's from 456 to 330
 ([explored-designs.md](https://github.com/martinus/seqlz/blob/main/docs/explored-designs.md#the-next-token-before-the-copies-reads-faster-on-both-phone-cores-kept)).
 @end
-@more {#ch-decode--bits-left} Why the bits never run short, for both page sizes
+@more {#ch-decode--bits-left} Why the bits never run short
 The refill is `seqlz_br_refill_8()`, the fast half of [`seqlz_br_refill()`](#ch-dec-basics--byte-loop),
 without the check of bytes left. After it `count` is at least 56
 ([`count |= 56`](#ch-dec-basics--or56)), and until the next one two fast sequences drop their code and
 offset bits, the second one before its own `next_token_fast()` refills.
 
-| page size | most offset bits | one fast sequence | two | left of 56 |
-| --- | --- | --- | --- | --- |
-| 4 KiB | {{ch14.max_off_bits}}, class 3 | {{ch14.fast_seq_bits}} | {{ch14.fast_two_bits}} | {{ch14.fast_left}} |
-| 16 KiB | {{k16.ch14.max_off_bits}}, class 3 | {{k16.ch14.fast_seq_bits}} | {{k16.ch14.fast_two_bits}} | {{k16.ch14.fast_left}} |
-@assert ch14.class3_bits == ch14.max_off_bits and F("k16.ch14.class3_bits") == F("k16.ch14.max_off_bits")
+| most offset bits | one fast sequence | two | left of 56 |
+| --- | --- | --- | --- |
+| {{ch14.max_off_bits}}, class 3 | {{ch14.fast_seq_bits}} | {{ch14.fast_two_bits}} | {{ch14.fast_left}} |
+@assert ch14.class3_bits == ch14.max_off_bits
 
 The peek at the next token needs 11 of them, and after the first sequence at least
-{{k16.ch14.fast_after_one}} are left. An escape refills on its own before its 12 bits, which only adds
-bits. After a slow sequence, whose `next_token()` guarantees only {{ch14.need}} or {{k16.ch14.need}}
+{{ch14.fast_after_one}} are left. An escape refills on its own before its 12 bits, which only adds
+bits. After a slow sequence, whose `next_token()` guarantees only {{ch14.need}}
 bits, `skip = 0` restarts the schedule ([the slow path's end](#b582)). The load has its two
 preconditions from the fast path's condition: `br.p <= in_fast` leaves 8 bytes of input, and the bounds
 above keep `count` at 0 or more.
@@ -756,7 +755,7 @@ slower and kept a loop of its own until 10th October 2026, when every core got t
 :::
 @end
 
-@@ 396-404
+@@ 394-402
 The three limits of the fast path. In the page: it writes at most 14 literal bytes and 40 bytes of
 match, rounded up to 64. In the literals: one `copy16()`. In the input: one refill of 8 bytes. With
 these, the fast path checks nothing else.
@@ -764,7 +763,7 @@ these, the fast path checks nothing else.
 A fast sequence writes the 16 bytes of `copy16()` at `d`, moves on by at most {{ch14.fast_nl}}
 literals and writes at most {{ch14.cmf.room}} bytes of match, {{ch14.cmf.max_write}} bytes in all, below
 the {{ch14.room.page}} of `FAST_BLOCK_ROOM`. The compiler checks that with the `static_assert` of
-[the next block](#b405).
+[the next block](#b403).
 @assert ch14.room.page == 64 and ch14.room.lit == 16 and ch14.room.input == 8 and ch14.cmf.max_write == 54 and ch14.fast_nl == 14
 @assert ch14.fast_nl + 40 <= ch14.room.page and ch14.fast_nl + ch14.fast_len + 7 <= ch14.room.page and ch14.fast_len <= 40
 
@@ -809,7 +808,7 @@ the {{ch14.room.page}} of `FAST_BLOCK_ROOM`. The compiler checks that with the `
 
 ## decode_block(): the loop
 
-@@ 405-417
+@@ 403-415
 The room of the block above, checked by the compiler. A sequence takes the fast path only with `ll`
 and `ml` below their caps, so it has at most {{ch14.fast_nl}} literals and a match of at most
 {{ch14.fast_len}} bytes. `copy_match_fast()` writes 40 bytes with its five stores, or `len + 7` with its
@@ -817,7 +816,7 @@ loop, for a longer match at an offset below 8: {{ch14.fast_nl}} + 40 and {{ch14.
 {{ch14.fast_len}} + 7 bytes, both within the 64. A change of the caps that lets the fast path write
 past its room stops the build, instead of waiting for a fuzzer to find it.
 
-@@ 418-427
+@@ 416-425
 @anchor ch-decode
 `deltas` is a constant at both calls in `seqlz_decompress()`, so the compiler makes two copies of the loop,
 and a page without deltas runs none of their code. A check of `deltas` for every sequence made levels
@@ -874,7 +873,7 @@ the deltas read another 0.13 to 0.24 µs slower on the A76 and 0.34 to 0.46 µs 
 :::
 @end
 
-@@ 428-437
+@@ 426-435
 @anchor ch-decode--setup
 `last = 1` is the format's starting repeat offset ([offsets](book:#ch-format--offsets)). `skip = 0`
 has the first fast sequence refill. `lit_bound` is where reading has to stop, behind `lit_end`.
@@ -882,7 +881,7 @@ has the first fast sequence refill. `lit_bound` is where reading has to stop, be
 0 for raw ones; `delta_fixed`, its distance, is set once from it below. The return values, 0 or `-EINVAL`, are those of
 [`seqlz_decompress()` in `seqlz.h`](book:#ch-header--encode-decode).
 
-@@ 438-450
+@@ 436-450
 The tables are prefetched before the header is read, so that their cache misses overlap with each
 other and with the work on the header and the literals. An in-order core stops at every miss it did not
 see coming. That is {{ch14.pf.token}} prefetches for the token table and {{ch14.pf.len}} for each
@@ -978,7 +977,7 @@ pay for a refill and 12 more bits anyway.
 Only {{ch14.tokens_coded}} of the {{const.TOKEN_SYMBOLS}} tokens have a code of their own in the 4 KiB
 tables; the others are the escape's code, `{{tok.code.3072}}`, and the token's number in 12 bits
 ([the token](#ch-format--token)). The refill is needed because `next_token()` made sure of only
-{{ch14.need}} or {{k16.ch14.need}} bits before the escape's code. Of the 4096 numbers 12 bits can hold,
+{{ch14.need}} bits before the escape's code. Of the 4096 numbers 12 bits can hold,
 {{ch14.no_token}} are no token, and the check rejects them.
 
 Token 513, {{ch14.t513.ll}} literal and a match of {{ch14.t513.ml}} at class {{ch14.t513.cls}}, has no
@@ -1065,7 +1064,7 @@ computes a `raw` it ignores and takes `last`.
 @more {#ch-decode--offset} Tokens of classes 1, 4 and 0, side by side
 `back` is `64 - raw_bits`, and `<< TOK_SHIFT` multiplies by 2 for class 1 and by 8 for classes 4 and 5.
 For class 0, the repeat offset, `back` is stored as `(64 - raw_bits) & 63`, 0 and not 64. Three tokens
-from the 4 KiB tables, with made-up bits `0101...` after the code and the offset bits:
+from the tables, with made-up bits `0101...` after the code and the offset bits:
 
 | | class {{ch14.tk.a.cls}}: token {{ch14.tk.a.s}} | class {{ch14.tk.b.cls}}: token {{ch14.tk.b.s}} | class {{ch14.tk.c.cls}}: token {{ch14.tk.c.s}} |
 | --- | --- | --- | --- |
@@ -1145,7 +1144,7 @@ passes. The first fast path in September 2026 missed exactly this, and a test bu
 then.
 @more {#ch-decode--slow} The literal length value, and the token the last sequence lost
 An `ll` of 15 means a literal length value follows the offset bits
-([length values](#ch-format--length-values)); the refill makes sure of the 20 or 22 bits
+([length values](#ch-format--length-values)); the refill makes sure of the 20 bits
 [`seqlz_br_value()`](#ch-dec-basics--value) may take. [`copy_literals()`](#ch-dec-basics--literals)
 may read up to `lit_bound`. With `deltas`, `undelta_literals()` restores the `nl` literals, in steps of 16
 bytes that may run up to 15 bytes past them, again before `last` changes.
@@ -1219,7 +1218,7 @@ byte 2 is a literal. Byte 2 is read only if the page has one, `src_len > 2`. Eac
 constant to `decode_block()`, which gives the two copies of the loop
 ([what each copy does](#ch-decode--deltas)).
 
-It is the kernel's `seqlz_decompress()` itself, declared in [`linux/seqlz.h`](linux-seqlz.h.html#b65):
+It is the kernel's `seqlz_decompress()` itself, declared in [`linux/seqlz.h`](linux-seqlz.h.html#b64):
 `wrkmem`, the kernel's name for work memory, is the buffer of coded literals, `SEQLZ_SCRATCH` bytes,
 and the `static_assert()` below checks that the interface's `SEQLZ_MEM_DECOMPRESS` is that size. The
 export makes it callable from a module, zram's backend among them

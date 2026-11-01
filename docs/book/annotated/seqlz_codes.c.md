@@ -66,9 +66,8 @@ Symbols below 16 are their own value. Symbol 18 is the values 64 to 127: base 64
 In the layout of [the decode tables](#ch-internal--decode-tables), symbols below 16 are their value
 with no extra bits, and a symbol $s$ from 16 on has the base $2^{s - 12}$ and $s - 12$ extra bits
 ([length values](#ch-header--length-values)). Symbol 18 gives `{{ch08.le.18}}`, base 64 and 6 extra
-bits. The last symbol, {{ch08.le_last_symbol}}, has {{ch08.le_last_extra}} extra bits, and on 16 KiB
-pages symbol {{k16.ch08.le_last_symbol}} has {{k16.ch08.le_last_extra}}, which still fit the field's
-4 bits.
+bits. The last symbol, {{ch08.le_last_symbol}}, has {{ch08.le_last_extra}} extra bits, which fit the
+field's 4 bits.
 @assert ch08.le_last_symbol == 23
 @end
 
@@ -354,7 +353,7 @@ the decoder could use it, and the build is `-EINVAL`.
 
 The escape's limit, `SEQLZ_MAX_ESCAPE_LEN`, comes from the encoder's proof that a page fits into zram's
 two pages: the escape code, the token's 12 bits and a class 3 offset of 12 bits must stay within 31
-bits on 4 KiB pages ([the escape](book:#ch-header--escape)).
+bits ([the escape](book:#ch-header--escape)).
 
 @@ 237-256
 The `memset()` does more than the comment says: tokens without a code need `enc[]` 0, `lit_cost` is

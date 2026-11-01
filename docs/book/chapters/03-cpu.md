@@ -87,7 +87,7 @@ on the bits the lookup before consumed, the code asks for the lines ahead of tim
 @anim misses A model, not a measurement: 8 lookups whose addresses do not depend on each other and whose lines are in no cache, about 100 ns per miss as above, and 20 ns of work on each entry. The out-of-order core's window holds the work of 3 lookups. One step is 20 ns.
 
 `seqlz_decompress()` asks for the lines of its tables before it reads the first byte of the page,
-{{ch03.prefetch_lines}} lines per round of a small loop, `prefetch_lines()`
+{{ch03.prefetch_lines}} lines per round of a small loop, `seqlz_prefetch_lines()`
 ([why 8 lines a round](#ch-dec-basics--prefetch), and [the line of `end - 1`](#ch-dec-basics--end-line) for why
 a table that does not start at a cache line misses its last line: the literal tables always do).
 @assert ch03.lit_at_mod != 0 and ch03.lit_size_mod == 0
@@ -222,7 +222,7 @@ the match's offset is below 8, 20 to 22
 ([explored-designs.md](https://github.com/martinus/seqlz/blob/main/docs/explored-designs.md#which-branches-three-in-the-sequence-loop-are-58-of-the-130-misses-of-a-page-seen-once)).
 The first one is gone. Whether {{ch03.refill_at}} bits are left depends on the lengths of the codes
 before, which no predictor knows for a new page. But a refill leaves at least 56 bits, and two fast
-sequences take at most {{ch03.two_fast}} of them on 4 KiB pages, {{k16.ch03.two_fast}} on 16 KiB, so
+sequences take at most {{ch03.two_fast}} of them, so
 `next_token_fast()` refills every second fast sequence without asking, a branch that alternates and
 that every predictor gets right ([the refill without its branch](#ch-decode--refill-branch)).
 
@@ -419,7 +419,7 @@ stack, and in a hot loop that can put a load onto a chain. The decoder reads its
 one register: `struct seqlz_bit_reader` has a `u64 bits` with the next bits on top and an `int count`
 of how many are real ([the bit reader](#ch-dec-basics--bit-reader)). One refill of 8 bytes serves two or
 three sequences: it leaves at least 56 bits, and a sequence on the fast path takes at most
-{{ch03.tok_bits}} bits of token and 14 of offset ({{ch03.off_max}} on 4 KiB pages).
+{{ch03.tok_bits}} bits of token and {{ch03.off_max}} of offset.
 
 The 8 literal streams need 8 such registers at once and a pointer each, and with a count each they
 did not fit into x86-64's registers. So a stream has no count: its 64 bits carry a 1 below the last
@@ -552,13 +552,13 @@ put:                            put_masked:
     ret
 ```
 
-With the mask the check is gone, and the mask itself costs nothing: x86-64's shift uses only the low
-6 bits of the count anyway, so the compiler drops the `and`. That is why the encoder's shifts are
-written `<< (n & 63U)` even where `n` is never 64, and why `enc[]` in `struct value_table` has
-{{ch03.enc_len_symbols}} entries for {{const.LEN_SYMBOLS}} or {{k16.const.LEN_SYMBOLS}} symbols: a
-power of 2, so that `s & (ENC_LEN_SYMBOLS - 1U)` proves every index in range
-([the masks](#ch-internal--masks), [`put_len_value()`](#f-seqlz_encoder-h-b130)). Masked shifts and indices took the compressor
-from 25 225 to 25 064 cycles per page, with 4.7% fewer instructions
+With the mask the check is gone, and the mask itself costs nothing: x86-64's shift uses only the low 6
+bits of the count anyway, so the compiler drops the `and`. That is why the encoder's shifts are written
+`<< (n & 63U)` even where `n` is never 64, and why `enc[]` in `struct value_table` has
+{{ch03.enc_len_symbols}} entries for {{const.LEN_SYMBOLS}} symbols: a power of 2, so that `s &
+(ENC_LEN_SYMBOLS - 1U)` proves every index in range ([the masks](#ch-internal--masks),
+[`put_len_value()`](#f-seqlz_encoder-h-b129)). Masked shifts and indices took the compressor from 25 225
+to 25 064 cycles per page, with 4.7% fewer instructions
 ([explored-designs.md](https://github.com/martinus/seqlz/blob/main/docs/explored-designs.md#the-compressor-second-round-fewer-instructions)).
 The decoder had 65 such checks in an early version, `lz4`'s 18, but not in its hot path: without them,
 the instructions per page were the same
