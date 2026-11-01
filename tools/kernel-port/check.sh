@@ -38,19 +38,19 @@ python3 "$here/port.py" "$work/src" >/dev/null
 git -C "$work/src" add -A
 git -C "$work/src" diff --cached --stat | tail -1
 
-# configure <build dir> <scripts/config args>: defconfig with seqlz, zram and the KUnit tests, the args on
-# top, then prepare
+# configure <build dir> <base config> <scripts/config args>: the base config (defconfig, tinyconfig) with
+# seqlz, zram and the KUnit tests, the args on top, then prepare
 configure() {
-    local o=$1
-    shift
-    make -C "$work/src" O="$o" "${margs[@]}" defconfig >/dev/null
+    local o=$1 base=$2
+    shift 2
+    make -C "$work/src" O="$o" "${margs[@]}" "$base" >/dev/null
     "$work/src/scripts/config" --file "$o/.config" --enable ZRAM --enable ZRAM_BACKEND_SEQLZ --module SEQLZ \
         --enable KUNIT --module SEQLZ_KUNIT_TEST "$@"
     make -C "$work/src" O="$o" "${margs[@]}" olddefconfig >/dev/null
     make -C "$work/src" O="$o" "${margs[@]}" -j"$(nproc)" prepare >/dev/null
 }
 
-configure "$work/build"
+configure "$work/build" defconfig
 for c in ZRAM_BACKEND_SEQLZ=y SEQLZ_KUNIT_TEST=m; do
     grep -q "^CONFIG_$c" "$work/build/.config" || { echo "CONFIG_$c not set" >&2; exit 1; }
 done
@@ -58,12 +58,20 @@ build "${kmake[@]}" -j"$(nproc)" W=1 KCFLAGS=-fstack-usage lib/seqlz/ drivers/bl
 ls "$work/build/lib/seqlz/seqlz_decompress.o" "$work/build/lib/seqlz/tests/seqlz_kunit.o" \
     "$work/build/drivers/block/zram/backend_seqlz.o" >/dev/null || exit 1
 echo "build: no warnings"
-# the whole kernel on x86-64, for modpost: the KUnit test is a module of its own, and building lib/seqlz/
-# alone never links it against what seqlz exports (on 1 Nov 2026 seqlz_tables was not exported). By
-# make's status, as file names like fserror.o fail a grep for errors.
+# a whole kernel on x86-64, for modpost: the KUnit test is a module of its own, and building lib/seqlz/
+# alone never links it against what seqlz exports (on 1 Nov 2026 seqlz_tables was not exported). As
+# defconfig, seqlz built in and the test a module, but from tinyconfig: 76 s instead of 410 s on 4 cores.
+# By make's status, as file names like fserror.o fail a grep for errors.
 if grep -q '^CONFIG_X86_64=y' "$work/build/.config"; then
-    "${kmake[@]}" -j"$(nproc)" >"$work/modpost.log" 2>&1 ||
+    o="$work/build-modpost"
+    configure "$o" tinyconfig --enable 64BIT --enable MODULES --enable BLOCK --enable SYSFS --enable BLK_DEV \
+        --enable RUNTIME_TESTING_MENU
+    for c in SEQLZ=y ZRAM_BACKEND_SEQLZ=y SEQLZ_KUNIT_TEST=m; do
+        grep -q "^CONFIG_$c" "$o/.config" || { echo "tinyconfig: CONFIG_$c not set" >&2; exit 1; }
+    done
+    make -C "$work/src" O="$o" "$@" -j"$(nproc)" >"$work/modpost.log" 2>&1 ||
         { grep -E 'ERROR|error:' "$work/modpost.log" >&2; echo "kernel build failed" >&2; exit 1; }
+    ls "$o/lib/seqlz/tests/seqlz_kunit.ko" >/dev/null || exit 1
     echo "modpost: the modules link"
 fi
 # the tables gen_seqlz_tables wrote in the build, against the ones userspace generates from src/, without
@@ -98,7 +106,7 @@ fi
 if grep -q '^CONFIG_ARM64=y' "$work/build/.config"; then
     for pages in 16K 64K; do
         o="$work/build-$pages"
-        configure "$o" --disable ARM64_4K_PAGES --enable "ARM64_${pages}_PAGES"
+        configure "$o" defconfig --disable ARM64_4K_PAGES --enable "ARM64_${pages}_PAGES"
         grep -q "^CONFIG_ARM64_${pages}_PAGES=y" "$o/.config" && grep -q '^CONFIG_SEQLZ_KUNIT_TEST=m' "$o/.config" ||
             { echo "$pages pages: CONFIG_ARM64_${pages}_PAGES or CONFIG_SEQLZ_KUNIT_TEST not set" >&2; exit 1; }
         ! grep -q '^CONFIG_ZRAM_BACKEND_SEQLZ=y' "$o/.config" ||
