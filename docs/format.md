@@ -503,4 +503,7 @@ damage rarely reaches: the codes above 8 and the values of `dt` other than 1 to 
 outside its stream, a block of literals only, a last sequence with a token, which is invalid, and
 blocks' own tables that overfill the code space, name a byte value above 255 or have bits after their
 end.
+
+[format-check.md](format-check.md) is the procedure to check this file again, more thoroughly: decoders
+written from it in a clean room, by agents that have never seen `src/`, and fuzzed against it.
 <!-- end -->
