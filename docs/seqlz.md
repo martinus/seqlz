@@ -4,11 +4,12 @@
 
 > [!NOTE]
 > **In short.** zram keeps swapped-out memory pages compressed in RAM. On the pages my desktop swapped
-> there, `seqlz-2` stores a page in **24% fewer bytes** than `lzo-rle`, zram's default, and
-> 29% and 28% fewer than `lz4`, the fastest common choice. It takes **16% and 18% more time** than
-> `lz4` to write a page and 6% and 13% more to read one. `zstd`, which compresses best, stores a page
-> in 2% and 6% fewer bytes than `seqlz-2`, but takes 2.2 and 2.1 times the time to write and
-> 1.9 times the time to read. Each pair of numbers is for two sets of pages, see below.
+> there, `seqlz-2` stores a page in **24% and 25% fewer bytes** than `lzo-rle`, zram's default, and
+> 29% and 28% fewer than `lz4`, the fastest common choice. It takes **13% and 16% more time** than
+> `lz4` to write a page and 9% and 16% more to read one. `zstd`, which compresses best, stores a page
+> in 2% and 5% fewer bytes than `seqlz-2`, but takes 2.2 times the time to write and 1.9 and 2.0 times
+> the time to read. `seqlz-3` stores less than `zstd` 3 in two thirds of its time. Each pair of numbers
+> is for two sets of pages, see below.
 
 This page is the overview: the result, what is not known yet, and the choices with their numbers. The
 book [seqlz, line by line](https://martin.ankerl.com/seqlz/) explains every line of `src/`, with
@@ -36,10 +37,10 @@ How to read the numbers:
   from zram for every page it wrote, my desktop 0.34 ([plan.md](plan.md#11-the-score-memory-against-time-not-bars),
   [the book](https://martin.ankerl.com/seqlz/#ch-zram--score)). How many bytes one µs per page is
   worth to you, an exchange rate, decides which codec is the best choice.
-* **When it was measured.** [The result](#the-result-lz4s-time-zstds-size-almost) is from 14th
-  October 2026, with the code and the tables of that day. The tables are trained on three sessions of a
-  phone under memory pressure, on pages that programs had in RAM on a desktop and on a third zram dump
-  of that desktop, not on the two dumps measured here.
+* **When it was measured.** [The result](#the-result-lz4s-time-zstds-size-almost) is from 1st November
+  2026, with the code of that day and the tables of 13th and 14th October. The tables are trained on
+  three sessions of a phone under memory pressure, on pages that programs had in RAM on a desktop and on
+  a third zram dump of that desktop, not on the two dumps measured here.
 
 ## The result: lz4's time, zstd's size, almost
 
@@ -50,10 +51,11 @@ core, means over the pages, first dump / second dump:
 
 | codec | stored bytes per page | write, µs | cold read, µs | time per page written, µs |
 | --- | --- | --- | --- | --- |
-| `lz4` (fastest) | 1450 / 1755 | 5.28 / 5.76 | 2.65 / 2.63 | 7.21 / 7.68 |
-| `lzo-rle` (zram's default) | 1361 / 1679 | 5.11 / 5.70 | 2.87 / 2.94 | 7.21 / 7.85 |
-| **`seqlz-2`** | **1030 / 1269** | **6.13 / 6.82** | **2.80 / 2.97** | **8.17 / 8.99** |
-| `zstd` 3 (smallest) | 1012 / 1197 | 13.45 / 14.47 | 5.46 / 5.72 | 17.44 / 18.65 |
+| `lz4` (fastest) | 1450 / 1755 | 5.31 / 5.79 | 2.53 / 2.51 | 7.16 / 7.62 |
+| `lzo-rle` (zram's default) | 1361 / 1679 | 5.12 / 5.69 | 2.75 / 2.81 | 7.12 / 7.75 |
+| **`seqlz-2`** | **1032 / 1265** | **6.02 / 6.71** | **2.77 / 2.90** | **8.05 / 8.83** |
+| `zstd` 3 | 1012 / 1198 | 13.51 / 14.52 | 5.36 / 5.86 | 17.42 / 18.80 |
+| `seqlz-3` (smallest) | 982 / 1191 | 9.25 / 10.41 | 3.05 / 3.23 | 11.47 / 12.77 |
 
 Compare the bold row with `lz4` and `zstd`: its size is close to `zstd`'s, its time close to
 `lz4`'s. In the chart above, the three panels on the right have the numbers of the table, write,
@@ -63,44 +65,44 @@ cache, in thousands of CPU cycles (ticks of the CPU's clock) per page: the darke
 the lighter one decoding.
 
 > [!NOTE]
-> **How the times are measured, and what p99 is.** The VM is [`tools/zram-vm/run.sh`](../tools/zram-vm/run.sh),
-> all codecs in each boot, `seqlz-1` too, 3 boots per dump and the means over them, one CPU of a
-> Ryzen 9 7950X fixed at 4.5 GHz. A program in
-> the VM writes each page to zram with `pwrite` and reads it back with `pread`, and times each call.
-> So a time is the whole system call, zram and zsmalloc included, not only the codec. Each page is
-> timed 3 times and its median counts. For a cold read, the compressed page is flushed from the CPU
-> cache first. The **mean** is the average over the 20 000 pages, the **median** or p50 the time half
-> of them stay below. For **p99** the 20 000 times are sorted: p99 is the one at position 19 800, so
-> 99% of the pages are done faster and the slowest 200 take longer. The mean says how much time all
-> pages cost together; p99 shows whether some pages are much slower than the rest, and a program
-> that waits for such a page feels it.
+> **How the times are measured, and what p99 is.** The VM is
+> [`tools/zram-vm/run.sh`](../tools/zram-vm/run.sh), all codecs in each boot, `seqlz-1` too, 3 boots per
+> dump and the means over them, one CPU of a Ryzen 9 7950X fixed at 4.5 GHz. A program in the VM writes
+> each page to zram with `pwrite` and reads it back with `pread`, and times each call. So a time is the
+> whole system call, zram and zsmalloc included, not only the codec. Each page is timed 3 times and its
+> median counts. For a cold read, the compressed page is flushed from the CPU cache first. The page was
+> decoded right before, which trains the branch predictor, so these reads are a little faster than a
+> swap-in's: in the swap-ins of the [README](../README.md), `seqlz-2` reads 18% slower than `lz4`. The
+> **mean** is the average over the 20 000 pages, the **median** or p50 the time half of them stay below.
+> For **p99** the 20 000 times are sorted: p99 is the one at position 19 800, so 99% of the pages are
+> done faster and the slowest 200 take longer. The mean says how much time all pages cost together; p99
+> shows whether some pages are much slower than the rest, and a program that waits for such a page feels
+> it.
 
 <details>
 <summary>The slowest pages, p99, and the work memory</summary>
 
-At p99 `seqlz-2` reads cold pages in 4.66 and 4.74 µs, faster than `lzo-rle` (5.55 and 5.61);
-`lz4` needs 4.90 and 4.68. It writes in 10.7 and 10.9 µs, where `lz4` needs 9.2 and 9.5 and `zstd`
-23.6 and 24.2. Its work memory is 8 KiB per CPU, one `kmalloc()` for the matcher's table of
-8192 bytes and a buffer of 4112 bytes the decoder decodes literals into, which are never in use at the
-same time; 16 KiB once zram gives compression and decompression contexts of their own. `lz4` takes its
-16 416 bytes of work space from `vmalloc()`, which are 5 pages, 20 KiB, and a small struct. Two things
-are not work memory: the buffer the compressed page is written into is zram's, two pages per CPU for
-every codec, and the tables for encoder and decoder, 43 280 bytes, are built from the fixed code
-lengths and shared by all CPUs: once when the kernel starts in the kernel's copy
-(`tools/kernel-port/`), once per zram device in the experiments of `tools/zram-vm/` and in the harness.
+At p99 `seqlz-2` reads cold pages in 4.59 and 4.61 µs, `lzo-rle` in 4.47 and 4.74 and `lz4` in 4.02 and
+4.00. It writes in 10.6 µs on both dumps, where `lz4` needs 9.3 and 9.6 and `zstd` 23.7 and 24.1. Its
+work memory is 8 KiB per CPU, one `kmalloc()` for the matcher's table of 8192 bytes and a buffer of 4112
+bytes the decoder decodes literals into, which are never in use at the same time; 16 KiB once zram gives
+compression and decompression contexts of their own. `lz4` takes its 16 416 bytes of work space from
+`vmalloc()`, which are 5 pages, 20 KiB, and a small struct. Two things are not work memory: the buffer
+the compressed page is written into is zram's, two pages per CPU for every codec, and the tables for
+encoder and decoder, 43 280 bytes, are built from the fixed code lengths and shared by all CPUs: once
+when the kernel starts in the kernel's copy (`tools/kernel-port/`), once per zram device in the
+experiments of `tools/zram-vm/` and in the harness.
 
 </details>
 
-No codec is better on both counts: nothing stores pages smaller than `seqlz-2` without taking
-twice its time, and none of zram's codecs is faster without taking at least 32% more bytes. `zstd`
-saves 2 and 7 bytes per page for each µs more than `seqlz-2`. `seqlz-1`, the same format
-with raw literals, was measured in the same boots, 1118 / 1462 bytes and 7.67 / 8.14 µs per page
-written. `seqlz-2` saves 175 and 229 bytes per page for each µs more than `seqlz-1`, and
-`seqlz-1` about 520 and 630 for each µs more than the faster of `lz4` and `lzo-rle`. So if a µs is
-worth less than 7 bytes to you, `zstd`'s smaller pages pay for its extra time, at least on the second
-dump. From there up to 175 bytes, `seqlz-2` is the best choice on both dumps, from 229 to about 520
-bytes `seqlz-1`, and above about 630 bytes `lz4` or `lzo-rle`. The chart below shows it, without
-`seqlz-1`.
+No codec is better on both counts. `zstd` 3 is off the line now: `seqlz-3` stores fewer bytes than it
+in 66% and 68% of its time. From `seqlz-2` to `seqlz-3` a µs per page written saves 15 and 19 bytes
+per page, from `seqlz-1` to `seqlz-2` 210 and 305, and from the faster of `lz4` and `lzo-rle` to
+`seqlz-1` about 480 and 520. `seqlz-1`, the same format with raw literals, was measured in the same
+boots, 1119 / 1478 bytes and 7.63 / 8.13 µs per page written. So if a µs is worth less than 15 bytes
+to you, `seqlz-3` is the best choice on both dumps, from 19 up to 210 bytes `seqlz-2`, from 305 to
+about 480 bytes `seqlz-1`, and above about 520 bytes `lz4` or `lzo-rle`. The chart below shows it,
+without `seqlz-1`.
 
 ![Stored size against time for all codecs](plots/seqlz-codecs.svg)
 
@@ -146,8 +148,9 @@ rest follows the offset bits as a length value: a code from one of two more fixe
 bits ([length values](https://martin.ankerl.com/seqlz/#ch-format--length-values)).
 
 **The literals, in 8 streams.** `seqlz-2` codes the literals of a page with one of 8 fixed
-literal tables, the one that takes the fewest bits for this page, and only where that saves 1/16 of
-them; otherwise they stay as they are. The coded literals are dealt out to 8 streams, literal `k` to
+literal tables, the one that takes the fewest bits for this page as a sample of every 7th literal
+says, and only where that saves 1/16 of them and 35 bytes more, 19 at level 3; otherwise they stay as
+they are. The coded literals are dealt out to 8 streams, literal `k` to
 stream `k mod 8`, so that the decoder can decode 8 of them side by side
 ([coding the literals](https://martin.ankerl.com/seqlz/#ch-literals-enc),
 [decoding them](https://martin.ankerl.com/seqlz/#ch-literals-dec)).
@@ -191,12 +194,12 @@ first two in part, below.
 
 ## Level 3: zstd 3's memory in less than half its time
 
-Level 3 is level 2 with two more steps, and since 21st October a third, below. The matcher looks one position further before it takes a match
-shorter than 20 bytes, and extends a match backwards over the literals before it. And a page with 512
-literals or more gets a literal table of its own where that and the table's description save 16 bytes
+Level 3 is level 2 with three more steps. The matcher looks one position further before it takes a match
+shorter than 20 bytes, and extends a match backwards over the literals before it. A page with 512
+literals or more gets a literal table of its own where that and the table's description save 32 bytes
 against the best of the 8 fixed tables. The description is the code length of each byte, in the order of
-the bytes, about 50 to 75 bytes; the decoder builds the table in the page it decodes into, so it needs no
-more memory ([format.md](format.md#a-blocks-own-literal-table)).
+the bytes, about 50 to 75 bytes; the decoder builds the table in the page it decodes into, so it needs
+no more memory ([format.md](format.md#a-blocks-own-literal-table)).
 
 Since 21st October 2026 level 3 also stores each literal as its delta to an earlier byte of the page,
 the literal minus that byte, before it codes them: the byte 4 or 8 before, inside the literals of one
@@ -210,27 +213,25 @@ about 3.5 µs more and a read 0.6 µs more, in userspace. A XOR with the same by
 [format.md](format.md#literals-as-deltas)).
 
 On the Mi 9T, zram in the phone's own kernel, the 19 775 pages of a phone session that the tables were
-not trained on, 23rd October 2026, time per page written as above:
+not trained on, 1st November 2026, time per page written as above:
 
 ![seqlz's levels against lz4 and zstd 3 on the Mi 9T, memory against time](plots/levels-phone.svg)
 
 | codec | bytes per page | big core, A76 | little core, A55 |
 | --- | ---: | ---: | ---: |
-| `lz4` | 1364 | 14.6 µs | 43.6 µs |
-| `seqlz-1` | 1071 | 15.6 µs | 49.5 µs |
-| `seqlz-2` | 997 | 17.4 µs | 56.3 µs |
-| `seqlz-3` | 875 | 26.4 µs | 79.3 µs |
-| `zstd` 3 | 951 | 51.4 µs | 165.7 µs |
+| `lz4` | 1364 | 14.6 µs | 43.0 µs |
+| `seqlz-1` | 1071 | 15.5 µs | 49.0 µs |
+| `seqlz-2` | 995 | 17.4 µs | 53.8 µs |
+| `seqlz-3` | 871 | 25.7 µs | 75.8 µs |
+| `zstd` 3 | 951 | 51.1 µs | 165.3 µs |
 
-So `seqlz-3` stores a page in 8.0% less memory than `zstd` 3, in 51% of its time on the big core and
-48% on the little one, and in 12.2% less memory than `seqlz-2` for 52% and 41% more time. On 15th
-October, before the deltas, it stored 952 bytes per page in 22.2 and 67.6 µs
-([explored-designs.md](explored-designs.md#level-3-with-its-deltas-in-the-mi-9ts-kernel-81-less-memory-than-on-15th-october-41-and-117-µs-more-per-page-written)).
+So `seqlz-3` stores a page in 8.4% less memory than `zstd` 3, in 50% of its time on the big core and
+46% on the little one, and in 12.4% less memory than `seqlz-2` for 47% and 41% more time
+([explored-designs.md](explored-designs.md#the-numbers-again-on-1st-november-seqlz-3-44-below-zstd-3-in-70-of-its-time-the-readmes-charts)).
 Its work memory is the same as `seqlz-2`'s, 16 KiB per CPU
 ([explored-designs.md](explored-designs.md#level-3-a-lazy-matcher-and-a-literal-table-of-the-pages-own-zstd-3s-memory-in-less-than-half-its-time-on-the-phone-kept)).
-In the kernel VM on 22nd October, the mean over four zram dumps, level 3 stores 24.4% of a page in 14.42
-µs per page written with its deltas, `zstd` 3 25.3% in 20.02 µs ([README](../README.md)); without them,
-in a run of 21st October, 25.4% in 12.96 µs.
+In the kernel VM, the mean over four zram dumps, level 3 stores 24.2% of a page in 13.43 µs per page
+written, `zstd` 3 25.3% in 19.30 µs ([README](../README.md)).
 
 ## What is not known yet
 
@@ -238,12 +239,13 @@ in a run of 21st October, 25.4% in 12.96 µs.
 > * **One desktop, one phone.** The numbers in this document are from two zram dumps of one desktop;
 >   the tables are trained on other pages of that desktop, the ones programs had in RAM, and on one
 >   zram dump of a phone.
-> * **arm64 on one phone.** The times here are from x86-64. On the small core of a Mi 9T phone, a
->   Cortex-A55, in the phone's own kernel, on the pages of the first dump, a cold read takes 59 µs for
->   `seqlz-1` and 61 µs for `seqlz-2` at the median, against 52 µs for `lz4`: 12% and 17% more.
->   On the big core it is 9.3 and 9.4 µs against 7.2. On the little core `seqlz-2` is the best
->   choice only up to 12 bytes per µs, `seqlz-1` up to 24
->   ([explored-designs.md](explored-designs.md#the-numbers-again-with-the-bit-order-and-the-token-tables-prefetch-cold-reads-on-the-a76-3-µs-faster)).
+> * **arm64 on one phone's kernel.** The times above are from x86-64. On the little core of a Mi 9T, a
+>   Cortex-A55, in the phone's own kernel, on the pages of a phone session, a cold read takes 28.8 µs
+>   for `seqlz-1` and 31.3 µs for `seqlz-2`, against 24.0 µs for `lz4`: 20% and 30% more. On the big
+>   core it is 7.0 and 8.3 µs against 6.1. On the little core `seqlz-2` is the best choice only from
+>   5.6 to 16 bytes per µs, `seqlz-1` up to 49
+>   ([explored-designs.md](explored-designs.md#the-numbers-again-on-1st-november-seqlz-3-44-below-zstd-3-in-70-of-its-time-the-readmes-charts)).
+>   A Pixel 9a runs the codecs in userspace only, without root, see the [README](../README.md#on-a-phone).
 >   In a test that switches between 25 apps, with the same RAM given to zram, launches were not
 >   slower, and because `seqlz` stores pages smaller every app stayed in memory, where `lz4` lost some
 >   ([Apps on the phone](explored-designs.md#apps-on-the-phone-with-the-same-ram-no-cold-launch-in-6-runs-of-seqlz-54-in-3-runs-of-lz4)).
@@ -253,7 +255,7 @@ in a run of 21st October, 25.4% in 12.96 µs.
 >   had until 1st November 2026
 >   ([explored-designs.md](explored-designs.md#16-kib-pages-as-four-blocks-of-4-kib-70-to-86-more-memory-than-one-block-of-16-kib-measured));
 >   there is no phone with 16 KiB pages yet ([format.md](format.md#status)).
-> * **Writes at p99** take 1.21 and 1.19 times `lz4`'s time.
+> * **Writes at p99** take 1.14 and 1.11 times `lz4`'s time.
 
 ## The choices, with their numbers
 

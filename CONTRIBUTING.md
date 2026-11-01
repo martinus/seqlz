@@ -6,9 +6,9 @@ a change needs before it is merged.
 
 ## Before you try a design
 
-Read [docs/explored-designs.md](docs/explored-designs.md) first. About 60 designs and choices are
-in there, with their numbers, and most of the obvious ideas were already tried. Add an entry for
-everything you measure, in the same pull request as the code, also and especially when it did not
+Read the catalog of [docs/explored-designs.md](docs/explored-designs.md) first. About 160 designs and
+choices are in there, with their numbers, and most of the obvious ideas were already tried. Add an entry
+for everything you measure, in the same pull request as the code, also and especially when it did not
 work.
 
 A design is judged by how much closer it gets to the goal, `lz4`'s speed at `zstd`'s size, by the score
@@ -67,7 +67,8 @@ The codec goes into the kernel as it is, so:
 
 - Plain C, `-std=gnu11`, freestanding: no libc, no floating point, no VLAs, no allocation.
 - No SIMD, and no inline assembly. A speedup has to come from code a C compiler keeps.
-- Stack frames well under the kernel's limit, below 256 bytes as a target.
+- Stack frames below 1024 bytes, the limit of older 32-bit kernels. `tools/kernel-port/check.sh`
+  prints the three deepest and fails above it; today they are about 700 bytes.
 - Big-endian has to work: read multi-byte values with explicit little endian loads, never by type
   punning. CI checks that s390x writes the same bytes as x86-64.
 - No sleeping and nothing that may fault: zram may call the codec with preemption disabled.
@@ -127,5 +128,5 @@ starts with its SPDX line:
 CI has one required check, `ci-ok`. It needs these to pass: the format check, the tests with gcc and
 clang on x86-64 and arm64, the fuzz smoke run with ASan and UBSan and with MSan, the
 kernel port built for x86-64, arm64, 32-bit arm and s390 with its KUnit tests, the same compressed bytes
-on x86-64, 32-bit x86 and big-endian s390x, and the docs: `tools/seqlz-ref/check.sh` and
-`tools/check-links.py`, both quick to run before a push.
+on x86-64, 32-bit x86 and big-endian s390x, the book (`docs/book/build.py --check`), and the docs:
+`tools/seqlz-ref/check.sh` and `tools/check-links.py`, both quick to run before a push.

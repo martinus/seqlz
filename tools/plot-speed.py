@@ -139,7 +139,7 @@ def main():
     fig.text(
         0.01,
         0.01,
-        f"Hot loop: perf over 2000 pages of the first dump, the median of 5 processes, {plot_codecs.cpu_model()} at a fixed "
+        f"Hot loop: perf, 30 loops minus 10 over the 20 000 pages of the first dump, {plot_codecs.cpu_model()} at a fixed "
         f"{args.clock}; darker bar compress, lighter decode.\nKernel: tools/zram-vm/run.sh, 20 000 pages per dump, {boots} "
         f"per dump with all codecs, {args.source or plot_codecs.git_source()}; cold read: compressed data flushed and another "
         "page read first, the seqlz backend prefetches the compressed data.",

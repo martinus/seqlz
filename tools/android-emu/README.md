@@ -5,7 +5,8 @@ pages. `emuapps.sh` runs the apps of the image, round after round, while `hog` f
 [`phone-apps/`](../phone-apps) holds most of the RAM, so that zram fills with the pages of apps. Then a
 `dd` of the zram device is a corpus, as on a phone. The image has no account signed in, so the pages
 hold no one's data, but they are a corpus like any other: keep them in `~/seqlz-corpus` and out of
-the repository.
+the repository. seqlz has blocks of 4 KiB only since 1st November 2026, so a dump of 16 KiB pages is
+for the other codecs.
 
 The images are `system-images;android-37.0;google_apis_ps16k;x86_64` and
 `system-images;android-37.0;google_apis;x86_64`, the device `pixel_8` with 4 GB of RAM and 4 cores.

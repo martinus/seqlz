@@ -482,8 +482,9 @@ than 1 to 3, are invalid now and free for a format that has to tell itself apart
 <!-- not in the kernel's copy -->
 ## How this file was checked
 
-`tools/seqlz-ref/seqlz_ref.py` decodes bit by bit, from this file alone, and agreed with `seqlz_decompress()` on
-every input it was given, valid and damaged blocks of both block sizes; the numbers are in
+`tools/seqlz-ref/seqlz_ref.py` decodes bit by bit, from this file alone, and agreed with
+`seqlz_decompress()` on every input it was given, valid and damaged blocks, also of the 16 KiB blocks
+the format had until 1st November 2026; the numbers are in
 [explored-designs.md](explored-designs.md#the-format-written-down-one-set-of-tables-and-stream-sizes-that-hold).
 
 `tools/seqlz-ref/seqlz_ref.c` is the same in C, also from this file alone, fast enough to be fuzzed:
@@ -495,9 +496,11 @@ found none either. Both runs were before literals as deltas; for those, the CI's
 `dt` 1 and 3, and on 22nd October both decoders got every delta byte, every cut and random damage of
 15 000 pages of 4 KiB from zram dumps and 2088 of 16 KiB from a process's resident pages, 5.8 million
 blocks in all, and agreed on every one.
+
 `test/seqlz_ref_test.cpp` checks the example above, the compressor's blocks at every level, damaged
-blocks, blocks whose literals are deltas of each kind, and blocks made by hand for the rules that damage rarely
-reaches: the codes above 8 and the values of `dt` other than 1 to 3, a literal code outside its stream, a block of literals only, a last sequence with a token, which
-is invalid, and blocks' own tables that overfill the code space, name a byte value above 255 or have
-bits after their end.
+blocks, blocks whose literals are deltas of each kind, and blocks made by hand for the rules that
+damage rarely reaches: the codes above 8 and the values of `dt` other than 1 to 3, a literal code
+outside its stream, a block of literals only, a last sequence with a token, which is invalid, and
+blocks' own tables that overfill the code space, name a byte value above 255 or have bits after their
+end.
 <!-- end -->
