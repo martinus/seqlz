@@ -23,7 +23,7 @@ are measured") is about 90 KB.
   for the bytes; a time is stale after a change on the hot path. Compare codecs only within one run, one
   boot can be off by 18% (CLAUDE.md, Measuring).
 - Current truth is elsewhere: format = `docs/format.md` (Status), code = `src/`, current numbers =
-  [Current state](#current-state-16-october-2026) and the newest catalog lines.
+  [Current state](#current-state) and the newest catalog lines.
 - Removed code is named by its old path (`explore/bytelz.c`, `spike/`): in git before `57fb8fb`, the
   commit of 7 Oct 2026 that removed it: `git show 57fb8fb^:explore/bytelz.c`. `src/seqlz.c` was split
   on 10 Oct 2026 into `src/seqlz_compress.c`, `src/seqlz_decompress.c`, `src/seqlz_codes.c`,
@@ -44,31 +44,30 @@ are measured") is about 90 KB.
 - Say which bytes: zsmalloc cost of the bench's model, zram's `mem_used` in the VM or phone, or
   compressed bytes (a raw page = 4096). On the same pages they differ by 3% to 5%.
 
-## Current state, 16 October 2026
+## Current state
 
-- Levels, one format: `seqlz-1` raw literals; `seqlz-2` one of 8 fixed literal tables per page, zram's
-  default; `seqlz-3` the matcher of levels 1 and 2 with one lazy step and the step back, and a literal table of
-  the page's own where it saves 16 bytes, from 512 literals, and since 21 Oct its literals stored as
-  deltas to an earlier byte of the page where that pays. Format: `docs/format.md` of 21 Oct 2026; tables
-  trained on `train-mix-1012` (13 Oct), token tables again for the offset classes of 14 Oct.
+As of 1 Nov 2026, `main` at `c8f8c3f`.
+
+- Levels, one format: `seqlz-1` raw literals; `seqlz-2` one of 8 fixed literal tables per page, picked
+  from every 7th literal, zram's default; `seqlz-3` the matcher of levels 1 and 2 with one lazy step and
+  the step back, a literal table of the page's own where it saves 32 bytes, from 512 literals, and its
+  literals stored as deltas to an earlier byte of the page where that pays. Literals coded where that
+  saves 1/16 of them and 35 bytes more, 19 at level 3. Format: `docs/format.md` of 21 Oct 2026, blocks of
+  4 KiB only since 1 Nov; tables trained on `train-mix-1012` (13 Oct), token tables again for the
+  offset classes of 14 Oct.
 - The score's `r` is 0.73 since 16 Oct 2026, a phone in daily use (Pixel 9a); every entry before uses the
   desktop's 0.34 and says so ([reads per write](#reads-per-write-on-phones-073-on-a-pixel-9a-in-daily-use-the-score-uses-it)).
   At 0.73 `lz4`'s faster swap-ins put it ahead of `lzo-rle`; the order of the levels does not change.
-- Kernel VM, `MODE=swap`, 3 boots, 16 Oct, the mean over p3 / p5 / zram0 / zram0-2026-09-24, memory as %
-  of 4 KiB and µs per page written at `r = 0.73`: `lz4` 36.5% 8.77, `lzo-rle` 34.9% 8.91, `seqlz-1`
-  29.1% 9.28, `seqlz-2` 26.5% 10.03, `seqlz-3` 25.4% 12.16, `zstd` 3 25.3% 19.38. Hull `lz4`, `seqlz-1`,
-  `seqlz-2`, `seqlz-3`, `zstd` 3 at 597, 145, 21 and 0.2 bytes per µs. Source:
-  [16th October](#the-numbers-again-on-16th-october-all-three-levels-with-lzo-rle-the-readmes-chart).
-  With the deltas, 22 Oct, same set: `seqlz-3` 24.4% in 14.42 µs, `zstd` 3 25.3% in 20.02, off the
-  hull, which is `lz4`, `seqlz-1`, `seqlz-2`, `seqlz-3` at 689, 131 and 22 bytes per µs
-  ([one rule](#one-rule-for-which-literals-are-deltas-045-fewer-bytes-a-simpler-spec-kept)); the README is that run.
-- Mi 9T, zram in its own kernel, p3, `write + 0.73 * cold read` in µs, A76 / A55: `lz4` 14.58 / 42.77,
-  `seqlz-1` 15.79 / 50.28, `seqlz-2` 17.61 / 55.91, `seqlz-3` 22.24 / 67.63, `zstd` 3 52.03 / 164.62
-  ([Level 3](#level-3-a-lazy-matcher-and-a-literal-table-of-the-pages-own-zstd-3s-memory-in-less-than-half-its-time-on-the-phone-kept)
-  has the write and read times).
-  With the deltas, 23 Oct, same pages: `lz4` 14.61 / 43.58, `seqlz-1` 15.63 / 49.52, `seqlz-2` 17.42 / 56.31,
-  `seqlz-3` 26.38 / 79.33 at 874.9 bytes per page, `zstd` 3 51.35 / 165.73 at 951.4
-  ([in the Mi 9T's kernel](#level-3-with-its-deltas-in-the-mi-9ts-kernel-81-less-memory-than-on-15th-october-41-and-117-µs-more-per-page-written)).
+- Kernel VM, `MODE=swap`, 3 boots, 1 Nov, the mean over p3 / p5 / zram0 / zram0-2026-09-24, memory as %
+  of 4 KiB and µs per page written at `r = 0.73`: `lz4` 36.5% 8.73, `lzo-rle` 34.9% 8.84, `seqlz-1`
+  29.1% 9.21, `seqlz-2` 26.4% 9.88, `seqlz-3` 24.2% 13.43, `zstd` 3 25.3% 19.30. Hull `lz4`, `seqlz-1`,
+  `seqlz-2`, `seqlz-3` at 624, 165 and 26 bytes per µs; `zstd` 3 off it. Every codec was faster than on
+  22 Oct, `lz4` by 5.6%: compare times within a run only ([1st November](#the-numbers-again-on-1st-november-seqlz-3-44-below-zstd-3-in-70-of-its-time-the-readmes-charts)); the README is that run.
+- Mi 9T, zram in its own kernel, p3, `write + 0.73 * cold read` in µs, A76 / A55, 1 Nov: `lz4` 14.59 /
+  43.01, `seqlz-1` 15.53 / 48.98, `seqlz-2` 17.41 / 53.84, `seqlz-3` 25.67 / 75.84 at 871.1 bytes per
+  page, `zstd` 3 51.05 / 165.30 at 951.4 ([1st November](#the-numbers-again-on-1st-november-seqlz-3-44-below-zstd-3-in-70-of-its-time-the-readmes-charts) has the write and read times).
+- Pixel 9a, userspace, no root, per page written X4 / A720 / A520: `lz4` 5.60 / 6.21 / 14.70,
+  `seqlz-2` 6.23 / 7.71 / 24.69, `seqlz-3` 10.29 / 12.65 / 40.56, `zstd` 3 17.00 / 19.09 / 65.23.
 - Why the ratio: the gap from `lz4` to `zstd` is mostly how the sequences are coded
   ([Where the ratio of `zstd` comes from](#where-the-ratio-of-zstd-comes-from)); `zstd` 3's remaining
   lead over `seqlz-2` was its literal table per page, which `seqlz-3` now has.
@@ -78,11 +77,13 @@ are measured") is about 90 KB.
 - zram's recompression with `seqlz-3` gives level 3's memory at level 1's write time for 7.8 to 10.1 µs
   per idle page, worth it where idle CPU time weighs less than about 0.3
   ([recompression](#recompression-with-level-3-78-to-101-µs-per-page-level-3s-memory-at-level-1s-write-time-on-the-hull-where-idle-time-weighs-less-than-03)).
+  An optimal parse in today's format would store 56 bytes per page less than level 3, a bound for a
+  level for recompression only ([optimal parse](#an-optimal-parse-in-todays-format-the-bound-for-a-level-for-recompression-only-56-bytes-per-page-under-level-3-half-of-it-matches-level-3s-matcher-does-not-find-not-built)).
 - WKdm (Apple's C version) in a VM run with the six codecs of the README: 50.1% of the page at 8.18 µs per page written, against
   `lz4`'s 36.5% at 9.21; on the hull in `lz4`'s place, to `seqlz-1` at 580 bytes per µs
   ([WKdm](#wkdm-in-the-kernel-vm-818-µs-per-page-written-against-lz4s-921-at-501-of-the-page-against-365-not-pursued)).
-- Known open costs: a cold swap-in of `seqlz-2` takes 0.62 to 0.95 µs more than `lz4`'s in the VM
-  run above, mostly branch mispredictions that a decode of the same page before hides
+- Known open costs: a cold swap-in of `seqlz-2` takes 0.59 µs more than `lz4`'s in the VM run above,
+  mostly branch mispredictions that a decode of the same page before hides
   ([found](#the-decoder-in-a-fault-found-110-branch-mispredictions-per-page-that-a-decode-of-the-same-page-before-hides));
   16 KiB pages have no format since 1 Nov 2026: the library compresses blocks of 4 KiB with any
   page size, and the 16 KiB tables are in git history only (last in `9ce7148`);
@@ -158,6 +159,13 @@ table in 10 bits again" are 24 and 28 Sep. "desktop 2" in "Levels 3 and 4" is 28
   literals are deltas ([one rule](#one-rule-for-which-literals-are-deltas-045-fewer-bytes-a-simpler-spec-kept)) ([deltas](#level-3-stores-its-literals-as-deltas-not-xors-084-fewer-bytes-than-the-xor-kept)). A XOR in their
   place ([the XOR](#level-3-xors-its-literals-with-an-earlier-byte-of-the-page-38-fewer-bytes-than-seqlz-3-of-15-october-kept))
   was never merged.
+- 30 Oct: `src/` as the kernel copy, its includes, guards and exports (#281 to #286).
+- 31 Oct: the deltas priced on every 11th literal (#289); literals coded from 35 bytes saved at level 2,
+  19 at level 3, own tables from 32 (#290); level 2's table from a sample of every 7th literal, the
+  streams written into slots (#308); the deltas undone 16 bytes at a time, their distance once per block
+  (#313).
+- 1 Nov: blocks of 4 KiB only, the 16 KiB tables removed (#318); level 2's coder without the pricing
+  branch, the stream sizes without `memcpy()` (#319). Same bytes as 31 Oct.
 
 ## Machines and terms
 
@@ -216,7 +224,7 @@ One line per entry, by area, newest first: date measured, verdict, link, result,
 - 2026-10-24 **kept** [Level 3 without its second try of the plain literals](#level-3-without-its-second-try-of-the-plain-literals-071-bytes-per-page-more-writes-18-and-20-faster-on-the-mi-9t-kept): where the deltas stayed raw, the plain literals were priced again; that ran on 13% to 34% of the pages and coded 0.8% to 3.4% of them. Without it: zsmalloc +0.71 bytes per page (+0.079%, ten samples), level 3 compress -1.6% instructions; Mi 9T p3 writes -0.93 µs A55, -0.39 µs A76, about 2 bytes per µs on the A76. Code: `seqlz_code_own()`; branch kernel-cleanup-2. Now: current. Untried: the kernel VM.
 - 2026-10-21 **not kept** [More transforms, a parse that knows them, Huffman's floor, near matches](#more-transforms-for-level-3s-literals-a-parse-that-knows-them-huffmans-floor-near-matches-at-most-06-on-phone-pages-not-kept): ten samples, level 3 with the XOR 881.05 bytes per page; the same three bytes subtracted 873.62 (kept as deltas); other distances, XOR or subtraction at 1 to 64: at most 1.6 more; words with carries worse than bytes; Paeth or the gradient as a fourth choice -3.5 (phone -4.9, 0.6%); XOR or subtraction per page 0.7 even with the best known; a parse that knows the XOR -2.1 on phone samples; Huffman's floor 0.5 to 1.2; near matches at most 3.2 to 7.4. Code: not committed, `r15/` in the research tools. Now: current. Untried: timing Paeth or the gradient.
 - 2026-10-21 **kept** [Level 3 stores its literals as deltas](#level-3-stores-its-literals-as-deltas-not-xors-084-fewer-bytes-than-the-xor-kept): the XOR's three choices as subtractions, modulo 256. Ten samples: level 3 873.6 bytes per page instead of 881.0 (-0.84%; phone -1.15%, desktop -0.30%). Mi 9T: reads +0.13 to +0.24 µs A76, +0.34 to +0.46 A55, writes +0.12 to +0.27 A76; about 22 bytes per µs with the phone's mix. Fast path in registers: inside the noise, not kept. Code: `sub_bytes()`, `delta_literals()`, `add4()`, `add8()`, `undelta_literals()`, `undelta_fast()`, PR #229. Now: current; [tables trained for deltas](#literal-tables-trained-for-deltas-at-most-30-bytes-per-page-at-level-3-with-12-tables-not-kept) 22 Oct, at most 0.35%. Untried: zram in the phone's kernel.
-- 2026-10-23 **measurement** [Level 3 with its deltas in the Mi 9T's kernel](#level-3-with-its-deltas-in-the-mi-9ts-kernel-81-less-memory-than-on-15th-october-41-and-117-µs-more-per-page-written): Mi 9T, zram in its own kernel, p3, `BUS=1`, 3 rounds: level 3 874.9 bytes per page (952.0 on 15 Oct), `zstd` 3 951.4; `write + 0.73 * cold read` A76 / A55: `lz4` 14.61 / 43.58, levels 1 to 3 15.63 / 49.52, 17.42 / 56.31, 26.38 / 79.33, `zstd` 3 51.35 / 165.73. Code: main 00073f1. Now: current; the README's phone table. Untried: COUNTS=1; another phone.
+- 2026-10-23 **measurement** [Level 3 with its deltas in the Mi 9T's kernel](#level-3-with-its-deltas-in-the-mi-9ts-kernel-81-less-memory-than-on-15th-october-41-and-117-µs-more-per-page-written): Mi 9T, zram in its own kernel, p3, `BUS=1`, 3 rounds: level 3 874.9 bytes per page (952.0 on 15 Oct), `zstd` 3 951.4; `write + 0.73 * cold read` A76 / A55: `lz4` 14.61 / 43.58, levels 1 to 3 15.63 / 49.52, 17.42 / 56.31, 26.38 / 79.33, `zstd` 3 51.35 / 165.73. Code: main 00073f1. Now: Numbers again on 1 Nov with `c8f8c3f` ([1st November](#the-numbers-again-on-1st-november-seqlz-3-44-below-zstd-3-in-70-of-its-time-the-readmes-charts)). Untried: COUNTS=1; another phone.
 - 2026-10-22 **kept** [One rule for which literals are deltas](#one-rule-for-which-literals-are-deltas-045-fewer-bytes-a-simpler-spec-kept): `p >= x` for all three deltas instead of the 5th / 9th literal of a sequence for the byte 4 / 8 before. Ten samples: level 3 869.7 bytes per page instead of 873.6 (-0.45%; phone -5.4, desktop -0.5). Mi 9T: writes 0.2 µs faster, reads within noise. Kernel VM, 4 dumps: 24.4% in 14.42 µs against 24.5% in 14.54 (zsmalloc -4.1 bytes). Code: `delta_literals()`, `undelta_literals()`, `undelta_fast()`, commit 689dad5, PR #229. Now: current.
 - 2026-10-22 **not kept** [Literal tables for deltas](#literal-tables-trained-for-deltas-at-most-30-bytes-per-page-at-level-3-with-12-tables-not-kept): 98% of the pages whose deltas a fixed table codes use table 1. Trained on train-mix-1012, ten samples, level 3: today's 8 + 1 / 2 / 4 tables for deltas -1.0 / -2.2 / -3.0 bytes per page (at most 0.35%); 7 plain + 1 for deltas -0.8 at level 3, +1.0 at level 2; 8 trained on both -2.4 at level 3, +4.2 at level 2. Code: not committed, `xt2/` in the research tools. Now: current.
 - 2026-10-21 **not kept** [Literal tables for XORed literals](#literal-tables-trained-for-xored-literals-at-most-28-bytes-per-page-at-level-3-with-12-tables-not-kept): 99% of XORed pages on a fixed table use table 1. Trained on train-mix-1012, ten samples, level 3: today's 8 + 1 / 2 / 4 tables for XORed literals -0.9 / -1.6 / -2.8 bytes per page (at most 0.3%); 7 plain + 1 XORed -0.4 at level 3, +1.4 at level 2; 8 to 10 trained on both at most -1.5 at level 3, up to +3.5 at level 2. Not worth more tables, a format change and level 2's pricing cost. Code: not committed; ~/seqlz-corpus/research/2026-10-21-tools/xt/. Now: again for deltas on 22 Oct, [at most 3.0 bytes](#literal-tables-trained-for-deltas-at-most-30-bytes-per-page-at-level-3-with-12-tables-not-kept).
@@ -230,9 +238,10 @@ One line per entry, by area, newest first: date measured, verdict, link, result,
 
 **The score**
 
+- 2026-11-01 **measurement** [The numbers again on 1 November, all docs' charts](#the-numbers-again-on-1st-november-seqlz-3-44-below-zstd-3-in-70-of-its-time-the-readmes-charts): Kernel VM `MODE=swap`, 3 boots, mean of p3/p5/zram0/zram0-2026-09-24: lz4 36.5% 8.73 µs, lzo-rle 34.9% 8.84, seqlz-1 29.1% 9.21, seqlz-2 26.4% 9.88, seqlz-3 24.2% 13.43, zstd 3 25.3% 19.30; hull 624, 165, 26 B/µs. Mi 9T (A76/A55 per page written): seqlz-2 17.41/53.84, seqlz-3 25.67/75.84 at 871.1 B, zstd 3 51.05/165.30. Pixel 9a: seqlz-3 61% to 66% of zstd 3's time. Read mode and hot loop on the desktop dumps. Code: `c8f8c3f`; the charts of README and seqlz.md. Now: current.
 - 2026-10-16 **measurement** [Swap-in bursts on a Pixel 9a](#swap-ins-on-a-pixel-9a-in-use-92-of-the-pages-in-bursts-of-1024-or-more-073-reads-per-write-again): 15 minutes in use, 10 ms samples: 0.732 reads per write; single swap-ins 0.0% of the pages, 92% in bursts of 1024 pages or more, 61% in bursts of 8192 or more, the largest 72 621. The mean time per page is the right measure. Code: tools/swap-bursts/. Now: current. Untried: an hour or a day of use; which core; burst durations.
 - 2026-10-16 **measurement** [Reads per write on phones](#reads-per-write-on-phones-073-on-a-pixel-9a-in-daily-use-the-score-uses-it): Pixel 9a in daily use, 7.1 days: pswpin/pswpout 0.73 (refaults, not readahead); the desktop had 0.34, the Mi 9T 0.16 idle and 0.45 to 0.61 in scripted sessions. The score's r is 0.73 since (seqlz-score, tools/plot-*.py); lz4 then ahead of lzo-rle, the levels unchanged. Code: bench/score.h. Now: current; 15 minutes of use gave 0.732 again ([bursts](#swap-ins-on-a-pixel-9a-in-use-92-of-the-pages-in-bursts-of-1024-or-more-073-reads-per-write-again)). Untried: other phones and users.
-- 2026-10-16 **measurement** [VM numbers of 16 October, the README's chart](#the-numbers-again-on-16th-october-all-three-levels-with-lzo-rle-the-readmes-chart): kernel VM MODE=swap, 3 boots, mean of the four VM samples: r = 0.73: lz4 36.5% memory / 8.77 µs per page written, lzo-rle 34.9% / 8.91, zstd 3 25.3% / 19.38, seqlz-1 29.1% / 9.28, seqlz-2 26.5% / 10.03, seqlz-3 25.4% / 12.16; hull lz4, seqlz-1, seqlz-2, seqlz-3, zstd 3 (at 0.34 lzo-rle instead of lz4). Code: tools/plot-readme.py, docs/plots/levels-vm.svg. Now: current.
+- 2026-10-16 **measurement** [VM numbers of 16 October, the README's chart](#the-numbers-again-on-16th-october-all-three-levels-with-lzo-rle-the-readmes-chart): kernel VM MODE=swap, 3 boots, mean of the four VM samples: r = 0.73: lz4 36.5% memory / 8.77 µs per page written, lzo-rle 34.9% / 8.91, zstd 3 25.3% / 19.38, seqlz-1 29.1% / 9.28, seqlz-2 26.5% / 10.03, seqlz-3 25.4% / 12.16; hull lz4, seqlz-1, seqlz-2, seqlz-3, zstd 3 (at 0.34 lzo-rle instead of lz4). Code: tools/plot-readme.py, docs/plots/levels-vm.svg. Now: Numbers again on 1 Nov with `c8f8c3f` ([1st November](#the-numbers-again-on-1st-november-seqlz-3-44-below-zstd-3-in-70-of-its-time-the-readmes-charts)). current.
 - 2026-10-14 **measurement** [VM and hot loop numbers of 14 October](#the-numbers-again-on-14th-october-05-and-47-smaller-than-on-5th-october-writes-03-µs-faster): Kernel VM, 3 boots, first/second desktop dump: seqlz-2 1029.7/1268.5 bytes per page, write 6.13/6.82 µs, cold 2.80/2.97; seqlz-1 1118.4/1462.3. Hull: seqlz-1 to seqlz-2 189/258 bytes per µs, seqlz-2 to zstd 3 2.1/8.3. Code: tools/zram-vm/run.sh, seqlz-score, tools/plot-codecs.py (mean over boots). Now: Predates 15 Oct: "Level 3, a lazy matcher" added seqlz-3, "The matcher without its step back" made writes 1% to 2% faster in the VM; all three levels with lzo-rle on 16 Oct ([16th October](#the-numbers-again-on-16th-october-all-three-levels-with-lzo-rle-the-readmes-chart)).
 - 2026-10-14 **method** [Work memory per CPU priced in the score](#work-memory-per-cpu-in-the-score-zstd-3-drops-off-the-hull-below-27-and-79-mib-in-zram-per-cpu): Bytes per CPU x CPUs / pages in zram added (lz4 20 512, zstd 3 192 544, seqlz-2 16 384). zstd 3 leaves the hull below 27 and 7.9 MiB in zram per CPU; other steps move 5% at most with 8 CPUs. Code: seqlz-score --per-cpu --device, bench/score.cpp; bench/kernel_codecs/alloc.c; #203. Now: current. Untried: How much a phone keeps in zram, and for how long.
 - 2026-10-07 **measurement** [Score with swap-out and swap-in times](#the-score-with-the-swap-times-seqlz-fast-lits-range-ends-at-155-and-211-bytes-per-µs-instead-of-200-and-279): Kernel VM MODE=swap, tables of 7 October: seqlz-2 lowest score from 3.1 to 155 bytes per µs (first dump) and 10.3 to 211 (second), not 200 and 279. It swaps in 0.52 and 0.72 µs slower than lz4, 0.12 and 0.27 in the read benchmark. Code: seqlz-score reads MODE=swap logs (bench/score.cpp); tools/zram-vm/run.sh. Now: 'Work memory per CPU in the score' adds C5 to these numbers; 'The numbers again on 14th October' has newer bytes; seqlz-3 (kept 15 Oct) now sits between seqlz-2 and zstd 3. Untried: The phone's swap times in the score, and r on a phone.
@@ -371,7 +380,7 @@ One line per entry, by area, newest first: date measured, verdict, link, result,
 **Phones: Mi 9T, Pixel 9a**
 
 - 2026-10-19 **measurement** [Write time on the Mi 9T by part, where zram runs](#write-time-on-the-mi-9t-by-part-and-where-zram-runs-there-level-1s-gap-to-lz4-is-the-encoders-arithmetic-96-of-the-writes-on-the-a76): harness, p3, write µs A55 / A76: lz4 16.9 / 7.63, seqlz-1 23.4 / 8.21, seqlz-2 27.2 / 8.48, seqlz-3 38.6 / 13.72. Level 1's matcher takes lz4's whole compress; the encoder about 65 to 74 instructions per sequence (5.8 / 1.3 µs), no cheaper as a second pass, a byte format or with fewer offset classes. zramlog of 17 Oct: 96% of the writes on the A76 (kswapd), 65% to 69% of the reads; weighted, write + 0.73 read seqlz-1 +11%, seqlz-2 +21%, seqlz-3 +76% over lz4. Killed: offset classes 1, 4, 5 removed, XOR literals against the last offset, 32-bit hash, sampled table choice. Code: offline, ~/seqlz-corpus/research/2026-10-17-tools/night/. Now: current. Untried: the Pixel 9a's core mix; 4 sub-histograms and level 3 without lit_cost().
-- 2026-10-23 **measurement** [Pixel 9a again with level 3's deltas](#the-pixel-9a-again-with-level-3s-deltas-seqlz-3-8-below-zstd-3-in-63-to-68-of-its-time): NDK r30 harness, X4 / A720 / A520, p3, `write + 0.73 * cold read`: level 3 10.57 / 12.94 / 40.79 µs at 874.9 bytes per page, `zstd` 3 16.75 / 19.13 / 65.16 at 951.4, `lz4` 5.52 / 6.26 / 14.92, `seqlz-1` 5.53 / 6.77 / 21.66, `seqlz-2` 6.27 / 7.81 / 25.29. Code: main 2d99419, tools/plot-cores.py a row per core. Now: current; the README's chart. Untried: zram in the Pixel's kernel.
+- 2026-10-23 **measurement** [Pixel 9a again with level 3's deltas](#the-pixel-9a-again-with-level-3s-deltas-seqlz-3-8-below-zstd-3-in-63-to-68-of-its-time): NDK r30 harness, X4 / A720 / A520, p3, `write + 0.73 * cold read`: level 3 10.57 / 12.94 / 40.79 µs at 874.9 bytes per page, `zstd` 3 16.75 / 19.13 / 65.16 at 951.4, `lz4` 5.52 / 6.26 / 14.92, `seqlz-1` 5.53 / 6.77 / 21.66, `seqlz-2` 6.27 / 7.81 / 25.29. Code: main 2d99419, tools/plot-cores.py a row per core. Now: Numbers again on 1 Nov with `c8f8c3f` ([1st November](#the-numbers-again-on-1st-november-seqlz-3-44-below-zstd-3-in-70-of-its-time-the-readmes-charts)). Untried: zram in the Pixel's kernel.
 - 2026-10-16 **measurement** [Pixel 9a, Tensor G4, userspace](#a-current-phone-the-pixel-9a-seqlz-1-as-fast-as-lz4-on-the-big-cores-seqlz-1-and-seqlz-2-14-and-17-times-lz4s-time-on-the-little-one): codecs on the X4, A720 and A520 without root, the Mi 9T's p3 pages; time per page written seqlz-1 4.82 / 5.62 / 21.55 µs against lz4 5.06 / 5.24 / 14.99, seqlz-2 5.54 / 6.56 / 25.23; seqlz-3 at zstd 3's memory in 49% to 54% of its time; hull lzo-rle, seqlz-1, seqlz-2, seqlz-3, zstd 3 on every core. The cycle counter does not run there, the harness uses steady_clock. Code: tools/phone-cores.sh, tools/plot-cores.py, bench/harness.cpp. Now: current. Untried: zram in its kernel, its own pages.
 - 2026-10-06 **not kept** [A55 write profile and decoder code prefetch](#the-a55-again-the-write-as-on-4-october-the-decoders-code-prefetched-for-cold-reads-not-kept): A55 compress cycles per page: lz4 30 032, seqlz-1 42 298, seqlz-2 47 776; pointer index in code_literals() same cycles. Prefetching the decoder's code: A55 cold -1.66 µs [-4.09, +0.51], warm reads +0.09 to +0.37 µs, A76 only slower. Not kept. Code: code_literals(); prefetch of seqlz_decode/decode_literals code (variants, not merged). Now: "The matcher without its step back" (15 Oct) removed the backward step at levels 1 and 2, part of the 9.6% the profile counted after a hit. Untried: Section says nothing new to try in C for the write; most of the 10.6 µs cold-read gap to lz4 stays unexplained.
 - 2026-10-06 **measurement** [Numbers with bit order and per-core token prefetch](#the-numbers-again-with-the-bit-order-and-the-token-tables-prefetch-cold-reads-on-the-a76-3-µs-faster): Mi 9T, three modules: MSB-first plus token prefetch on in-order cores reads cold 3.0 µs faster on the A76 (13.49 to 10.43), 6.2 µs at p99; compressed-data prefetch makes A55 warm reads 2.2 µs faster. VM: seqlz-2 1055.3 bytes per page. Code: tools/plot-devices.py, docs/plots/devices.svg. Now: VM numbers replaced by "The numbers again on 14th October". Per-core prefetch replaced (#152). Phone runs since 8 Oct use one codec per process and BUS=1 ("Less noise on the phone").
@@ -2398,7 +2407,7 @@ write is the one that matters most.
 
 ## Level 3 with its deltas in the Mi 9T's kernel: 8.1% less memory than on 15th October, 4.1 and 11.7 µs more per page written
 
-Status: measurement, 2026-10-23. Now: current.
+Status: measurement, 2026-10-23. Now: Numbers again on 1 Nov with `c8f8c3f` ([1st November](#the-numbers-again-on-1st-november-seqlz-3-44-below-zstd-3-in-70-of-its-time-the-readmes-charts)).
 
 *The phone's numbers of the README were from 15th October, before level 3 stored its literals as
 deltas. Again in the Mi 9T's own kernel, with the code of 23rd October: level 3 stores 874.9 bytes per
@@ -2430,7 +2439,7 @@ October for every codec but level 3. Means of 3 rounds in µs, the range in the 
 | level 3 | 874.9 | 19.31 | 5.77 / 9.69 | 26.38 | 51.77 | 15.69 / 37.76 | 79.33 |
 
 The score is `write + 0.73 * cold read`. The table of 15th October has 0.34; with 0.73 its level 3 is
-22.24 and 67.63 ([current state](#current-state-16-october-2026)). zram's `mem_used` per page in these
+22.24 and 67.63 ([level 3](#level-3-a-lazy-matcher-and-a-literal-table-of-the-pages-own-zstd-3s-memory-in-less-than-half-its-time-on-the-phone-kept)). zram's `mem_used` per page in these
 runs: `lz4` 1424.6, `zstd` 3 998.6, levels 1 to 3 1118.9, 1043.5 and 913.7.
 
 From level 2 to level 3 a µs now saves 13.6 bytes per page on the A76 and 5.3 on the A55; `zstd` 3
@@ -3015,7 +3024,7 @@ step back is the same with both.
 
 ## The Pixel 9a again with level 3's deltas: seqlz-3 8% below zstd 3 in 63% to 68% of its time
 
-Status: measurement, 2026-10-23. Now: current.
+Status: measurement, 2026-10-23. Now: Numbers again on 1 Nov with `c8f8c3f` ([1st November](#the-numbers-again-on-1st-november-seqlz-3-44-below-zstd-3-in-70-of-its-time-the-readmes-charts)).
 
 *The Pixel 9a's numbers of 16th October were from before level 3 stored its literals as deltas. The
 same setup again with the code of 23rd October: level 3 stores 874.9 bytes per page, 21.4%, against
@@ -4562,9 +4571,115 @@ the tests and the bit by bit page read most significant bit first now; `seqlz_re
 `seqlz_decode()` on 1800 pages from two dumps, 1040 valid and the others with a flipped bit or cut
 short.
 
+## The numbers again on 1st November: seqlz-3 4.4% below zstd 3 in 70% of its time, the README's charts
+
+Status: measurement, 2026-11-01. Now: current.
+
+*Every number of the README, `docs/seqlz.md` and `docs/plan.md` measured again with `main` at `c8f8c3f`,
+after the changes of 23rd October to 1st November: the deltas priced on every 11th literal, the coding
+thresholds of 35 and 19 bytes, own tables from 32 bytes saved, level 2's table from a sample with the
+streams in slots, the deltas undone 16 bytes at a time, level 2's coder without the pricing branch,
+`src/` as the kernel copy. Kernel VM, `MODE=swap`, the mean over the four dumps: `seqlz-2` 26.4% of a
+page in 9.88 µs per page written (26.5% in 10.52 on 22nd October), `seqlz-3` 24.2% in 13.43 (24.4% in
+14.42), `zstd` 3 25.3% in 19.30 (20.02), `lz4` 36.5% in 8.73 (9.25). Every codec got faster, `lz4` by
+5.6%, so the times compare only within a run: against `lz4` `seqlz-2` stays at 1.13 times its time,
+`seqlz-3` went from 72% to 70% of `zstd` 3's. On the Mi 9T, against 23rd October, `seqlz-2` and
+`seqlz-3` are 4.4% faster per page written on the A55, where `lz4` moved by 1.3% in the same run, and
+`seqlz-3` 2.7% faster on the A76; `seqlz-3` stores 871.1 bytes per page, 8.4% less than `zstd` 3, in 50%
+and 46% of its time. On the Pixel 9a `seqlz-3` takes 61% to 66% of `zstd` 3's time (63% to 68% on 23rd
+October), `seqlz-1` is as fast as `lz4` on the X4.* Code: `main` at `c8f8c3f`; charts
+`docs/plots/levels-vm.svg`, `levels-phone.svg`, `pixel-cores.svg`, `seqlz-speed.svg`,
+`seqlz-codecs.svg`; `tools/plot-speed.py`'s note now says how the hot loop is measured.
+
+**Kernel VM.** `tools/zram-vm/run.sh` at kernel `986c24e0fe44`, gcc 16.2.1, Ryzen 9 7950X, CPU 2 at
+4.5 GHz, boost off, `ALGOS=lz4,lzo-rle,zstd,seqlz-1,seqlz-2,seqlz-3 BOOTS=3`, 20 000 pages per dump.
+`MODE=swap` with `KARGS=zram.zram_prefetch=8` on p3, p5, zram0 and zram0-2026-09-24, `seqlz-score` per
+dump, bytes per page and µs per page written at `r = 0.73`:
+
+| codec | p3 | p5 | zram0 | zram0-2026-09-24 | mean |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| `lz4` | 1408.1, 8.31 | 1366.8, 8.39 | 1450.3, 8.75 | 1754.4, 9.47 | 36.5%, 8.73 |
+| `lzo-rle` | 1362.9, 8.26 | 1308.0, 8.42 | 1361.0, 8.89 | 1678.5, 9.79 | 34.9%, 8.84 |
+| `seqlz-1` | 1114.7, 8.69 | 1063.3, 8.78 | 1119.0, 9.35 | 1477.6, 10.03 | 29.1%, 9.21 |
+| `seqlz-2` | 1039.5, 9.37 | 994.9, 9.34 | 1032.3, 9.93 | 1264.8, 10.89 | 26.4%, 9.88 |
+| `seqlz-3` | 906.6, 12.86 | 891.4, 12.67 | 981.6, 13.30 | 1190.4, 14.87 | 24.2%, 13.43 |
+| `zstd` 3 | 998.4, 18.64 | 943.9, 18.37 | 1012.3, 19.24 | 1197.4, 20.93 | 25.3%, 19.30 |
+
+Means of swap-out and cold swap-in: `lz4` 6.40 / 3.19 µs, `lzo-rle` 6.18 / 3.65, `seqlz-1` 6.66 / 3.49,
+`seqlz-2` 7.12 / 3.78, `seqlz-3` 10.42 / 4.12, `zstd` 3 14.63 / 6.39. Hull of the means: `lz4`,
+`seqlz-1`, `seqlz-2`, `seqlz-3` at 624, 165 and 26 bytes per µs. A boot's swap-in means spread by
+0.02 to 0.09 µs.
+
+Read mode, the same codecs on zram0 / zram0-2026-09-24, means in µs, p99 in brackets:
+
+| codec | bytes per page | write | cold read | per page written |
+| --- | --- | --- | --- | --- |
+| `lz4` | 1450 / 1755 | 5.31 (9.32) / 5.79 (9.56) | 2.53 (4.02) / 2.51 (4.00) | 7.16 / 7.62 |
+| `lzo-rle` | 1361 / 1679 | 5.12 (9.65) / 5.69 (9.77) | 2.75 (4.47) / 2.81 (4.74) | 7.12 / 7.75 |
+| `seqlz-1` | 1119 / 1478 | 5.68 (9.21) / 6.18 (9.49) | 2.68 (4.35) / 2.67 (4.24) | 7.63 / 8.13 |
+| `seqlz-2` | 1032 / 1265 | 6.02 (10.62) / 6.71 (10.63) | 2.77 (4.59) / 2.90 (4.61) | 8.05 / 8.83 |
+| `seqlz-3` | 982 / 1191 | 9.25 (19.07) / 10.41 (19.07) | 3.05 (7.06) / 3.23 (6.62) | 11.47 / 12.77 |
+| `zstd` 3 | 1012 / 1198 | 13.51 (23.71) / 14.52 (24.06) | 5.36 (9.26) / 5.86 (9.78) | 17.42 / 18.80 |
+
+Hot loop on zram0, `perf stat -e cycles:u,instructions:u` of `seqlz-bench-interleaved --decode-loop 30`
+minus `--decode-loop 10`, per loop and page, `--compress` for the compress cycles: `lz4` 16 737
+compress, 4915 decode, 11 763 decode instructions; `lzo-rle` 15 394, 6398, 15 333; `zstd` 3 52 363,
+16 494, 56 347; `seqlz-2` 19 459, 6888, 25 299.
+
+**Mi 9T.** `tools/zram-phone/run.sh` with `BUS=1 COOL=45 ROUNDS=3`, `CODECS="lz4 zstd seqlz-a-1
+seqlz-a-2 seqlz-a-3"`, the 19 775 pages of p3 (`p3-sample20000-nosame`), a module of `c8f8c3f` with NDK
+r21e's clang 9; sizes from `seqlz-bench-interleaved --no-timing` on the same pages. Every run held its
+clock; the clusters were at 34.1 to 51.2 C after the runs. Means of 3 rounds, µs:
+
+| codec | bytes per page | A76 write / warm / cold | A76 per page written | A55 write / warm / cold | A55 per page written |
+| --- | ---: | --- | ---: | --- | ---: |
+| `lz4` | 1364.0 | 10.14 / 3.68 / 6.10 | 14.59 | 25.46 / 8.91 / 24.04 | 43.01 |
+| `seqlz-1` | 1071.1 | 10.40 / 3.87 / 7.03 | 15.53 | 27.99 / 11.32 / 28.75 | 48.98 |
+| `seqlz-2` | 994.5 | 11.35 / 4.55 / 8.30 | 17.41 | 30.96 / 12.97 / 31.34 | 53.84 |
+| `seqlz-3` | 871.1 | 18.31 / 5.74 / 10.08 | 25.67 | 48.46 / 15.65 / 37.51 | 75.84 |
+| `zstd` 3 | 951.4 | 35.90 / 16.05 / 20.75 | 51.05 | 114.55 / 39.24 / 69.52 | 165.30 |
+
+On 23rd October, per page written, A76 / A55: `lz4` 14.61 / 43.58, `seqlz-1` 15.63 / 49.52, `seqlz-2`
+17.42 / 56.31, `seqlz-3` 26.38 / 79.33 at 874.9 bytes, `zstd` 3 51.35 / 165.73. Hull on the A76: `lz4`,
+`seqlz-1`, `seqlz-2`, `seqlz-3` at 311, 41 and 15 bytes per µs; on the A55 49, 16 and 5.6.
+
+**Pixel 9a.** `tools/phone-cores.sh` with an NDK r30 build of `c8f8c3f`, cpu7 (X4), cpu4 (A720), cpu0
+(A520), 3 rounds; sizes from the run on `p3-sample20000`, times from `ONCE=1` on
+`p3-sample20000-nosame`. Clocks not fixed (no root), every run ended at 3105, 2600 and 1849 MHz; the
+battery was at 36.9 C at the start and 32.1 C at the end, against 27 to 28 C on 23rd October. µs per
+page, write / cold read:
+
+| codec | bytes per page | X4 | A720 | A520 |
+| --- | ---: | --- | --- | --- |
+| `lz4` | 1364.0 | 4.48 / 1.54 | 4.95 / 1.73 | 12.04 / 3.65 |
+| `lzo-rle` | 1312.7 | 4.16 / 1.74 | 4.52 / 2.07 | 11.27 / 4.69 |
+| `seqlz-1` | 1071.1 | 4.45 / 1.53 | 5.30 / 2.07 | 17.85 / 5.21 |
+| `seqlz-2` | 994.5 | 4.95 / 1.75 | 5.92 / 2.45 | 20.03 / 6.39 |
+| `seqlz-3` | 871.1 | 8.52 / 2.42 | 10.29 / 3.23 | 34.51 / 8.29 |
+| `zstd` 3 | 951.4 | 13.23 / 5.17 | 14.83 / 5.83 | 53.00 / 16.76 |
+
+Per page written, X4 / A720 / A520: `lz4` 5.60 / 6.21 / 14.70, `seqlz-1` 5.57 / 6.81 / 21.65, `seqlz-2`
+6.23 / 7.71 / 24.69, `seqlz-3` 10.29 / 12.65 / 40.56, `zstd` 3 17.00 / 19.09 / 65.23.
+
+Not measured: zram in the Pixel's kernel; the VM with clang.
+
+```sh
+ALGOS=lz4,lzo-rle,zstd,seqlz-1,seqlz-2,seqlz-3 BOOTS=3 MODE=swap KARGS=zram.zram_prefetch=8 \
+    tools/zram-vm/run.sh <linux tree> ~/seqlz-corpus/phone-dump/p3-sample20000 >swap-p3.log   # and p5, zram0, zram0-2026-09-24
+./build/seqlz-score swap-p3.log >swap-p3.score
+tools/plot-readme.py --title "zram in a kernel VM, mean over four zram dumps" --note "..." \
+    --out docs/plots/levels-vm.svg swap-p3.score swap-p5.score swap-zram0.score swap-zram0-2026-09-24.score
+ALGOS=lz4,lzo-rle,zstd,seqlz-1,seqlz-2,seqlz-3 BOOTS=3 tools/zram-vm/run.sh <linux tree> ~/seqlz-corpus/zram0-sample20000 >read-zram0.log
+tools/plot-speed.py --hot hot.tsv --hot-title "Hot loop, 23rd Sep dump" --run "23rd Sep=read-zram0.log" \
+    --run "24th Sep=read-zram0-2026-09-24.log" --source "main of 1st November 2026, c8f8c3f" --out docs/plots/seqlz-speed.svg
+tools/plot-codecs.py --run "zram dump of 23 Sep=read-zram0.log" --run "zram dump of 24 Sep=read-zram0-2026-09-24.log" \
+    --skip seqlz-1 --source "main of 1st November 2026, c8f8c3f" --out docs/plots/seqlz-codecs.svg
+tools/plot-levels.py mi9t-summary.txt sizes-p3.txt docs/plots/levels-phone.svg
+```
+
 ## The numbers again on 16th October, all three levels with lzo-rle: the README's chart
 
-Status: measurement, 2026-10-16. Now: current.
+Status: measurement, 2026-10-16. Now: Numbers again on 1 Nov with `c8f8c3f` ([1st November](#the-numbers-again-on-1st-november-seqlz-3-44-below-zstd-3-in-70-of-its-time-the-readmes-charts)).
 
 *The README's chart and table: `lz4`, `lzo-rle`, `zstd` 3 and the three levels in one kernel VM run,
 the mean over the four VM samples. With the phone's `r = 0.73`, which the chart has, `lz4`, `seqlz-1`,

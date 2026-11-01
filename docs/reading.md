@@ -1,6 +1,6 @@
 # Reading and reviewing the code
 
-The codec is about 3800 lines, and the decoder is the part that has to be safe for any input. So read
+The codec is about 3700 lines, and the decoder is the part that has to be safe for any input. So read
 it in five passes, each one a piece that can be judged by itself, and the decoder before the
 compressor. The book, [seqlz, line by line](https://martin.ankerl.com/seqlz/), explains every line
 when the reason for one is not obvious; it describes the code of the commit it names, the code on
@@ -26,7 +26,7 @@ constant against format.md, and that the
 `static_assert`s really tie the numbers together: the bit widths, the 31 bits that a token and its
 offset take at most, the sizes of the tables.
 
-## 3. The decoder, about 930 lines
+## 3. The decoder, about 1050 lines
 
 [`src/seqlz_decompress.c`](../src/seqlz_decompress.c), then
 [`src/seqlz_decompress_literals.c`](../src/seqlz_decompress_literals.c). The one question for every
@@ -46,7 +46,7 @@ The KUnit tests in [`tools/kernel-port/seqlz_kunit.c`](../tools/kernel-port/seql
 `seqlz_test_coded_literals()` build blocks by hand, one rule of the format at a time. The fuzz targets
 in [`fuzz/`](../fuzz) reach every decoder path.
 
-## 4. The compressor, about 1520 lines
+## 4. The compressor, about 1700 lines
 
 [`src/seqlz_encoder.h`](../src/seqlz_encoder.h), the encoder, [`src/seqlz_match.h`](../src/seqlz_match.h), the
 matcher, [`src/seqlz_compress.c`](../src/seqlz_compress.c), which has both in the kernel's copy, then

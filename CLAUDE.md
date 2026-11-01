@@ -14,8 +14,7 @@ harness names `seqlz-1` (raw literals), `seqlz-2` (one of 8 fixed literal tables
 `seqlz-3` (lazy matcher, a literal table of the page's own); levels by number, so that what a level
 does can change. Target: upstream Linux. One name for everything: `seqlz`, the codec, the repository
 (`martinus/seqlz`), binaries `seqlz-*`, options `SEQLZ_*`; the harness's own C names, which wrap `lz4`
-and `zstd` too, `bench_*`. It was `quetschn` until 23 Oct 2026; the book keeps the old names until its
-next update.
+and `zstd` too, `bench_*`. It was `quetschn` until 23 Oct 2026.
 
 ## Goal and design rules
 
