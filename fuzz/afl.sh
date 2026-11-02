@@ -1,7 +1,7 @@
 #!/bin/bash
 # afl.sh <out dir> [jobs] [cmake args]: builds the fuzz targets with AFL++ and starts them in the
-# background, a third of the jobs each on the decoder, the roundtrip and the decoder against the one
-# written from docs/format.md (diff). Per target one main instance, then
+# background, a quarter of the jobs each on the decoder, the roundtrip, the decoder against the ones
+# written from docs/format.md (diff) and the clean-room writer's blocks in every decoder (gen). Per target one main instance, then
 # by turns one with ASan and UBSan, which see a read one byte too far, one with CMPLOG for the header's
 # magic values, and a plain one. AFL++ from PATH, or from the checkout in $AFL.
 #
@@ -12,7 +12,7 @@ OUT=$(realpath -m "${1:?usage: afl.sh <out dir> [jobs] [cmake args]}")
 JOBS=${2:-9}
 CMAKE_ARGS=("${@:3}")
 REPO=$(cd "$(dirname "$0")/.." && pwd)
-targets=(decode roundtrip diff)
+targets=(decode roundtrip diff gen)
 bin() { if [ -n "${AFL:-}" ]; then echo "$AFL/$1"; else command -v "$1"; fi; }
 
 build() { # variant, then the environment afl-clang-lto needs for it
@@ -29,12 +29,13 @@ build asan AFL_USE_ASAN=1 AFL_USE_UBSAN=1
 build cmplog AFL_LLVM_CMPLOG=1
 mkdir -p "$OUT"/seeds-{decode,roundtrip}
 "$OUT/build-plain/seqlz-fuzz-seeds" "$OUT/seeds-decode" "$OUT/seeds-roundtrip"
-# diff takes compressed pages, as decode does
+# diff takes compressed pages, as decode does; gen takes the choices of a writer, any bytes
 ln -sfn seeds-decode "$OUT/seeds-diff"
+mkdir -p "$OUT/seeds-gen" && printf '\0\1\2\3' > "$OUT/seeds-gen/0"
 
 # the longest input each target takes, from the page size
 page=4096
-declare -A max_len=([decode]=$((2 * page)) [roundtrip]=$((page + 1)) [diff]=$((2 * page)))
+declare -A max_len=([decode]=$((2 * page)) [roundtrip]=$((page + 1)) [diff]=$((2 * page)) [gen]=$page)
 
 export AFL_SKIP_CPUFREQ=1 AFL_NO_UI=1 AFL_TRY_AFFINITY=1
 # where core dumps go to a program (systemd-coredump on Fedora), afl-fuzz refuses to start; only root

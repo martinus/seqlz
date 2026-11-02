@@ -20,20 +20,23 @@ option(SEQLZ_SANITIZE "Build with ASan and UBSan" OFF)
 # for the fuzz targets of fuzz/, which are C: the C++ standard library is not built with it.
 option(SEQLZ_MSAN "Build with MSan" OFF)
 
+# the sanitizers alone, for code that is not ours to hold to our warnings, see tools/format-check/cleanroom/
+add_library(seqlz_sanitize INTERFACE)
+if(SEQLZ_SANITIZE)
+    target_compile_options(seqlz_sanitize INTERFACE -fsanitize=address,undefined -fno-sanitize-recover=all -fno-omit-frame-pointer)
+    target_link_options(seqlz_sanitize INTERFACE -fsanitize=address,undefined)
+endif()
+if(SEQLZ_MSAN)
+    target_compile_options(seqlz_sanitize INTERFACE -fsanitize=memory -fsanitize-memory-track-origins
+                                                       -fno-sanitize-recover=all -fno-omit-frame-pointer)
+    target_link_options(seqlz_sanitize INTERFACE -fsanitize=memory)
+endif()
 add_library(seqlz_warnings INTERFACE)
 target_compile_options(seqlz_warnings INTERFACE -Wall -Wextra -Wpedantic -Wconversion -Wshadow)
 if(SEQLZ_WERROR)
     target_compile_options(seqlz_warnings INTERFACE -Werror)
 endif()
-if(SEQLZ_SANITIZE)
-    target_compile_options(seqlz_warnings INTERFACE -fsanitize=address,undefined -fno-sanitize-recover=all -fno-omit-frame-pointer)
-    target_link_options(seqlz_warnings INTERFACE -fsanitize=address,undefined)
-endif()
-if(SEQLZ_MSAN)
-    target_compile_options(seqlz_warnings INTERFACE -fsanitize=memory -fsanitize-memory-track-origins
-                                                       -fno-sanitize-recover=all -fno-omit-frame-pointer)
-    target_link_options(seqlz_warnings INTERFACE -fsanitize=memory)
-endif()
+target_link_libraries(seqlz_warnings INTERFACE seqlz_sanitize)
 
 # Page corpus collectors, see docs/plan.md Phase 1. Linux only, they read /proc.
 add_library(seqlz_collect STATIC tools/collect/page_stats.cpp tools/collect/resident.cpp tools/collect/split.cpp
@@ -110,15 +113,34 @@ if(SEQLZ_FUZZ)
         target_compile_options(seqlz_fuzz PRIVATE -fsanitize=fuzzer-no-link)
     endif()
     target_link_libraries(seqlz_fuzz PRIVATE seqlz_warnings)
-    foreach(target seqlz_decode_fuzz seqlz_roundtrip_fuzz seqlz_diff_fuzz seqlz_encode_fuzz)
+    foreach(target seqlz_decode_fuzz seqlz_roundtrip_fuzz seqlz_diff_fuzz seqlz_encode_fuzz seqlz_gen_fuzz)
         add_executable(${target} fuzz/${target}.c)
         target_compile_options(${target} PRIVATE -fsanitize=fuzzer)
         target_link_options(${target} PRIVATE -fsanitize=fuzzer)
         target_link_libraries(${target} PRIVATE seqlz_fuzz seqlz_warnings)
     endforeach()
-    # the decoder written from docs/format.md, instrumented like the target
-    target_sources(seqlz_diff_fuzz PRIVATE tools/seqlz-ref/seqlz_ref.c)
-    target_include_directories(seqlz_diff_fuzz PRIVATE tools/seqlz-ref)
+    # the decoders written from docs/format.md, instrumented like the target: seqlz_ref.c, and the
+    # clean-room agents' D and R as they wrote them, without our warnings, their cr_decode() renamed
+    set(cleanroom tools/format-check/cleanroom)
+    add_library(seqlz_cleanroom_d STATIC ${cleanroom}/D/src/cr_decode.c)
+    target_compile_definitions(seqlz_cleanroom_d PRIVATE cr_decode=cr_decode_d)
+    add_library(seqlz_cleanroom_r STATIC ${cleanroom}/R/seqlz.c)
+    target_compile_definitions(seqlz_cleanroom_r PRIVATE cr_decode=cr_decode_r)
+    add_library(seqlz_cleanroom_w STATIC ${cleanroom}/W/cr.c)
+    target_include_directories(seqlz_cleanroom_w PUBLIC ${cleanroom}/W)
+    foreach(lib seqlz_cleanroom_d seqlz_cleanroom_r seqlz_cleanroom_w)
+        target_compile_options(${lib} PRIVATE -std=c11)
+        if(NOT CMAKE_C_COMPILER MATCHES "afl-")
+            target_compile_options(${lib} PRIVATE -fsanitize=fuzzer-no-link)
+        endif()
+        target_link_libraries(${lib} PRIVATE seqlz_sanitize)
+    endforeach()
+    foreach(target seqlz_diff_fuzz seqlz_gen_fuzz)
+        target_sources(${target} PRIVATE tools/seqlz-ref/seqlz_ref.c)
+        target_include_directories(${target} PRIVATE tools/seqlz-ref)
+        target_link_libraries(${target} PRIVATE seqlz_cleanroom_d seqlz_cleanroom_r)
+    endforeach()
+    target_link_libraries(seqlz_gen_fuzz PRIVATE seqlz_cleanroom_w)
     # Searches for slow pages, see tools/seqlz-worst/cost_fuzz.c; not part of afl.sh or smoke.sh. With
     # seqlz without coverage instrumentation, which made some pages 3.6 and others 6.6 times costlier
     # and so changed which ones cost most: the only coverage is the target's own.
