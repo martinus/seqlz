@@ -8,7 +8,8 @@
 # that the spec does not describe. The pages are made up, never from a dump: tools/seqlz-worst/pages/,
 # and six written here, three of them with deltas, one for each. First, the tables in src/ must be what tools/kernel-port/gen-seqlz-lengths.py
 # makes from the counts in bench/, byte for byte, and the longest code of each table what docs/format.md's
-# table of tables says. Needs cc and python3.
+# table of tables says. Last, the claims of docs/format.md that tools/format-check/claims.py checks. Needs
+# cc and python3.
 set -euo pipefail
 here=$(cd "$(dirname "$0")" && pwd)
 repo=$(cd "$here/../.." && pwd)
@@ -107,3 +108,4 @@ for p in "$out"/*.page; do
 done
 echo "the tables' hashes match docs/format.md, $wrong of $pages compressed pages decode wrong with seqlz_ref.py"
 [[ $wrong -eq 0 ]]
+python3 "$repo/tools/format-check/claims.py" | tail -1
