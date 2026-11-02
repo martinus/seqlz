@@ -355,8 +355,11 @@ code stays the code of steps 4 to 11. Otherwise another round.
 
 Every decoder gets the same blocks and must say the same: valid or not, and for a valid one the same
 block. The decoders: `seqlz_decompress()`, `seqlz_ref.c`, D's, R's, and `seqlz_ref.py` on a sample,
-as it is slow. `tools/format-check/all-decoders` (to be written) takes
-files of blocks and prints one line per block per decoder, verdict and SHA-256 of the block.
+as it is slow. `seqlz-all-decoders <pages>...` ([`tools/format-check/all_decoders.c`](../tools/format-check/all_decoders.c),
+built when the fuzz targets are not) compresses each page of each file at levels 1 to 3 and holds the
+four C decoders of `fuzz/decoders.h` against the page and each other, on the blocks as written and
+damaged as below. A difference prints the file, the page, the level and the damage, never the page's
+bytes.
 
 The blocks:
 
@@ -370,10 +373,11 @@ The blocks:
   and phones; this runs only locally, and only the verdicts and SHA-256 leave the machine, as the
   pages hold keys and passwords;
 - of the compressed blocks of the samples above: every cut (every length from 0 to `len - 1`) of one
-  block in 100, every single bit flipped of one block in 1000, and one random damage of 1 to 8 bytes
+  block in 10, every single bit flipped of one block in 100, and one random damage of 1 to 8 bytes
   of each.
 
-With 200 000 pages that is about 2 * 10^7 blocks; the runner states the count.
+With 200 000 pages that is about 10^8 blocks through every decoder, about 200 s on 10 cores; the
+runner states the count.
 
 ## Step 5: valid blocks by construction
 
@@ -629,4 +633,11 @@ in `fuzz/smoke.sh`: none either. A planted difference, D without its check of th
 of `B`, made both targets fail in seconds, with "seqlz_decompress invalid, seqlz_ref.c invalid, cleanroom
 D valid, cleanroom R invalid".
 
-Not run yet: the long AFL++ runs of step 7, steps 4, 6 and 8 to 11.
+Step 4, `seqlz-all-decoders` on ten samples of 20 000 pages of 4 KiB each, five of a phone's memory
+dump, two of a Xiaomi Mi 9T's zram, three of a desktop's zram, one process per file on a Ryzen 9 7950X: 600 000 blocks, 102.8 million blocks
+through every decoder with the cuts, bit flips and random damage, no difference, 193 s. The pages of
+`tools/seqlz-worst/pages/`: 24 blocks, 4179 through every decoder, none either. A planted difference,
+D without its check of the bits after the end of `B`, made it report 5 on 300 pages. Not in this run
+yet: `seqlz_ref.py`, the agents' own test blocks and those of `test/seqlz_ref_test.cpp`.
+
+Not run yet: the long AFL++ runs of step 7, steps 6 and 8 to 11.
