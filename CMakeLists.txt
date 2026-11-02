@@ -202,8 +202,8 @@ if(BUILD_TESTING)
     add_executable(seqlz_test test/main.cpp test/zsmalloc_cost_test.cpp test/page_stats_test.cpp test/resident_test.cpp
                                  test/harness_test.cpp test/split_test.cpp test/import_raw_test.cpp
                                  test/compare_test.cpp test/score_test.cpp test/seqlz_test.cpp test/seqlz_ref_test.cpp tools/seqlz-ref/seqlz_ref.c
-                                 test/seqlz_train_test.cpp)
-    target_link_libraries(seqlz_test PRIVATE seqlz_bench seqlz_collect seqlz seqlz_train
+                                 test/seqlz_train_test.cpp test/seqlz_rules_test.cpp)
+    target_link_libraries(seqlz_test PRIVATE seqlz_bench seqlz_collect seqlz seqlz_train seqlz_cleanroom_d seqlz_cleanroom_r
                                                 seqlz_warnings doctest::doctest)
     # where the test finds bench/seqlz_counts_*.txt
     target_compile_definitions(seqlz_test PRIVATE SEQLZ_SOURCE_DIR="${CMAKE_SOURCE_DIR}")

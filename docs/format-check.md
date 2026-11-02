@@ -415,14 +415,17 @@ could not tell from format.md that the choice is allowed.
 
 ## Step 6: one valid and one invalid block per rule
 
-For each rule of I's `RULES.md`, the runner makes a pair of blocks with W's writer and a small edit:
-one that is valid and as close to the edge as possible, and one that breaks this rule and no other.
+For each rule of I's `RULES.md`, the runner makes a pair of blocks, by hand or with W's writer, and a
+small edit: one that is valid and as close to the edge as possible, and one that breaks this rule and no
+other.
 The expected verdict comes from the inventory, not from a decoder; this is the only step whose
 oracle is format.md itself and not the agreement of decoders. Every decoder must give the expected
 verdict for both blocks.
 
-The pairs go into `test/` as a doctest (`test/seqlz_rules_test.cpp`, to be written), one `SUBCASE`
-per rule ID, so that CI keeps them. The rules that `test/seqlz_ref_test.cpp` already covers by hand
+The pairs go into `test/` as a doctest, [`test/seqlz_rules_test.cpp`](../test/seqlz_rules_test.cpp),
+one `SUBCASE` or test case per rule ID, with `seqlz_decompress()`, `seqlz_ref.c`, D and R, so that CI
+keeps them. Its blocks are made by hand with the writer of the bits, coded literals and own tables of
+[`test/seqlz_blocks.h`](../test/seqlz_blocks.h), which `test/seqlz_ref_test.cpp` uses too. The rules that `test/seqlz_ref_test.cpp` already covers by hand
 (the codes above 8, `dt` other than 1 to 3, a literal code outside its stream, a last sequence with a
 token, own tables that overfill the code space, name a byte value above 255 or have bits after their
 end) get their pair anyway, from the inventory's wording.
@@ -640,4 +643,12 @@ through every decoder with the cuts, bit flips and random damage, no difference,
 D without its check of the bits after the end of `B`, made it report 5 on 300 pages. Not in this run
 yet: `seqlz_ref.py`, the agents' own test blocks and those of `test/seqlz_ref_test.cpp`.
 
-Not run yet: the long AFL++ runs of step 7, steps 6 and 8 to 11.
+Step 6, [`test/seqlz_rules_test.cpp`](../test/seqlz_rules_test.cpp): a valid block and the same block
+broken by one rule for each rule of I's list that can be broken alone or with one other, R1 to R9
+(R8a to R8e on three own tables), R11 to R21, I1, and the valid cases V1, V5, V13, V14 and V15: 7
+test cases, 696 assertions, every decoder gives the list's verdict. R10 is no condition of its own in
+the list. Two planted differences made it fail: D without its check of the bits after the end of `B`
+(R12b and R20, 4 assertions), and `seqlz_decompress()` taking `dt = 4` (R6, all three spec decoders
+against it).
+
+Not run yet: the long AFL++ runs of step 7, steps 8 to 11.
