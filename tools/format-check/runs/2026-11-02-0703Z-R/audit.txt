@@ -1,0 +1,31 @@
+  Bash: cat /room/BRIEF.md
+  Bash: ls -la && echo "---TABLES---" && ls -la tables/ && echo "---WC---" && wc -l seqlz.rst
+  Bash: cat seqlz.rst
+  Bash: cd /room/tables && for f in TOK LL ML LIT OWN; do echo "$f: $(sha256sum $f.bin | cut -d' ' -f1) size=$(stat -c%s $f.bin)"; done
+  Bash: cd /room && python3 -c " import sys for name in ['TOK','LL','ML','LIT','OWN']: d=open('tables/%s.bin'%name,'rb').read() print(name, 'len', len(d), 'max', max(d), 'nonzero', sum(1 for x in d if x)) if 
+  Bash: python3 -c " from fractions import Fraction for name in ['TOK','LL','ML','OWN']: d=open('tables/%s.bin'%name,'rb').read() s=sum(Fraction(1,2**x) for x in d if x>0) print(name,'sum',s, 'complete' if s=
+  Write: /room/gen_tables.py
+  Bash: python3 gen_tables.py && head -20 seqlz_tables.h && echo "..." && wc -l seqlz_tables.h
+  Edit: /room/gen_tables.py
+  Write: /room/seqlz.h
+  Write: /room/seqlz.c
+  Edit: /room/seqlz.c
+  Bash: cc -std=c11 -Wall -Wextra -c seqlz.c -o /tmp/seqlz.o 2>&1 | head -40; echo "exit ${PIPESTATUS[0]}"
+  Edit: /room/gen_tables.py
+  Bash: python3 gen_tables.py && cc -std=c11 -Wall -Wextra -c seqlz.c -o /tmp/seqlz.o 2>&1 | head; echo "exit ${PIPESTATUS[0]}"
+  Write: /room/tests.c
+  Edit: /room/tests.c
+  Write: /room/build_and_test.sh
+  Bash: chmod +x build_and_test.sh && ./build_and_test.sh 2>&1 | tail -40
+  Bash: cat > /tmp/fuzz.c <<'EOF' #include "seqlz.h" #include <stdlib.h> #include <stdio.h> #include <string.h> int main(void){ unsigned char out[4096]; unsigned char buf[8200]; unsigned seed=12345; long vali
+  Bash: cc -std=c11 -O2 -g -I. -fsanitize=address,undefined seqlz.c /tmp/fuzz.c -o /tmp/fuzz && /tmp/fuzz
+  Bash: cat > /tmp/fuzz2.c <<'EOF' #include "seqlz.h" #include <stdlib.h> #include <stdio.h> #include <string.h> static unsigned char seeds[4][64]={ {0x02,0x00,0x61,0x62,0x23,0xf2,0xff,0xfb,0x60}, /* example 
+  Bash: which clang 2>/dev/null && clang -std=c11 -O1 -g -I. -fsanitize=memory -fno-omit-frame-pointer seqlz.c /tmp/fuzz.c -o /tmp/fuzz_msan 2>&1 | head -5 && /tmp/fuzz_msan 2>&1 | head -20 || echo "clang/MSa
+  Bash: clang -std=c11 -O1 -g -I. -fsanitize=memory -fno-omit-frame-pointer seqlz.c /tmp/fuzz2.c -o /tmp/fuzz2_msan && /tmp/fuzz2_msan && clang -std=c11 -O1 -g -I. -fsanitize=memory -fno-omit-frame-pointer se
+  Bash: cc -std=c11 -O2 -I. seqlz.c tests.c -o /tmp/tests_fast && /tmp/tests_fast 2>&1 | grep perf
+  Bash: cat > /tmp/fuzz_target.c <<'EOF' #include "seqlz.h" #include <stdint.h> #include <stddef.h> int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size){ unsigned char out[4096]; cr_decode(data, size,
+  Write: /room/QUESTIONS.md
+  Bash: ./build_and_test.sh 2>&1
+  Bash: python3 -c " d=open('tables/TOK.bin','rb').read() print('TOK symbols with codes:', sum(1 for x in d if x)) print('symbol 3072 (escape) length:', d[3072]) print('max symbol index with code:', max(i for
+29 tool calls, 0 marked
+result: 31 turns, 16.8 min, 3.4321345000000005 USD

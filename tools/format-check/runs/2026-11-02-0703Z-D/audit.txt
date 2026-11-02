@@ -1,0 +1,29 @@
+  Bash: cat /room/BRIEF.md; ls -la /room
+  Bash: cd /room; cat format.md; ls -la tables; sha256sum tables/*
+  Read: /room/format.md
+  Bash: cd /room; ls -la tables; sha256sum tables/*
+  Bash: cd /room; which python3 gcc clang make; clang --version | head -1; python3 -I -c " from fractions import Fraction for name,sz in [('TOK',3073),('LL',24),('ML',24),('OWN',19)]+[('LIT',2048)]: b=open('t
+  Write: /room/QUESTIONS.md
+  Bash: mkdir -p /room/src /room/tools /room/tests && cat > /room/tools/gen_tables.py <<'EOF' #!/usr/bin/env python3 """Make src/cr_tables.h from tables/*.bin, after checking each against the SHA-256 in forma
+  Write: /room/src/cr_decode.h
+  Write: /room/src/cr_decode.c
+  Bash: python3 -I - <<'EOF' p='src/cr_decode.c' s=open(p).read() start=s.index(' /* the sequences */') end=s.index(' return check_end(&b);') new=''' /* the sequences */ bits b = {src + bstart, len - bstart, 
+  Bash: sed -i 's|from tables/\*.bin. Do not edit.|from the files in tables/. Do not edit.|' tools/gen_tables.py && python3 -I tools/gen_tables.py tables src/cr_tables.h && gcc -std=c11 -Wall -Wextra -pedanti
+  Write: /room/tests/test_decode.c
+  Bash: python3 -I - <<'EOF' p='tests/test_decode.c' s=open(p).read() def rep(a,b): global s assert s.count(a)==1, a s=s.replace(a,b) rep(''' memcpy(b, example, sizeof b); b[7] = 0xfb | 0x00; /* bits 11111011
+  Bash: grep -n "every class" -B30 tests/test_decode.c | sed -n 1,45p | grep -n "out\|tot"
+  Bash: sed -n 725,740p tests/test_decode.c
+  Bash: python3 -I - <<'EOF' p='tests/test_decode.c' s=open(p).read() def rep(a,b): global s assert s.count(a)==1, a s=s.replace(a,b) rep('{15 + 31, 35 + 16, 4095, 3, 0, 0}, /* LL value 31 (symbol 16 b = 4), 
+  Bash: mkdir -p /tmp/mut && cat > /tmp/mut/run.sh <<'EOF' #!/bin/bash # each line: a unique string in cr_decode.c and its replacement that removes one rule cd /room i=0 while IFS='|' read -r from to; do [ -z
+  Bash: sed -i "s/IFS='|'/IFS=\$'\\\\t'/; s/gcc -std=c11 -O1 -w/clang -std=c11 -O1 -w -fsanitize=address,undefined -fno-sanitize-recover=all/" /tmp/mut/run.sh && sed -i 's/|/\t/' /tmp/mut/list && sed -i 's/^ 
+  Bash: sed -i 's/^ if (token >= ESCAPE)\t if (0)/ if (token >= ESCAPE)\t if (0)/' /tmp/mut/list && bash /tmp/mut/run.sh 2>&1 | grep '^\[\|BAD' | sed 's/ \+/ /g'
+  Bash: python3 -I - <<'EOF' pairs = [ (" if (n > BLOCK)"," if (0)"), (" if (2 + (size_t)n > len)"," if (0)"), (" if (dt < 1 || dt > 3)"," if (0)"), (" if (code > 8)"," if (code > 15)"), (" if (v > 255)"," if
+  Bash: sed -n 1,12p /tmp/mut/run.sh | cat -A | sed -n 5,12p
+  Bash: cat > /tmp/mut/apply.py <<'EOF' import sys s = open('/room/src/cr_decode.c').read() a = sys.argv[1].replace("\\n", "\n"); b = sys.argv[2].replace("\\n", "\n") assert s.count(a) >= 1, a open('/tmp/mut/
+  Bash: python3 -I - <<'EOF' p='tests/test_decode.c' s=open(p).read() def rep(a,b): global s assert s.count(a)==1, a s=s.replace(a,b) # 11: declare s[j] != 0 for a stream without literals, adding no bytes rep
+  Bash: python3 -I - <<'EOF' p='tests/test_decode.c' s=open(p).read() def rep(a,b): global s assert s.count(a)==1, a s=s.replace(a,b) rep('''static void test_random(int count, double *blocks_per_sec) {''','''
+  Bash: clang -std=c11 -O1 -g -fsanitize=fuzzer,memory -o build/fuzz_msan src/cr_decode.c tests/fuzz.c 2>&1 | tail -3 && ./build/fuzz_msan -max_total_time=30 -max_len=8192 build/corpus 2>&1 | tail -2
+  Bash: cat >> Makefile <<'EOF' # libFuzzer with MSan, 30 s fuzz-msan: build/test_opt $(CLANG) $(CFLAGS_COMMON) -O1 -fsanitize=fuzzer,memory -o build/fuzz_msan $(SRC) tests/fuzz.c mkdir -p build/corpus ./buil
+  Bash: make clean >/dev/null && rm src/cr_tables.h && make test 2>&1 | grep -v '^clang\|^cc\|^mkdir'; grep -c '^## ' QUESTIONS.md
+27 tool calls, 0 marked
+result: 28 turns, 14.2 min, 2.5096685999999995 USD

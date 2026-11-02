@@ -70,6 +70,7 @@ the block's own, see [A block's own literal table](#a-blocks-own-literal-table).
 - A **bit string** like `110` is written in the order its bits are read, the first one leftmost. A
   number like 6 is a number. `read(3)` of the bits 1, 1, 0 is the number 6; the same bits as a code are
   the bit string `110`.
+- A *Why:* runs to the end of its paragraph: what follows it there is not part of the format either.
 
 ## Block size
 
@@ -133,8 +134,8 @@ A block is invalid if
 
 - `len < 2`, or `n > BLOCK`;
 - with raw literals `2 + n > len`;
-- with coded literals `len < 3`, which leaves no byte 2, or `len < 3 + w + e`, `dt` is not 1, 2 or 3,
-  `code > 8`, the block's own table is invalid, or `3 + w + e + d + s[0] + ... + s[7] > len`.
+- with coded literals `len < 3`, which leaves no byte 2, or `len < 3 + w + e`, with `e = 1` `dt` is not
+  1, 2 or 3, `code > 8`, the block's own table is invalid, or `3 + w + e + d + s[0] + ... + s[7] > len`.
 
 ## Prefix codes
 
@@ -198,7 +199,7 @@ Every table is built from counts that are in the kernel, `lib/seqlz/seqlz_counts
 codes and decode tables are built from them when the kernel is built. The counts say how often each
 token, `ll` and `ml` symbol occurred on the training pages, for each literal table, how often each
 byte occurred as a literal on the pages that table codes best, and how often each symbol of `OWN`
-occurred in the blocks' own tables. The pages are 1 091 983 memory pages of a desktop and a phone. They are not published, because memory pages hold keys and passwords. The counts
+occurred in the descriptions of the blocks' own tables. The pages are 1 091 983 memory pages of a desktop and a phone. They are not published, because memory pages hold keys and passwords. The counts
 can't give those back: they are sums over all pages, each literal table's over 10 590 pages or more, and
 they don't say which symbol came after which or on which page.
 -->
@@ -207,7 +208,7 @@ Every table is built from counts that are in this repository,
 [`bench/seqlz_counts.txt`](../bench/seqlz_counts.txt). They have how often each token, `ll` and
 `ml` symbol occurred on the training pages, for each literal table, how often each byte occurred as
 a literal on the pages that table codes best, and how often each symbol of `OWN` occurred in the
-descriptions of the pages that level 3 gives a table of their own. `tools/kernel-port/gen-seqlz-lengths.py` turns the counts
+descriptions of the blocks' own tables. `tools/kernel-port/gen-seqlz-lengths.py` turns the counts
 into the tables in `src/`, and `tools/seqlz-ref/check.sh` checks in CI that they are its output, byte for
 byte. `seqlz-train --from-counts <file>` does the same in C++, see `bench/seqlz_train.cpp`, and
 the test `seqlz_train` checks that it gives the same tables. The kernel gets the generator as
@@ -259,11 +260,11 @@ The literal streams and a block's own literal table are read the same way, each 
 `read()` and `symbol()` there take the next bits of that stream or table, not of `B`.
 
 A valid block ends where its bits end: after the last bit it needs, fewer than 8 bits of `B` are left,
-all in its last byte, and they are 0. A block that needs a bit past the end of `B` is invalid. *Why:*
-zram stores no checksum, so this is what tells a damaged block from a valid one, at one compare per
-block, and the compressor writes nothing else. A decoder may read zeros past the end instead of checking
-at every read, and check at the end that it did not use them; `seqlz_decompress()` does that, and the
-result is the same as checking at every read.
+all in its last byte, and they are 0. A block that needs a bit past the end of `B` is invalid. A decoder
+may read zeros past the end instead of checking at every read, and check at the end that it did not
+need them; `seqlz_decompress()` does that, and the result is the same as checking at every read.
+*Why:* zram stores no checksum, so this is what tells a damaged block from a valid one, at one compare
+per block, and the compressor writes nothing else.
 
 ### Length values
 
@@ -357,7 +358,7 @@ loop:
     if off == 0 or off > |out| or ml > BLOCK - |out|: invalid
     ml times: append the byte off places before the end of out
 
-at the stop: no bit read past the end of B, fewer than 8 bits of B left, all 0, else invalid
+at the stop: no bit needed past the end of B, fewer than 8 bits of B left, all 0, else invalid
 ```
 
 The match is copied one byte at a time, each byte after the one before is written, so it can repeat
@@ -367,10 +368,10 @@ like `memcpy` gives other bytes when `off < ml`.
 There is no count of the sequences, and the last sequence has no token. Every match is at least 4
 bytes, so once the literals left are as many as the bytes the block still needs, no match can follow:
 the literals left are the last sequence. A block whose last match reaches the end of the block ends with
-no literals left, a block of literals only has `n = BLOCK` and no bits in `B`. *Why:* a decoder knows
-`n` and `BLOCK`, so a token for the last sequence would only say what the decoder knows already, in
-about 1.2 bytes per block. Every sequence before the last writes at least 4 bytes, so a decoder stops
-after at most `BLOCK / 4 + 1` sequences, also on blocks that are not valid.
+no literals left, a block of literals only has `n = BLOCK` and no bits in `B`. Every sequence before
+the last writes at least 4 bytes, so a decoder stops after at most `BLOCK / 4 + 1` sequences, also on
+blocks that are not valid. *Why:* a decoder knows `n` and `BLOCK`, so a token for the last sequence
+would only say what the decoder knows already, in about 1.2 bytes per block.
 
 Two things follow from the rules: a valid block has `n >= 1`, because the first match needs a byte
 before it, and the first match's offset is at most that sequence's `ll`.
@@ -407,7 +408,7 @@ stored as it is. `x` depends on `dt`:
   sequence before, 1 for the first: `x = 4` for `last` 1 or 2, 6 for `last = 3`, else `last`. In
   [Decoding](#decoding) `copy(ll)` comes before `last = off`, so a sequence's literals use the offset
   of the sequence before, as class 0 does, and the last sequence's literals the offset of the last
-  match.
+  match, 1 in a block without one.
 
 `out[p - x]` is any byte already written, of a match or a literal, of this sequence or an earlier one,
 as it is in the block, i.e. a literal with its delta already added back. The last sequence is no
@@ -525,7 +526,7 @@ blocks in all, and agreed on every one.
 `test/seqlz_ref_test.cpp` checks the example above, the compressor's blocks at every level, damaged
 blocks, blocks whose literals are deltas of each kind, and blocks made by hand for the rules that damage
 rarely reaches: the codes above 8 and the values of `dt` other than 1 to 3, a literal code outside its
-stream, a block of literals only, a token after the last sequence whose bits are not 0, which is
+stream, a block of literals only, bits after the last sequence that are not 0, e.g. a token, which is
 invalid, and blocks' own tables that overfill the code space, name a byte value above 255 or have bits
 after their end.
 
