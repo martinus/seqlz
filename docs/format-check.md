@@ -441,13 +441,14 @@ A dictionary for AFL++ with the values of byte 2 (`t`) and of `dt`.
 
 Budget, with `fuzz/afl.sh` (targets `diff` and `gen`):
 
-- at least 12 instances for 8 hours, and then on until no instance found a new path for 2 hours
-  (`afl-whatsup`, "last find");
+- at least 12 instances for 8 hours, and then on until no instance reached a new edge for 2 hours
+  (column `edges_found` of each instance's `plot_data`). Not a new path, AFL's "last find": new
+  hit counts of known edges keep coming as new paths for hours after the last new edge;
 - 1 hour of `fuzz/smoke.sh` with MSan (`-DSEQLZ_SANITIZE=OFF -DSEQLZ_MSAN=ON`), which AFL's builds
   don't have.
 
 No benchmark runs on the same machine at the same time, it would spoil the benchmark's numbers. The
-runner records the execs, paths and the last find of each target. After the run, every input of AFL's
+runner records the execs, edges and the last new edge of each target. After the run, every input of AFL's
 queue goes through step 4's `all-decoders` once more, also through `seqlz_ref.py`.
 
 ## Step 8: every rule of src/ is a rule of format.md
@@ -578,7 +579,7 @@ they are updated for the change, by someone who reads format.md, not `src/`.
 
 Each run gets one entry: the date, the commit of format.md, the models of D, R, W and I, the audits,
 the questions by kind and the changes of format.md they led to, the number of blocks of step 4, the
-execs and paths of step 7, the mutants found and survived, the coverage of step 8, and every difference
+execs and edges of step 7, the mutants found and survived, the coverage of step 8, and every difference
 with its outcome. The summary also goes to format.md's
 [How this file was checked](format.md#how-this-file-was-checked).
 
@@ -651,8 +652,16 @@ Step 4, `seqlz-all-decoders` on ten samples of 20 000 pages of 4 KiB each, five 
 dump, two of a Xiaomi Mi 9T's zram, three of a desktop's zram, one process per file on a Ryzen 9 7950X: 600 000 blocks, 102.8 million blocks
 through every decoder with the cuts, bit flips and random damage, no difference, 193 s. The pages of
 `tools/seqlz-worst/pages/`: 24 blocks, 4179 through every decoder, none either. A planted difference,
-D without its check of the bits after the end of `B`, made it report 5 on 300 pages. Not in this run
-yet: `seqlz_ref.py`, the agents' own test blocks and those of `test/seqlz_ref_test.cpp`.
+D without its check of the bits after the end of `B`, made it report 5 on 300 pages.
+
+The agents' own test blocks: D's and R's tests built with a hook in place of their `cr_decode()` that
+saves each block before it decodes it, D's with 2000 random blocks: 41 731 and 200 020 blocks, all
+through the four decoders of `seqlz_diff_fuzz`, no difference. `seqlz_ref.py` against
+`seqlz_decompress()`, verdict and SHA-256 of the block: 10 413 distinct blocks of the agents' tests (4481
+valid), and on step 7's queue below 8004 distinct blocks of `decode` and `diff` (58 valid) and 29 361 of
+the pages of `roundtrip` at levels 1 to 3 and W's blocks of `gen`, as written and damaged (25 884
+valid), no difference. Not run yet: the blocks of `test/seqlz_ref_test.cpp` through D and R, which
+`seqlz_test` holds against `seqlz_ref.c` only.
 
 Step 6, [`test/seqlz_rules_test.cpp`](../test/seqlz_rules_test.cpp): a valid block and the same block
 broken by one rule for each rule of I's list that can be broken alone or with one other, R1 to R9
@@ -666,7 +675,26 @@ Step 8, [`tools/format-check/reject-sites.md`](../tools/format-check/reject-site
 places where `seqlz_decompress()` rejects a block is a rule of I's list, but one that rejects a call
 without scratch memory, which is no rule of the format; each rule but R10, which the list has as no
 condition of its own, has such a place. So `src/` has no rule that format.md leaves out, and format.md
-none that `src/` does not check. The coverage of step 8 is still to run, on the blocks of step 7's queue.
+none that `src/` does not check.
+
+The coverage, clang 22.1.8 with `-fprofile-instr-generate -fcoverage-mapping`, over step 4's ten
+samples and its other blocks, `seqlz_test` with step 6's pairs, and step 7's final queue through its
+targets and `seqlz-all-decoders`:
+
+| file | lines | branches |
+| --- | --- | --- |
+| `src/seqlz_decompress.c` | 301 of 301 | 130 of 130 |
+| `src/seqlz_decompress_literals.c` | 206 of 207 | 94 of 96 |
+| `tools/seqlz-ref/seqlz_ref.c` | 220 of 223 | 149 of 156 |
+| D, `cr_decode.c` | 231 of 231 | 138 of 138 |
+| R, `seqlz.c` | 378 of 393 | 199 of 218 |
+| W, `cr.c` | 297 of 312 | 323 of 393 |
+
+So every reject site of `src/` but one is reached, also the call without scratch memory, by
+`seqlz_test`. The one line missed, the site `seqlz_decompress_literals.c:353`, is `n > BLOCK` checked a
+second time, which the caller checked already (the equivalent mutant of step 9). `seqlz_ref.c` misses its own tables' checks,
+which the fixed tables pass, and a code not found after 15 bits, which a table that fills its code
+space never gives. R misses defensive returns of the same kind, W its counts of what it wrote.
 
 Step 10, [`tools/format-check/claims.py`](../tools/format-check/claims.py), in `tools/seqlz-ref/check.sh`:
 of I's 80 claims 44 hold by the program, 25 by an argument or another step, 11 are open, none is wrong.
@@ -689,5 +717,24 @@ the literals, which the caller checked; a run to byte value 257 (R8c) fails at t
 the own table one byte past `len` (R8e) is read as zeros and fails R9. The miss of the escaped token 3072
 showed a gap of step 6, whose R13 pair now has 3072 too.
 
-Running: step 7's AFL++ run, 24 instances since 09:18 UTC on 2nd November, 6 on each of `decode`,
-`roundtrip`, `diff` and `gen`. Not run yet: the coverage of step 8, the open claims of step 10.
+Step 7, `fuzz/afl.sh` at `b308a99`, AFL++ 5.03c with `afl-clang-lto`, 24 instances on a Ryzen 9 7950X,
+6 on each target: a main one, 2 with ASan and UBSan, 2 with CMPLOG and a plain one. From 09:18 to 18:22
+UTC on 2nd November, 9 h 4 min, stopped 162 min after the last new edge:
+
+| target | inputs | edges | queue |
+| --- | --- | --- | --- |
+| `decode` | 12.64 billion | 645 of 753 | 846 |
+| `diff` | 9.72 billion | 1700 of 2121 | 1244 |
+| `roundtrip` | 1.64 billion | 1535 of 1977 | 1947 |
+| `gen` | 0.49 billion | 2097 of 2609 | 1636 |
+
+24.5 billion inputs, no crash, no hang, so no difference between the four decoders either. Edges are
+of the main, CMPLOG and plain builds, which share one map; the stability of `diff` and `gen`, 90% to
+92%, comes from the tables built on the first call. Then 1 hour of `fuzz/smoke.sh` with MSan at
+`568d747`, the five targets of `fuzz/` on one core each: 453 million inputs, none either. The final
+queue again, through the coverage build's targets: `diff` on the queues of `decode` and `diff`, `gen`
+and `roundtrip` on their own, and the 7777 pages of `roundtrip`'s queue through `seqlz-all-decoders`,
+23 331 blocks and 4 778 380 through every decoder, no difference.
+
+Not run yet: the open claims of step 10, the rule pairs of step 6 on s390x, the blocks of
+`test/seqlz_ref_test.cpp` through D and R.
