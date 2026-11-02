@@ -7,7 +7,8 @@
 # A retrain of the tables without new hashes in docs/format.md fails here, and so does a format change
 # that the spec does not describe. The pages are made up, never from a dump: tools/seqlz-worst/pages/,
 # and six written here, three of them with deltas, one for each. First, the tables in src/ must be what tools/kernel-port/gen-seqlz-lengths.py
-# makes from the counts in bench/, byte for byte. Needs cc and python3.
+# makes from the counts in bench/, byte for byte, and the longest code of each table what docs/format.md's
+# table of tables says. Needs cc and python3.
 set -euo pipefail
 here=$(cd "$(dirname "$0")" && pwd)
 repo=$(cd "$here/../.." && pwd)
@@ -70,6 +71,26 @@ while len(p) < 4096:
 open(f"{out}/delta-last3.page", "wb").write(p[:4096])
 EOF
 "$out/compress" "$out"/*.page >/dev/null
+
+# the column "longest code" of docs/format.md's table of tables, both copies, against the tables: a
+# retrain changes the tables' hashes there, and this keeps it from leaving the column behind
+python3 - "$here" "$repo/docs/format.md" <<'EOF'
+import re
+import sys
+
+sys.path.insert(0, sys.argv[1])
+import seqlz_ref
+
+longest = {name: max(lengths) for name, lengths in seqlz_ref.load_lengths().items()}
+spec = open(sys.argv[2]).read()
+rows = re.findall(r"^\| (?:[^|]*`(\w+)`|literal tables 0 to 7) \| [^|]* \| (\d+) bits \|", spec, re.M)
+seen = [(name or "LIT", int(bits)) for name, bits in rows]
+if sorted({n for n, _ in seen}) != sorted(longest) or len(seen) != 2 * len(longest):
+    sys.exit(f"docs/format.md's table of tables: rows {seen}, expected each of {sorted(longest)} twice")
+for name, bits in seen:
+    if bits != longest[name]:
+        sys.exit(f"docs/format.md says the longest code of {name} is {bits} bits, the table's is {longest[name]}")
+EOF
 
 pages=0
 wrong=0

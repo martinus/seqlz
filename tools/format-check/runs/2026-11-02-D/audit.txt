@@ -1,0 +1,26 @@
+  Bash: cat /room/BRIEF.md; ls -la /room
+  Bash: cd /room; cat format.md; ls -la tables; sha256sum tables/*
+  Read: /room/format.md
+  Bash: cd /room; ls -la tables; sha256sum tables/*
+  Bash: which gcc clang python3 make; gcc --version | head -1; clang --version | head -1; python3 -c " import sys for n in ['TOK','LL','ML','OWN','LIT']: b=open('/room/tables/%s.bin'%n,'rb').read() parts=[b[i
+  Write: /room/QUESTIONS.md
+  Bash: mkdir -p /room/tools /room/src /room/tests /room/fuzz; cat > /room/tools/gen_tables.py <<'EOF' #!/usr/bin/env python3 """Make src/cr_tables.h from tables/*.bin. Checks each file against the SHA-256 gi
+  Write: /room/src/cr_decode.c
+  Bash: python3 - <<'EOF' p='src/cr_decode.c' s=open(p).read() old_last=s[s.index(' if (n - used == BLOCK - olen) {'):s.index(' unsigned tok = symbol')] s=s.replace(old_last,''' if (n - used == BLOCK - olen) 
+  Write: /room/tests/ref.c
+  Bash: python3 - <<'EOF' p='tests/ref.c' s=open(p).read() s=s.replace(''' int code[3073]; /* canonical code of each symbol */ } rtable;''',''' int firstcode[32], count[32]; int sorted[3073]; /* symbols by (l
+  Write: /room/tests/test.c
+  Bash: python3 - <<'EOF' p='tests/test.c' s=open(p).read() rep=[('s[k++] = S(5, 1000, 3, 1234);','s[k++] = S(5, 1000, 3, 200);'), ('s[k++] = S(0, 8, 5, 1600);','s[k++] = S(0, 8, 5, 1200);'), (' int used = 65
+  Bash: sed -i 's|from tables/\*.bin. Do not edit.|from the files in tables/. Do not edit.|' tools/gen_tables.py && sed -i 's/l2\[8\] = "abcdefgh"/l2[9] = "abcdefgh"/; s/l2\[16\] = "abcdefghijklmnop"/l2[17] =
+  Bash: ./build/test 50 2>&1 | grep -v "disagree on output" | head -30; ./build/test 50 | grep -c "disagree on output"
+  Bash: sed -i 's/ for (size_t q_ = 0; q_ < (k); q_++) { / size_t k_ = (k); \\\n for (size_t q_ = 0; q_ < k_; q_++) { /' tests/ref.c && grep -n -A3 "define COPY" tests/ref.c && make test 2>&1 | grep -v "^clan
+  Bash: sed -i 's/ for (int l = 2; l < 32; l++)\n first/X/' tests/ref.c && python3 - <<'EOF' p='/room/tests/ref.c' s=open(p).read() s=s.replace("for (int l = 2; l < 32; l++)\n first[l]","for (int l = 2; l < 1
+  Bash: ./build/test-asan 1000 2>&1 | grep -A12 "ERROR" | head -20
+  Bash: python3 - <<'EOF' p='/room/tests/test.c' s=open(p).read() a=""" for (int k = 0; k < s[i].ml; k++, o++) blk[o] = blk[o - off]; last = off;""" assert a in s s=s.replace(a,""" for (int k = 0; k < s[i].ml
+  Bash: python3 - <<'EOF' p='/room/tests/test.c' s=open(p).read() a=""" test_example(); test_header();""" s=s.replace(a,""" if (argc > 2 && strcmp(argv[1], "--seeds") == 0) { /* writes valid blocks as a seed 
+  Bash: cat >> QUESTIONS.md <<'EOF' ## 13. What the compressor writes — which of its habits are rules > "Not part of the format: any block that decodes is fine, and one block can be written in many > ways" Th
+  Bash: python3 - <<'EOF' p='/room/QUESTIONS.md' s=open(p).read() i=s.index('is a run of at least 256 values, which goes past 255 from any start') j=s.index('The decoder\nimplements only') s=s[:i]+'is a run o
+  Bash: python3 - <<'EOF' p='/room/QUESTIONS.md' s=open(p).read() a='''is a run of at least 256 values, so from any start `v >= 0` its last value `v + 255 + x` is past 255. The decoder implements only the fou
+  Bash: make clean >/dev/null && rm src/cr_tables.h && make src/cr_tables.h test 2>&1 | grep -E "python|OK|FAIL" ; wc -l src/*.c src/*.h tests/*.c tools/*.py fuzz/*.c QUESTIONS.md
+24 tool calls, 0 marked
+result: 25 turns, 10.1 min, 2.0529182 USD

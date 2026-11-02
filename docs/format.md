@@ -118,7 +118,8 @@ layouts.
 9 to 15 are invalid.
 
 The `w` bytes from byte `3 + e` on are one number `S` of `8 * w` bits, little endian, and
-`s[j] = (S >> (j * w)) & ((1 << w) - 1)`: 8 sizes of `w` bits fill exactly `w` bytes; `w` is 5 to 12.
+`s[j] = (S >> (j * w)) & ((1 << w) - 1)`: 8 sizes of `w` bits fill exactly `w` bytes, so `w` counts
+both, the bits of one size and the bytes of all 8. `w` is 5 to 12, `S` has 40 to 96 bits.
 *Why:* a stream holds at most every 8th literal, of at most 10 bits, so at most `BLOCK * 10 / 64`
 bytes, 640 in a 4 KiB block; the largest stream of most blocks is below 128 bytes, so 7 bits each
 do, and 2 bytes each made blocks about 5 bytes larger on average. The codes 9 to 15 are kept for later.
@@ -167,20 +168,20 @@ set of tables would be a new format, see [No version in the block](#no-version-i
 is a list of code lengths, one byte per symbol, symbol 0 first:
 
 <!-- in the kernel's copy:
-| table | symbols | codes of at most | in `lib/seqlz/seqlz_lengths.h` |
+| table | symbols | longest code | in `lib/seqlz/seqlz_lengths.h` |
 | --- | --- | --- | --- |
 | tokens and escape, `TOK` | 3073 | 11 bits | `seqlz_default_lengths.token` |
 | literal length values, `LL` | `LEN_SYMBOLS` | 8 bits | `seqlz_default_lengths.ll` |
-| match length values, `ML` | `LEN_SYMBOLS` | 8 bits | `seqlz_default_lengths.ml` |
+| match length values, `ML` | `LEN_SYMBOLS` | 7 bits | `seqlz_default_lengths.ml` |
 | literal tables 0 to 7 | 256 each | 10 bits | `seqlz_lit_sets[0]` to `[7]` |
 | a block's own literal table, `OWN` | 19 | 8 bits | `seqlz_own_lengths` |
 -->
 <!-- not in the kernel's copy -->
-| table | symbols | codes of at most | in `src/seqlz_lengths.h` |
+| table | symbols | longest code | in `src/seqlz_lengths.h` |
 | --- | --- | --- | --- |
 | tokens and escape, `TOK` | 3073 | 11 bits | `seqlz_default_lengths.token` |
 | literal length values, `LL` | `LEN_SYMBOLS` | 8 bits | `seqlz_default_lengths.ll` |
-| match length values, `ML` | `LEN_SYMBOLS` | 8 bits | `seqlz_default_lengths.ml` |
+| match length values, `ML` | `LEN_SYMBOLS` | 7 bits | `seqlz_default_lengths.ml` |
 | literal tables 0 to 7 | 256 each | 10 bits | `seqlz_lit_sets[0]` to `[7]` |
 | a block's own literal table, `OWN` | 19 | 8 bits | `seqlz_own_lengths` |
 <!-- end -->
@@ -258,10 +259,11 @@ The literal streams and a block's own literal table are read the same way, each 
 `read()` and `symbol()` there take the next bits of that stream or table, not of `B`.
 
 A valid block ends where its bits end: after the last bit it needs, fewer than 8 bits of `B` are left,
-all in its last byte, and they are 0. *Why:* zram stores no checksum, so this is what tells a damaged
-block from a valid one, at one compare per block, and the compressor writes nothing else. A decoder may
-read zeros past the end instead of checking at every read, and check at the end that it did not use
-them; `seqlz_decompress()` does that, and the result is the same as checking at every read.
+all in its last byte, and they are 0. A block that needs a bit past the end of `B` is invalid. *Why:*
+zram stores no checksum, so this is what tells a damaged block from a valid one, at one compare per
+block, and the compressor writes nothing else. A decoder may read zeros past the end instead of checking
+at every read, and check at the end that it did not use them; `seqlz_decompress()` does that, and the
+result is the same as checking at every read.
 
 ### Length values
 
@@ -303,10 +305,10 @@ a code.
 Reading a token:
 
 ```text
-t = symbol(TOK)
-if t == 3072:
-    t = read(12)
-    if t >= 3072: the block is invalid
+token = symbol(TOK)
+if token == 3072:
+    token = read(12)
+    if token >= 3072: the block is invalid
 ```
 
 ### Offsets
@@ -326,8 +328,9 @@ the most frequent of all and gets a class of its own.
 | 5 | 8 | `read(8) * 8` | 8 to 2040, multiples of 8 |
 
 Class 1 stores the offset divided by 2, classes 4 and 5 divided by 8. The last offset starts as 1
-for each block. For a sequence with a match, an offset of 0, or one larger than the bytes written so far,
-makes the block invalid.
+for each block. The last column has the offsets of a valid block: an offset of 0, which classes 1 to 5
+give for offset bits of 0, or one larger than `|out|` after this sequence's literals are copied, makes
+the block invalid, see [Decoding](#decoding).
 
 ## Decoding
 
@@ -354,7 +357,7 @@ loop:
     if off == 0 or off > |out| or ml > BLOCK - |out|: invalid
     ml times: append the byte off places before the end of out
 
-at the stop: fewer than 8 bits of B left, all 0, else invalid
+at the stop: no bit read past the end of B, fewer than 8 bits of B left, all 0, else invalid
 ```
 
 The match is copied one byte at a time, each byte after the one before is written, so it can repeat
@@ -379,10 +382,15 @@ the block's byte `start[j] + i div 8`. Stream `j` holds literal `j`, `j + 8`, `j
 each as one symbol of the literal table that `code` names, one after the other; a code's first bit is
 the first one read.
 
-If stream `j` has literals, their codes take `b` bits with `8 * s[j] - 8 < b <= 8 * s[j]`: they end in
-the stream's last byte, and the bits after the last code in that byte are 0. A stream without
-literals, stream `n` to 7 when `n < 8`, has `s[j] = 0`. Else the block is invalid. A decoder may read
-past the end of a stream, as long as it checks this.
+The block is invalid if a stream `j`
+
+- has literals whose codes take `bits` bits, and not `8 * s[j] - 8 < bits <= 8 * s[j]`: the codes end
+  in the stream's last byte;
+- has literals, and a bit after the last code in the stream's last byte is not 0;
+- has no literals, which are streams `n` to 7 when `n < 8`, and `s[j]` is not 0.
+
+A decoder may read past the end of a stream, the next stream's bytes or zeros, if it checks these
+rules; the result is the same.
 
 ## Literals as deltas
 
@@ -418,8 +426,8 @@ of it is bit `7 - (i mod 8)` of byte `3 + w + e + i div 8`. It is a list of symb
 the code length of each byte value with a code, in the order of the byte values, from 0 on:
 
 - symbol `l - 1`, for `l` from 1 to 10: the next byte value has a code of `l` bits;
-- symbol `9 + k`, for `k` from 1 to 9, then `x = read(k - 1)` from the table's bits: the next
-  `2^(k-1) + x` byte values have no code. `k = 1` is one byte value, `read(0)` is 0.
+- symbol `9 + k`, for `k` from 1 to 9, then `r = read(k - 1)` from the table's bits: the next
+  `2^(k-1) + r` byte values have no code. `k = 1` is one byte value, `read(0)` is 0.
 
 The list ends as soon as the codes fill the code space: when `2^-l`, summed over the lengths so far,
 is exactly 1. Byte values after the last one with a code have none. The table's last byte is the one
@@ -510,16 +518,16 @@ is valid or what it decodes to. `fuzz/smoke.sh` runs it for a minute in CI, `fuz
 on 6 October, 10 AFL++ instances for 2 hours, 1.7 billion inputs, found no difference, and on 9 October,
 with the encoder and decoder of `5342a9b`, 12 instances for 2 hours, 1.94 billion inputs on this target,
 found none either. Both runs were before literals as deltas; for those, the CI's seeds include blocks with
-`dt` 1 and 3, and on 22nd October both decoders got every delta byte, every cut and random damage of
+`dt` 1 and 3, and on 22nd October both decoders got every cut and random damage of
 15 000 pages of 4 KiB from zram dumps and 2088 of 16 KiB from a process's resident pages, 5.8 million
 blocks in all, and agreed on every one.
 
 `test/seqlz_ref_test.cpp` checks the example above, the compressor's blocks at every level, damaged
-blocks, blocks whose literals are deltas of each kind, and blocks made by hand for the rules that
-damage rarely reaches: the codes above 8 and the values of `dt` other than 1 to 3, a literal code
-outside its stream, a block of literals only, a last sequence with a token, which is invalid, and
-blocks' own tables that overfill the code space, name a byte value above 255 or have bits after their
-end.
+blocks, blocks whose literals are deltas of each kind, and blocks made by hand for the rules that damage
+rarely reaches: the codes above 8 and the values of `dt` other than 1 to 3, a literal code outside its
+stream, a block of literals only, a token after the last sequence whose bits are not 0, which is
+invalid, and blocks' own tables that overfill the code space, name a byte value above 255 or have bits
+after their end.
 
 [format-check.md](format-check.md) is the procedure to check this file again, more thoroughly: decoders
 written from it in a clean room, by agents that have never seen `src/`, and fuzzed against it.

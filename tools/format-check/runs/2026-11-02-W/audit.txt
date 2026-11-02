@@ -1,0 +1,41 @@
+  Bash: cat /room/BRIEF.md; ls -la /room
+  Bash: cd /room; cat format.md; ls -la tables; sha256sum tables/*
+  Bash: cd /room; sed -n 1,200p format.md
+  Bash: cd /room; ls -la tables; sha256sum tables/*
+  Bash: cd /room; sed -n 200,420p format.md
+  Bash: cd /room; sed -n 420,700p format.md
+  Bash: cd /room; python3 -I - <<'EOF' from fractions import Fraction as F def info(name,L): s=sum(F(1,2**l) for l in L if l) z=[i for i,l in enumerate(L) if l==0] print(name,len(L),'sum',s,'max',max(L),'zero
+  Write: /room/QUESTIONS.md
+  Bash: mkdir -p /room/tools && cat > /room/tools/gen_tables.py <<'EOF' # Writes cr_tables.h from tables/*.bin, after checking each against format.md's SHA-256. import hashlib, sys d = sys.argv[1] want = { 'T
+  Write: /room/cr_write.h
+  Bash: { echo '/* The items of FEATURES.md, in its order: CR_FEAT(id, name). */' echo 'CR_FEAT(F_RAW, "layout: raw literals")' echo 'CR_FEAT(F_CODED, "layout: coded literals")' for i in 0 1 2 3 4 5 6 7; do e
+  Bash: sed -i 's/CR_FEAT(F_OFF_MAX3, "largest offset of class 3")/CR_FEAT(F_OFF_MAX3, "offset 4092 (class 3), the largest a match can have")/' cr_features.def && grep MAX cr_features.def
+  Write: /room/cr_write.c
+  Bash: python3 -I - <<'EOF' p='cr_write.c'; s=open(p).read() s=s.replace('''static unsigned char seen[CR_NFEAT]; static void feat(int f) { cr_feat_occ[f]++; seen[f] = 1; }''','''static unsigned long long occ
+  Write: /room/cr_gen.c
+  Write: /room/cr_check.c
+  Bash: cat > Makefile <<'EOF' CC ?= cc CFLAGS ?= -std=c11 -O2 -Wall -Wextra -pedantic all: cr-gen cr-check cr_tables.h: tables/TOK.bin tables/LL.bin tables/ML.bin tables/LIT.bin tables/OWN.bin tools/gen_tabl
+  Bash: sed -i 's|from tables/\*.bin;|from the files in tables/;|' tools/gen_tables.py && python3 - <<'EOF' import re p='cr_write.c'; s=open(p).read() s=re.sub(r'(\n )(if \([a-z]+ == \d+\) feat\(F_OFF_MAX\d\)
+  Bash: python3 - <<'EOF' p='cr_check.c'; s=open(p).read() s=s.replace(''' unsigned long long S = 0; for (unsigned i = 0; i < w; i++) S |= (unsigned long long)buf[3 + e + i] << (8 * i); size_t s[8], at = 3 + 
+  Bash: ./cr-check /tmp/crt 2000 >/dev/null; for k in $(seq 0 300); do r=$(./cr-check - < /tmp/crt/$k.z 2>/tmp/o.bin); if cmp -s /tmp/o.bin /tmp/crt/$k.block; then s=ok; else s=BAD; fi; echo "$s $(xxd -p -l4 
+  Bash: sed 's| for (unsigned q = 0; q < ml; q++, o++) out\[o\] = out\[o - off\];\n }|&|' cr_check.c > /tmp/dbg.c && python3 - <<'EOF' s=open('/tmp/dbg.c').read() s=s.replace('if (off == 0 || off > o || ml > 
+  Bash: ./cr-check /tmp/crt 40; for k in 2 4; do /tmp/dbg - < /tmp/crt/$k.z 2>&1 >/dev/null | grep -a '^seq' | head -5; echo; done
+  Bash: ./cr-check - < /tmp/crt/0.z 2>/tmp/o.bin; cmp -l /tmp/o.bin /tmp/crt/0.block | head -5; cmp -l /tmp/o.bin /tmp/crt/0.block | wc -l
+  Bash: python3 -I - <<'EOF' b=open('/tmp/crt/0.z','rb').read() n=(b[0]|b[1]<<8)&0x7fff; t=b[2]; w=5+((t>>4)&7); e=t>>7 S=int.from_bytes(b[3+e:3+e+w],'little'); s=[(S>>(j*w))&((1<<w)-1) for j in range(8)] pri
+  Bash: python3 -I - <<'EOF' b=open('/tmp/crt/0.z','rb').read(); blk=open('/tmp/crt/0.block','rb').read() L=open('tables/LIT.bin','rb').read()[512:768] cnt=[0]*16 for l in L: cnt[l]+=1 cnt[0]=0; first=[0]*16;
+  Bash: ./cr-check - < /tmp/crt/0.z 2>/tmp/o.bin; ls -l /tmp/o.bin; python3 -c " d=open('/tmp/o.bin','rb').read(); print(d[2040:2056].hex())"
+  Bash: python3 - <<'EOF' p='cr_check.c'; s=open(p).read() s=s.replace(" for (size_t q = 0; q < (k); q++) { \\", " for (size_t q = 0, kk = (k); q < kk; q++) { \\") open(p,'w').write(s) EOF grep -n "kk = (k)" 
+  Bash: rm -rf /tmp/crt && mkdir /tmp/crt && ./cr-gen 7 20000 /tmp/crt > /tmp/g.txt && ./cr-check /tmp/crt 20000 | tail -1 && cat /tmp/g.txt
+  Bash: grep -n "m = 2 + pick" cr_write.c && sed -i 's/unsigned m = 2 + pick(&ch, 255), cnt\[11\] = {0};/unsigned m = range_(\&ch, 2, 256, 16), cnt[11] = {0};/' cr_write.c && grep -n "unsigned m = " cr_write.
+  Bash: mkdir -p /tmp/edge && cd /tmp/edge && cat > edge.c <<'EOF' #include "/room/cr_write.h" #include <stdio.h> #include <stdlib.h> #include <string.h> static unsigned char c[40000], d[CR_CAP_MAX], b[4096],
+  Bash: cd /tmp/edge && for k in 0 5 300 1000 4000; do f=out/$k.z; printf "$k: "; (cat $f; printf '\0') | /room/cr-check - 2>/dev/null; python3 -I -c " import sys;b=bytearray(open('$f','rb').read()); b[-1]^=1
+  Bash: rm -rf /tmp/crt /tmp/c100k && mkdir /tmp/c100k && (time ./cr-gen 1 100000 /tmp/c100k > /tmp/gen100k.txt) 2>&1 && ./cr-check /tmp/c100k 100000 | tail -2
+  Bash: cat >> QUESTIONS.md <<'EOF' ## 7. Literals as deltas — with a block's own table, and where no literal is a delta > | 2 | 1 | `t`: `code = t & 15` is how the literals are coded, ... `e = t >> 7` whethe
+  Read: /room/cr_write.c
+  Write: /room/FEATURES.md
+  Bash: cat /tmp/claude-1000/-room/1d3fdc2e-ea5d-4bab-a393-723d73dbe11a/tasks/b02z2q8mp.output; cat /tmp/gen100k.txt; for k in $(seq 0 30000); do /tmp/dbg - < /tmp/c100k/$k.z 2>&1 >/dev/null | grep -a '^seq' 
+  Bash: for k in $(seq 30001 100000); do /tmp/dbg - < /tmp/c100k/$k.z 2>&1 >/dev/null | grep -a '^seq' | awk '{print $2}'; done > /tmp/toks2.txt; for k in $(seq 0 30000); do /tmp/dbg - < /tmp/c100k/$k.z 2>&1 
+  Bash: python3 - <<'EOF' p='Makefile'; s=open(p).read() s=s.replace('''clean:''','''# Writes 2000 blocks and checks each with cr-check, a strict decoder written from format.md. test: cr-gen cr-check rm -rf t
+  Bash: make test 2>&1 | grep blocks
+39 tool calls, 0 marked
+result: 40 turns, 15.1 min, 2.3391332000000005 USD
