@@ -492,6 +492,12 @@ a variable unused does not build, the old binary runs, and the mutant looks as i
 surviving mutant is either equivalent (the notes show why no block tells it apart) or a hole in steps
 4 to 7, which then gets a block that finds it. No mutant stays in the tree.
 
+[`tools/format-check/mutants.py`](../tools/format-check/mutants.py) has the mutants as exact text
+replacements and works on a copy of the checkout: each built, then `seqlz_test`'s rule pairs and
+reference tests and `seqlz-all-decoders` on it, and with `--fuzz` the targets `diff` and `gen` with ASan
+and UBSan for each mutant those miss. Most of the misses read a byte past a buffer that changes no verdict
+in a test without sanitizers.
+
 ## Step 10: the numbers of format.md
 
 Every row of I's `CLAIMS.md` is checked, by [`tools/format-check/claims.py`](../tools/format-check/claims.py)
@@ -674,5 +680,14 @@ under qemu, the pages of `tools/seqlz-worst/pages/` and 4000 of two of the sampl
 zram and 2000 of a phone's: 12 024 blocks, 2 017 927 through every decoder, no difference on either,
 and the same counts as on x86-64. The rule pairs of step 6 are a C++ test and did not run there.
 
+Step 9, [`tools/format-check/mutants.py`](../tools/format-check/mutants.py), 31 mutants of
+`seqlz_decompress()`: 20 found by the rule pairs or `seqlz-all-decoders`; of the 11 left, 7 by 5 minutes
+of `diff` and `gen` with ASan and UBSan, among them an escaped token of exactly 3072 that a block of 104
+bytes made valid for `seqlz_decompress()` alone; 4 survived, and each is equivalent: `n = BLOCK + 1`
+(R2) fails later, as the literals left never equal the bytes left; `n > BLOCK` checked a second time in
+the literals, which the caller checked; a run to byte value 257 (R8c) fails at the table's end, `b > 256`;
+the own table one byte past `len` (R8e) is read as zeros and fails R9. The miss of the escaped token 3072
+showed a gap of step 6, whose R13 pair now has 3072 too.
+
 Running: step 7's AFL++ run, 24 instances since 09:18 UTC on 2nd November, 6 on each of `decode`,
-`roundtrip`, `diff` and `gen`. Not run yet: step 9, the coverage of step 8, the open claims of step 10.
+`roundtrip`, `diff` and `gen`. Not run yet: the coverage of step 8, the open claims of step 10.
