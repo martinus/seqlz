@@ -123,7 +123,8 @@ The `w` bytes from byte `3 + e` on are one number `S` of `8 * w` bits, little en
 both, the bits of one size and the bytes of all 8. `w` is 5 to 12, `S` has 40 to 96 bits.
 *Why:* a stream holds at most every 8th literal, of at most 10 bits, so at most `BLOCK * 10 / 64`
 bytes, 640 in a 4 KiB block; the largest stream of most blocks is below 128 bytes, so 7 bits each
-do, and 2 bytes each made blocks about 5 bytes larger on average. The codes 9 to 15 are kept for later.
+do, and 2 bytes each would make a block with coded literals about 9 bytes larger. The codes 9 to 15
+are kept for later.
 
 The coded literals are split into 8 **streams**: literal 0 goes to stream 0, literal 1 to stream 1, ...,
 literal 8 to stream 0 again. Stream `j` starts at byte `start[j] = 3 + w + e + d + s[0] + ... + s[j-1]`,
@@ -296,7 +297,8 @@ c   = token >> 9         the class of the offset, 0 to 5
 
 That is 16 * 32 * 6 = 3072 tokens. A match is at least 4 bytes, so the token stores `ml - 4`, the
 **match length field** `mlf`. *Why:* one code for the three numbers lets frequent combinations share a
-short code, and shorter matches cost more bits than the literals they replace.
+short code, and matches of 3 bytes at the last offset would make a block about 1.5% smaller for 8%
+more sequences, which writing and reading both pay for.
 
 Symbol 3072 of `TOK` is the **escape**: it is followed by the token's number in 12 bits. Any token can
 be sent escaped, also one that has a code of its own; it means the same. *Why:* there are only 2048
@@ -317,7 +319,7 @@ if token == 3072:
 The offset's class says how it is stored: each class reads its **offset bits** and turns them into
 the offset. *Why:* small offsets are frequent, and so are multiples of 8, at which 8-byte values like
 pointers repeat, so they get classes with fewer bits. Offset 2, at which 16-bit values repeat, is
-the most frequent of all and gets a class of its own.
+with 8 the most frequent offset other than the last one, and gets a class of its own.
 
 | class | offset bits | offset | offsets it can send |
 | --- | --- | --- | --- |

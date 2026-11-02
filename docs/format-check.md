@@ -515,7 +515,10 @@ open. `tools/seqlz-ref/check.sh` runs it, so CI holds the claims on every push. 
 - the `x` of `dt = 3` for each `last`;
 - the example, bit by bit, as its table says;
 - the numbers in "Why:" sentences, e.g. "0.4 to 0.5 bytes per byte value with a code": measured again,
-  or the sentence changed.
+  or the sentence changed. What only pages can tell,
+  [`tools/format-check/measure_claims.py`](../tools/format-check/measure_claims.py) counts on the
+  compressor's blocks of the samples, locally; `claims.py` names its numbers, or the entry of
+  explored-designs.md that measured a claim, as "measured".
 
 ## Step 11: big-endian and 32-bit
 
@@ -660,8 +663,9 @@ through the four decoders of `seqlz_diff_fuzz`, no difference. `seqlz_ref.py` ag
 `seqlz_decompress()`, verdict and SHA-256 of the block: 10 413 distinct blocks of the agents' tests (4481
 valid), and on step 7's queue below 8004 distinct blocks of `decode` and `diff` (58 valid) and 29 361 of
 the pages of `roundtrip` at levels 1 to 3 and W's blocks of `gen`, as written and damaged (25 884
-valid), no difference. Not run yet: the blocks of `test/seqlz_ref_test.cpp` through D and R, which
-`seqlz_test` holds against `seqlz_ref.c` only.
+valid), no difference. The blocks of `seqlz_test`, which `test/seqlz_ref_test.cpp` holds against
+`seqlz_ref.c` only, the same way, with a hook in place of `seqlz_ref_decode()`: 53 199 blocks through the
+four decoders, and `seqlz_ref.py` on the 50 555 distinct ones (38 407 valid), no difference.
 
 Step 6, [`test/seqlz_rules_test.cpp`](../test/seqlz_rules_test.cpp): a valid block and the same block
 broken by one rule for each rule of I's list that can be broken alone or with one other, R1 to R9
@@ -699,14 +703,39 @@ space never gives. R misses defensive returns of the same kind, W its counts of 
 Step 10, [`tools/format-check/claims.py`](../tools/format-check/claims.py), in `tools/seqlz-ref/check.sh`:
 of I's 80 claims 44 hold by the program, 25 by an argument or another step, 11 are open, none is wrong.
 The open ones are measurements on a corpus or of speed (C11, C13, C15, C30, C41, C45, C50, C56, C62,
-C63) and the logs of old runs (C79); step 10 asks for those numbers measured again or the sentences
-changed, which is still to do. A changed page count in either copy of "Where the tables come from"
+C63) and the logs of old runs (C79). A changed page count in either copy of "Where the tables come from"
 made `claims.py` fail.
+
+Then the open ones measured, [`measure_claims.py`](../tools/format-check/measure_claims.py) on the first
+2000 pages of each of the ten samples at levels 1 to 3, or the entry of explored-designs.md that measured
+them. Seven hold as written: the largest stream below 128 bytes in 69% of level 2's coded blocks and 80%
+of level 3's (C11), 8 streams faster than fewer (C15, one stream 11 901 decode cycles per page, four 8146),
+the token table's lines per page (C30, 42.5 instead of 55.3), 1.2 to 1.3 bytes for a last token (C50),
+32% of the literals as deltas 0 against 14% without (C56), 86% of the byte values of own tables with a
+code of 7 to 10 bits (C62), 0.50 bytes per byte value and 74% of the tables 40 to 100 bytes (C63). Three
+did not, and format.md says what was measured now:
+
+- C13, "2 bytes each made blocks about 5 bytes larger on average": that was zsmalloc's cost of 5th
+  October. Now `w` is 7.0 on average, so 2 bytes per size are 9 bytes more per block with coded literals.
+- C41, "shorter matches cost more bits than the literals they replace": a match of 4 bytes takes 11.6
+  to 11.9 bits of token, offset and length, 3 literals 19 to 24, so a match of 3 would not. The reason
+  is the time: explored-designs.md measured matches of 3 at the last offset as about 1.5% of a page for
+  8% more sequences.
+- C45, offset 2 "the most frequent of all": it is the most frequent offset other than the last one at
+  levels 1 and 2, 7.2% against 8's 6.2%, but at level 3 8 is, 5.9% against 5.0%, and with the last
+  one 8 is ahead at every level.
+
+C79 stays open until "How this file was checked" names this run instead of the old ones.
 
 Step 11, [`tools/format-check/cross.sh`](../tools/format-check/cross.sh): on 32-bit x86 and on s390x
 under qemu, the pages of `tools/seqlz-worst/pages/` and 4000 of two of the samples, 2000 of a desktop's
 zram and 2000 of a phone's: 12 024 blocks, 2 017 927 through every decoder, no difference on either,
-and the same counts as on x86-64. The rule pairs of step 6 are a C++ test and did not run there.
+and the same counts as on x86-64. Then with `DOCTEST_SRC` also the rule pairs of step 6 and
+`test/seqlz_ref_test.cpp`, 18 test cases, built with g++ alone: all pass on both. 1 440 086 assertions
+on 32-bit x86, as on x86-64 with the same g++ 14, and 1 440 089 on s390x: the test's pages of pointers
+are written with `memcpy()` of a `uint64_t`, so on s390x they are other pages, and of their damaged
+blocks a few others stay valid, each one an assertion that all decoders give the same block. Two test
+cases differ, by 4 and by 1, both on those pages.
 
 Step 9, [`tools/format-check/mutants.py`](../tools/format-check/mutants.py), 31 mutants of
 `seqlz_decompress()`: 20 found by the rule pairs or `seqlz-all-decoders`; of the 11 left, 7 by 5 minutes
@@ -736,5 +765,4 @@ queue again, through the coverage build's targets: `diff` on the queues of `deco
 and `roundtrip` on their own, and the 7777 pages of `roundtrip`'s queue through `seqlz-all-decoders`,
 23 331 blocks and 4 778 380 through every decoder, no difference.
 
-Not run yet: the open claims of step 10, the rule pairs of step 6 on s390x, the blocks of
-`test/seqlz_ref_test.cpp` through D and R.
+Not done yet: "How this file was checked" in format.md with this run, which also closes C79.
