@@ -182,7 +182,10 @@ How the agent runs:
   RemoteTrigger and SendMessage, where a session that knows `src/` could answer. Its home is empty, so
   it reads no instruction files, memory, plugins or hooks of the user or the project.
 - Credentials: `ANTHROPIC_API_KEY` in the environment, and then claude also runs with `--bare`; or
-  `CLAUDE_CODE_OAUTH_TOKEN`, a token of the subscription from `claude setup-token`. Never the login of
+  `CLAUDE_CODE_OAUTH_TOKEN`, a token of the subscription from `claude setup-token`; or else that token
+  in `~/.config/seqlz-cleanroom.token` (`SEQLZ_CLEANROOM_TOKEN_FILE` names another file), readable by
+  its owner only. The file is for a runner that is a Claude Code session: the commands it runs don't
+  get the token in their environment, and the runner never reads the file itself. Never the login of
   the host's `~/.claude`: a refresh of its token in the container could log the host out.
 - The model is named on the command line, and recorded in `meta.txt` with the commit, the version of
   claude and the image.

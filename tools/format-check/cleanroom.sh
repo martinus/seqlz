@@ -13,9 +13,12 @@
 #
 # The agent runs in podman, with the room as /room, the home as /home/agent and the host's claude binary,
 # nothing else of the host. Credentials: ANTHROPIC_API_KEY, then claude runs with --bare, or
-# CLAUDE_CODE_OAUTH_TOKEN from `claude setup-token`; never the login of ~/.claude, which a refresh in
-# the container could take from the host. The image, seqlz-cleanroom, is built from Containerfile on
-# the first run. Exits 1 if the audit marked a call or the run did not finish.
+# CLAUDE_CODE_OAUTH_TOKEN from `claude setup-token`, or else that token in the file
+# $SEQLZ_CLEANROOM_TOKEN_FILE, by default ~/.config/seqlz-cleanroom.token, readable by its owner only.
+# The file is for a runner that is itself a Claude Code session, whose commands don't get the token in
+# their environment. Never the login of ~/.claude, which a refresh in the container could take from the
+# host. The image, seqlz-cleanroom, is built from Containerfile on the first run. Exits 1 if the audit
+# marked a call or the run did not finish.
 set -euo pipefail
 here=$(cd "$(dirname "$0")" && pwd)
 repo=$(cd "$here/../.." && pwd)
@@ -44,8 +47,20 @@ if [[ -n ${ANTHROPIC_API_KEY:-} ]]; then
 elif [[ -n ${CLAUDE_CODE_OAUTH_TOKEN:-} ]]; then
     auth=(-e CLAUDE_CODE_OAUTH_TOKEN)
 else
-    echo "set ANTHROPIC_API_KEY, or CLAUDE_CODE_OAUTH_TOKEN from 'claude setup-token'" >&2
-    exit 2
+    token_file=${SEQLZ_CLEANROOM_TOKEN_FILE:-${XDG_CONFIG_HOME:-$HOME/.config}/seqlz-cleanroom.token}
+    if [[ ! -r $token_file ]]; then
+        echo "set ANTHROPIC_API_KEY, or CLAUDE_CODE_OAUTH_TOKEN from 'claude setup-token', or put that" \
+            "token into $token_file" >&2
+        exit 2
+    fi
+    # a token others can read is one others can use
+    if [[ $(stat -c %a "$token_file") != [46]00 ]]; then
+        echo "$token_file is readable by others: chmod 600 $token_file" >&2
+        exit 2
+    fi
+    CLAUDE_CODE_OAUTH_TOKEN=$(tr -d '[:space:]' < "$token_file")
+    export CLAUDE_CODE_OAUTH_TOKEN
+    auth=(-e CLAUDE_CODE_OAUTH_TOKEN)
 fi
 claude_bin=$(realpath "$(command -v claude)")
 
@@ -60,7 +75,7 @@ fi
     echo "commit: $(git -C "$repo" rev-parse HEAD)$(git -C "$repo" diff --quiet HEAD -- docs/format.md || echo ', docs/format.md changed')"
     echo "claude: $("$claude_bin" --version)"
     echo "image: $(podman image inspect seqlz-cleanroom --format '{{.Id}}')"
-    echo "auth: ${auth[1]}"
+    echo "auth: ${auth[1]}${token_file:+ from $token_file}"
     echo "start: $(date -u +%Y-%m-%dT%H:%M:%SZ)"
 } > "$dir/meta.txt"
 
