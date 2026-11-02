@@ -77,7 +77,8 @@ All of these, on the same commit:
 3. Every rule of the inventory (step 2, brief I) has a valid and an invalid block, and every decoder
    gives each the verdict the inventory says.
 4. Every item of [the list in step 5](#step-5-valid-blocks-by-construction) was written at least 100
-   times by the writer, and decoded by every decoder.
+   times by the writer, and decoded by every decoder; an item that random choices hardly reach has a
+   block made by hand in step 6's test instead.
 5. Every reject site in `src/seqlz_decompress.c` and `src/seqlz_decompress_literals.c` maps to a rule
    of the inventory, and every rule to a reject site; every line and branch of the decoders is reached
    by the blocks of steps 4 to 7, or the run says why not.
@@ -394,7 +395,7 @@ W's `FEATURES.md` should have at least the items below; the runner adds what is 
 it in a second round, in the same clean room. A missing item counts as a question of kind B if W
 could not tell from format.md that the choice is allowed.
 
-- Layout: raw and coded literals; `n` = 1, 7, 8, 9, `BLOCK - 1`, `BLOCK`; coded literals with each
+- Layout: raw and coded literals; `n` = 1, 7, 8, 9, `BLOCK - 4`, `BLOCK`; coded literals with each
   `code` 0 to 8, each `w` 5 to 12, also larger than the largest `s[j]` needs,
   `e` 0 and 1, each `dt` 1 to 3, streams with no literal (`n < 8`), a stream that ends at each of the
   8 bit positions of its last byte.
@@ -408,10 +409,13 @@ could not tell from format.md that the choice is allowed.
   `off < ml`, overlapping copies, with `off` 1, 2, 3 and 8.
 - Deltas: `dt = 3` with `last` 1, 2, 3, 4, 5, 7, 8 and a large one; the first literals with `p < x`;
   a delta whose `out[p - x]` is a byte of a match; deltas in the last sequence.
-- A block's own table: each code length 1 to 10, each run symbol `k` 1 to 9 with the smallest and
+- A block's own table: each code length 1 to 10, each run symbol `k` 1 to 8 with the smallest and
   largest `x`, a table whose last code is byte value 255, a table of only two byte values with codes
   of 1 bit, a table that ends at each bit position of its last byte.
 - Bits: `B` that ends at each of the 8 bit positions of its last byte; a block whose `B` is empty.
+
+[`tools/format-check/writer_items.py`](../tools/format-check/writer_items.py) counts the items on the
+blocks of W's `cr-gen`, parsed as `seqlz_ref.py` parses them, and names those below 100.
 
 ## Step 6: one valid and one invalid block per rule
 
@@ -667,13 +671,26 @@ valid), no difference. The blocks of `seqlz_test`, which `test/seqlz_ref_test.cp
 `seqlz_ref.c` only, the same way, with a hook in place of `seqlz_ref_decode()`: 53 199 blocks through the
 four decoders, and `seqlz_ref.py` on the 50 555 distinct ones (38 407 valid), no difference.
 
+Step 5, [`tools/format-check/writer_items.py`](../tools/format-check/writer_items.py) on 2 million blocks
+of W's `cr-gen`, 20 seeds of 100 000, each block decoded to W's page by all four decoders: of the 157
+items of the list, 154 are in at least 100 blocks, and every token is there in each form the list asks
+for: the 640 tokens with a code of their own with it and escaped, the other 2432 escaped. The three
+below 100 are corners that random choices hardly reach: `ll` 4092 (10 blocks), class 3 at offset 4092
+(3), and a run of 254, the longest `k = 8` can have in a complete table (0). Step 6's test has a block
+made by hand for each: `ll` 4092 in I1's `n = 4092`, the run of 254 in the own table of the byte values
+0 and 255, and class 3 at offset 4092 now next to V15. The list had two items no valid block has, `n =
+BLOCK - 1` and a run of `k = 9`; they are `BLOCK - 4` and `k` 1 to 8 now. W's own `FEATURES.md` counts
+179 items, not those of the list, which is why `writer_items.py` counts them again; no run did before.
+
 Step 6, [`test/seqlz_rules_test.cpp`](../test/seqlz_rules_test.cpp): a valid block and the same block
 broken by one rule for each rule of I's list that can be broken alone or with one other, R1 to R9
 (R8a to R8e on three own tables), R11 to R21, I1, and the valid cases V1, V5, V13, V14 and V15: 7
 test cases, 696 assertions, every decoder gives the list's verdict. R10 is no condition of its own in
 the list. Two planted differences made it fail: D without its check of the bits after the end of `B`
 (R12b and R20, 4 assertions), and `seqlz_decompress()` taking `dt = 4` (R6, all three spec decoders
-against it).
+against it). Since then the pair of R13 has the escaped token 3072 (step 9), and V15 the largest offset
+a block has, class 3 from 4092 back after 4092 literals, and 4093 as the invalid one: 712 assertions.
+Rejecting an offset equal to `|out|` in `seqlz_decompress()` made the new pair fail, at offset 4092.
 
 Step 8, [`tools/format-check/reject-sites.md`](../tools/format-check/reject-sites.md): each of the 20
 places where `seqlz_decompress()` rejects a block is a rule of I's list, but one that rejects a call
