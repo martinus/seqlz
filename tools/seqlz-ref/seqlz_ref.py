@@ -27,8 +27,9 @@ def spec_hashes():
     return dict(re.findall(r"^\| `(\w+)` \| `([0-9a-f]{64})` \|", (REPO / "docs" / "format.md").read_text(), re.MULTILINE))
 
 
-def load_tables():
-    """canonical codes of TOK, LL, ML, the 8 literal tables and OWN, after checking the lengths' SHA-256"""
+def load_lengths():
+    """{TOK, LL, ML, LIT, OWN: code lengths} from src/seqlz_lengths.h, LIT the 8 literal tables one after
+    the other, after checking their SHA-256 against docs/format.md"""
     src = (REPO / "src" / "seqlz_lengths.h").read_text()
 
     def field(name):
@@ -41,9 +42,17 @@ def load_tables():
     assert len(tables["TOK"]) == 3073 and len(tables["LL"]) == len(tables["ML"]) == 12 + P
     assert len(lit) == 8 * 256 and len(own) == 19
     hashes = spec_hashes()
-    for name, lengths in [*tables.items(), ("LIT", lit), ("OWN", own)]:
+    tables.update(LIT=lit, OWN=own)
+    for name, lengths in tables.items():
         if hashlib.sha256(bytes(lengths)).hexdigest() != hashes[name]:
             raise SystemExit(f"{name}: the table is not the one docs/format.md names")
+    return tables
+
+
+def load_tables():
+    """canonical codes of TOK, LL, ML, the 8 literal tables and OWN, after checking the lengths' SHA-256"""
+    tables = load_lengths()
+    lit, own = tables["LIT"], tables["OWN"]
     return (
         canonical(tables["TOK"], 11),
         canonical(tables["LL"], 8),

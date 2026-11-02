@@ -6,7 +6,6 @@ Each gets the tables as tables/<name>.bin, one per row of format.md's table of S
 the role's brief from docs/format-check.md, "Step 2: the briefs". A role that is a file instead is a
 trial: the room gets only that file, as BRIEF.md."""
 
-import hashlib
 import re
 import sys
 from pathlib import Path
@@ -21,30 +20,8 @@ import seqlz_ref
 
 
 def tables():
-    """{name: the code lengths as bytes}, from src/seqlz_lengths.h, checked against format.md's SHA-256"""
-    src = (REPO / "src" / "seqlz_lengths.h").read_text()
-
-    def field(name):
-        return seqlz_ref.numbers(re.search(r"\." + name + r"\s*=\s*\{([^}]*)\}", src).group(1))
-
-    own_at = src.index("seqlz_own_lengths[SEQLZ_OWN_SYMBOLS] =")
-    lit_at = src.index("seqlz_lit_sets[SEQLZ_LIT_SETS][256] =")
-    t = {
-        "TOK": field("token"),
-        "LL": field("ll"),
-        "ML": field("ml"),
-        "LIT": seqlz_ref.numbers(src[lit_at:own_at].split("=", 1)[1]),
-        "OWN": seqlz_ref.numbers(src[own_at:].split("=", 1)[1]),
-    }
-    hashes = seqlz_ref.spec_hashes()
-    if sorted(hashes) != sorted(t):
-        sys.exit(f"format.md names the tables {sorted(hashes)}, src/seqlz_lengths.h has {sorted(t)}")
-    out = {}
-    for name, lengths in t.items():
-        out[name] = bytes(lengths)
-        if hashlib.sha256(out[name]).hexdigest() != hashes[name]:
-            sys.exit(f"{name}: src/seqlz_lengths.h is not the table docs/format.md names")
-    return out
+    """{name: the code lengths as bytes}, checked against format.md's SHA-256 by seqlz_ref.py"""
+    return {name: bytes(lengths) for name, lengths in seqlz_ref.load_lengths().items()}
 
 
 def brief(role):

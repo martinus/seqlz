@@ -1,0 +1,34 @@
+  Bash: cat /room/BRIEF.md
+  Bash: ls -la && echo "---TABLES---" && ls -la tables/ && echo "---WC---" && wc -l seqlz.rst
+  Bash: cat -n seqlz.rst
+  Bash: cd /room/tables && for f in TOK LL ML LIT OWN; do echo "$f: $(wc -c < $f.bin) bytes, sha256=$(sha256sum $f.bin | cut -d' ' -f1)"; done
+  Bash: cd /room && cat seqlz.rst | grep -n "SHA-256\|c5f97d70\|ce0b70\|c39358\|43f552\|96312d"
+  Write: /room/gen_tables.py
+  Bash: python3 -I gen_tables.py && echo "---HEAD---" && head -5 seqlz_tables.h && echo "---OWN---" && grep -A2 "own_lengths" seqlz_tables.h | head -5
+  Bash: python3 -I -c " d=open('tables/LL.bin','rb').read(); print('LL',list(d)) d=open('tables/ML.bin','rb').read(); print('ML',list(d)) d=open('tables/TOK.bin','rb').read(); print('TOK[3072]=',d[3072],'nonz
+  Write: /room/cr_decode.h
+  Write: /room/cr_decode.c
+  Edit: /room/cr_decode.c
+  Edit: /room/cr_decode.c
+  Edit: /room/cr_decode.c
+  Edit: /room/cr_decode.c
+  Bash: cat > /tmp/smoke.c <<'EOF' #include "cr_decode.h" #include <stdio.h> #include <string.h> int main(void){ unsigned char out[4096]; /* The example: 4 KiB block of "ab" x2048 */ unsigned char ex[] = {0x0
+  Bash: python3 -I -c " d=open('tables/LIT.bin','rb').read() t0=d[0:256] coded=[i for i in range(256) if t0[i]] print('table0 codeable count',len(coded)) print('byte0 len',t0[0],'byte1 len',t0[1],'byte 0x41 l
+  Bash: python3 -I -c " d=open('tables/LIT.bin','rb').read() for c in range(8): t=d[256*c:256*c+256] cov=sum(1 for i in range(256) if t[i]) # kraft kr=sum(2.0**-(t[i]) for i in range(256) if t[i]) print('tabl
+  Write: /room/gen_tests.py
+  Bash: python3 -I gen_tests.py && grep -c "tv_in_" test_vectors.h | head -1 && grep "N_TVECS" test_vectors.h
+  Edit: /room/gen_tests.py
+  Bash: python3 -I gen_tests.py && grep "N_TVECS" test_vectors.h
+  Write: /room/test_seqlz.c
+  Edit: /room/test_seqlz.c
+  Write: /room/run_tests.sh
+  Bash: chmod +x run_tests.sh && ./run_tests.sh 2>&1 | tail -40
+  Bash: cat > /tmp/bench.c <<'EOF' #include "cr_decode.h" #include "test_vectors.h" #include <stdio.h> #include <time.h> static const unsigned char EX[]={0x02,0x00,0x61,0x62,0x23,0xf2,0xff,0xfb,0x60}; int mai
+  Bash: sed -i '1i #define _POSIX_C_SOURCE 199309L' /tmp/bench.c && cc -std=c11 -O2 -I. /tmp/bench.c cr_decode.c -o /tmp/bench && /tmp/bench
+  Edit: /room/gen_tests.py
+  Bash: ./run_tests.sh 2>&1 | tail -8
+  Write: /room/QUESTIONS.md
+  Bash: cc -std=c11 -O2 -Wall -Wextra -Werror -pedantic -I. -c cr_decode.c -o /tmp/cr.o && echo "plain pedantic build: clean" && ./run_tests.sh 2>&1 | tail -6
+  Bash: ls -la *.c *.h *.py *.sh *.md && echo "--- line counts ---" && wc -l cr_decode.c gen_tables.py gen_tests.py test_seqlz.c QUESTIONS.md
+32 tool calls, 0 marked
+result: 34 turns, 19.7 min, 4.653626 USD

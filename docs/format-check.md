@@ -128,7 +128,7 @@ test and told to follow this file, one phase at a time:
 
 | phase | steps | what to tell the runner | it stops with |
 | --- | --- | --- | --- |
-| 1 | 1 to 3 | "Run steps 1 to 3 of docs/format-check.md, D on `<model>`, R on `<model>`, W and I on `<model>`, then stop and show me the questions, sorted." | the questions of kind B and C, for the maintainer |
+| 1 | 1 to 3 | "Run steps 1 to 3 of docs/format-check.md, D on `<model>`, R on `<model>`, W and I on `<model>`, the run directories named as step 1 says, in `<runs>`, then stop and show me the questions, sorted." | the questions of kind B and C, for the maintainer |
 | 2 | the tools | "Build the tools of steps 4 to 11 of docs/format-check.md, for the clean-room results of phase 1's last round in <run directories>." | a pull request |
 | 3 | 4 to 6, 10 | "Run steps 4, 5, 6 and 10 of docs/format-check.md on the clean-room results of phase 1's last round, then stop and show me every difference and every claim that does not hold." | the differences and the claims, for the maintainer |
 | 4 | 7 | "Start step 7 of docs/format-check.md in the background and tell me how to see its state." | the fuzzers running |
@@ -156,6 +156,10 @@ makes the directory an agent works in, `<dir>/room`, with `make_room.py`, and st
 `<dir>` must be outside any checkout of the repository, so that the agent finds no `.git`, no
 instruction file of the project (`CLAUDE.md`, `.claude/`) and no memory of earlier sessions from it;
 the script refuses one inside.
+
+A round's directories are `<runs>/<start>-<role>`, `<start>` the UTC time the round starts as
+`YYYY-MM-DD-HHMMZ`, the same for its four agents, e.g. `2026-11-02-0620Z-D`; the runner's notes of
+the round are `<runs>/<start>-notes.md`. So the runs sort by time, and a round's runs stay together.
 
 What is in it, and nothing else:
 
@@ -201,8 +205,8 @@ run did not finish. The runner reads every marked call; one that reached outside
 count, it runs again in a new directory.
 
 Into the repository go per round only the record of why format.md changed: in
-`tools/format-check/runs/<date>-<role>/` the agent's `QUESTIONS.md`, `meta.txt` and `audit.txt`, and
-the runner's notes with every question and its kind, `<date>-notes.md`. The code, `FEATURES.md`,
+`tools/format-check/runs/<start>-<role>/` the agent's `QUESTIONS.md`, `meta.txt` and `audit.txt`, and
+the runner's notes with every question and its kind, `<start>-notes.md`. The code, `FEATURES.md`,
 `RULES.md`, `CLAIMS.md` and the transcript stay in the run directory, outside the repository: a round
 whose questions change format.md is replaced by the next one, and git would keep its files forever.
 The last round's code and lists go in, as written, with the tools of steps 4 to 11 that use them. A
@@ -517,6 +521,12 @@ longer the one that is checked. So: new clean rooms, new sessions, steps 1 to 7 
 and 10 for the changed rules, step 9 for the changed reject sites. Never the old session with the new
 text: it has the old reading in its context.
 
+That holds for a change of the format's text, what a decoder writer reads, the kernel's copy
+included. The parts of format.md between the comments "not in the kernel's copy" and "end" that are
+no rule of the format (the Status, "What the compressor writes", "How this file was checked") are
+fixed without a new round: a clean room that read the old sentence would not read the format any
+differently.
+
 A later change of the format, or a clearer sentence in format.md, needs at least: new D, W and I
 from step 1, steps 3 to 6, step 7 for 2 hours, and step 9 for the reject sites the change
 touched. The decoders of earlier runs stay in the repository and in the diff target only as long as
@@ -560,5 +570,24 @@ after a run past 255, the date of the format, a left over "4 KiB tables", a *Why
 the compressor writes". Three questions of kind A were asked by three agents each, and format.md
 answers them more plainly now too. No question of kind C or D. The questions, audits and the notes
 with every question and its kind are in [`tools/format-check/runs/`](../tools/format-check/runs).
+
+### 2nd November 2026, phase 1 again: seven places, two of them old ones
+
+Commit `8f95830`, the format.md of the first round's changes, claude 2.1.316. The same models,
+10.1 to 19.7 min each. All four runs count: the audit marked no call.
+
+64 questions: D 22, R 15, W 7, I 20. Eight of the first round's ten places of kind B were not asked
+again. Two came back in another form: the column of longest codes, now "codes of at most", read as
+the longest code again, and the end of a block's own table, which all agents now read right (kind A).
+Of kind B 7, again none a change of the format: that a block needing a bit past the end of `B` is
+invalid was written nowhere as a rule; the column of longest codes, now the real ones (`ML` 7 bits)
+and checked by `tools/seqlz-ref/check.sh`; which sentences the "Else" of a literal stream's rules
+covers; whether an offset is checked against `|out|` before or after the sequence's literals; a
+sentence of "How this file was checked" that called every token after the last sequence invalid,
+while token 49's code `0000` fits into the zeros at the end; names with two meanings near each other,
+`t`, `x` and `b`, renamed where it was cheap; and "every delta byte" in "How this file was checked",
+which nobody could tell the meaning of any more and which is gone. Three questions of kind A that
+three agents asked are answered more plainly too: `w` counts both bits and bytes, the column of
+offsets leaves out 0, and offset 0 is invalid. No question of kind C or D.
 
 Steps 4 to 11 have not run. Next: phase 1 again, with new clean rooms on the changed format.md.
