@@ -128,7 +128,7 @@ test and told to follow this file, one phase at a time:
 
 | phase | steps | what to tell the runner | it stops with |
 | --- | --- | --- | --- |
-| 1 | 1 to 3 | "Run steps 1 to 3 of docs/format-check.md, D on `<model>`, R on `<model>`, W and I on `<model>`, then stop and show me the questions, sorted." | the questions of kind B and C, for the maintainer |
+| 1 | 1 to 3 | "Run steps 1 to 3 of docs/format-check.md, D on `<model>`, R on `<model>`, W and I on `<model>`, the run directories named as step 1 says, in `<runs>`, then stop and show me the questions, sorted." | the questions of kind B and C, for the maintainer |
 | 2 | the tools | "Build the tools of steps 4 to 11 of docs/format-check.md, for the clean-room results of phase 1's last round in <run directories>." | a pull request |
 | 3 | 4 to 6, 10 | "Run steps 4, 5, 6 and 10 of docs/format-check.md on the clean-room results of phase 1's last round, then stop and show me every difference and every claim that does not hold." | the differences and the claims, for the maintainer |
 | 4 | 7 | "Start step 7 of docs/format-check.md in the background and tell me how to see its state." | the fuzzers running |
@@ -156,6 +156,10 @@ makes the directory an agent works in, `<dir>/room`, with `make_room.py`, and st
 `<dir>` must be outside any checkout of the repository, so that the agent finds no `.git`, no
 instruction file of the project (`CLAUDE.md`, `.claude/`) and no memory of earlier sessions from it;
 the script refuses one inside.
+
+A round's directories are `<runs>/<start>-<role>`, `<start>` the UTC time the round starts as
+`YYYY-MM-DD-HHMMZ`, the same for its four agents, e.g. `2026-11-02-0620Z-D`; the runner's notes of
+the round are `<runs>/<start>-notes.md`. So the runs sort by time, and a round's runs stay together.
 
 What is in it, and nothing else:
 
@@ -201,8 +205,8 @@ run did not finish. The runner reads every marked call; one that reached outside
 count, it runs again in a new directory.
 
 Into the repository go per round only the record of why format.md changed: in
-`tools/format-check/runs/<date>-<role>/` the agent's `QUESTIONS.md`, `meta.txt` and `audit.txt`, and
-the runner's notes with every question and its kind, `<date>-notes.md`. The code, `FEATURES.md`,
+`tools/format-check/runs/<start>-<role>/` the agent's `QUESTIONS.md`, `meta.txt` and `audit.txt`, and
+the runner's notes with every question and its kind, `<start>-notes.md`. The code, `FEATURES.md`,
 `RULES.md`, `CLAIMS.md` and the transcript stay in the run directory, outside the repository: a round
 whose questions change format.md is replaced by the next one, and git would keep its files forever.
 The last round's code and lists go in, as written, with the tools of steps 4 to 11 that use them. A
