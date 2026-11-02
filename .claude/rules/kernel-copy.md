@@ -16,8 +16,10 @@ follows these rules; open gaps in existing code: issues #151 to #157 (review of 
 - Kernel helpers, not own ones: `get_unaligned_le16()`, `sizeof_field()`, `prefetch()`,
   `L1_CACHE_BYTES`, `BIT()`. No inline assembly, not even per architecture: fix a kernel gap with its
   own kernel patch, carried in `tools/kernel-port/` and applied by `port.py` (`x86-prefetcht0.patch`).
-  That file is `git format-patch -1 --stdout` of branch `x86-prefetcht0-tip` (`gra cd moonnova`, on
-  tip/master): change code or changelog there with `git commit --amend`, then write the file again.
+  That file is `git format-patch --notes -1 --stdout` of branch `x86-prefetcht0-tip` (`gra cd
+  moonnova`, on tip/master): change code or changelog there with `git commit --amend`, then write the
+  file again. Its git note is the Claude Code disclosure below `---` (Summit view, kernel `1e035297ffda`:
+  in the cover letter, not the changelog); `notes.rewriteRef` keeps it across amend and rebase.
   `src/linux/*.h` (not `seqlz.h`, the interface) = kernel headers outside the kernel; may do what such
   a patch does. `src/` includes exactly the kernel headers the kernel copy includes; Linux 4.14's gaps
   are in `tools/zram-phone/compat/`.
