@@ -199,6 +199,8 @@ TEST_CASE("format rules: the raw example of docs/format.md, and each rule that o
         CHECK_FALSE(valid(*r, with(example, 8, 0x61)));
     }
     SUBCASE("R13 an escaped token of 3072 or more") {
+        // 0010 and then 3072 in 12 bits, the edge, and 4082
+        CHECK_FALSE(valid(*r, with(with(example, 4, 0x2c), 5, 0x00)));
         CHECK_FALSE(valid(*r, with(example, 4, 0x2f)));
     }
     SUBCASE("R14 offset 0, the bit of class 1 is 0") {
