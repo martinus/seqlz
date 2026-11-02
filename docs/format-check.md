@@ -461,6 +461,8 @@ The runner lists every place in `src/seqlz_decompress.c` and `src/seqlz_decompre
 - a rule without a reject site is a rule that `src/` does not check (kind C), or one that follows from
   other checks; then the run's notes say which.
 
+The map is [`tools/format-check/reject-sites.md`](../tools/format-check/reject-sites.md).
+
 Then line and branch coverage (`llvm-cov`, a clang build with `-fprofile-instr-generate
 -fcoverage-mapping`) of the two files, of `seqlz_ref.c` and of D's and R's decoders, over all blocks
 of steps 4 to 7. Every line and every branch reached, or the notes say why not, e.g. a check that a
@@ -492,8 +494,9 @@ surviving mutant is either equivalent (the notes show why no block tells it apar
 
 ## Step 10: the numbers of format.md
 
-Every row of I's `CLAIMS.md` is checked, by `tools/format-check/claims.py` (to be written) where a
-program can, by a short argument in the run's notes where not. At least these:
+Every row of I's `CLAIMS.md` is checked, by [`tools/format-check/claims.py`](../tools/format-check/claims.py)
+where a program can, by a short argument where not; `claims.py` prints both, and which claims stay
+open. `tools/seqlz-ref/check.sh` runs it, so CI holds the claims on every push. At least these:
 
 - the table of tables: the symbols of each table, its longest code, and that every table is complete;
 - "only 2048 codes of 11 bits, fewer than the 3072 tokens": the number of tokens with a code of their
@@ -512,7 +515,9 @@ program can, by a short argument in the run's notes where not. At least these:
 The blocks of steps 4 (the made-up part) and 6 through `seqlz_decompress()` on s390x and 32-bit x86, as
 CI's endian job does with `test/seqlz_endian.c`: the verdicts and the SHA-256 of every block the same
 as on x86-64. The clean-room decoders too, if they build there; a difference of theirs between CPUs is
-a bug in them, not in format.md.
+a bug in them, not in format.md. [`tools/format-check/cross.sh`](../tools/format-check/cross.sh)
+builds `seqlz-all-decoders` with all four decoders for 32-bit x86 and, in podman under qemu, for s390x,
+and runs it on the pages it gets.
 
 ## What a difference means
 
@@ -651,4 +656,23 @@ the list. Two planted differences made it fail: D without its check of the bits 
 (R12b and R20, 4 assertions), and `seqlz_decompress()` taking `dt = 4` (R6, all three spec decoders
 against it).
 
-Not run yet: the long AFL++ runs of step 7, steps 8 to 11.
+Step 8, [`tools/format-check/reject-sites.md`](../tools/format-check/reject-sites.md): each of the 20
+places where `seqlz_decompress()` rejects a block is a rule of I's list, but one that rejects a call
+without scratch memory, which is no rule of the format; each rule but R10, which the list has as no
+condition of its own, has such a place. So `src/` has no rule that format.md leaves out, and format.md
+none that `src/` does not check. The coverage of step 8 is still to run, on the blocks of step 7's queue.
+
+Step 10, [`tools/format-check/claims.py`](../tools/format-check/claims.py), in `tools/seqlz-ref/check.sh`:
+of I's 80 claims 44 hold by the program, 25 by an argument or another step, 11 are open, none is wrong.
+The open ones are measurements on a corpus or of speed (C11, C13, C15, C30, C41, C45, C50, C56, C62,
+C63) and the logs of old runs (C79); step 10 asks for those numbers measured again or the sentences
+changed, which is still to do. A changed page count in either copy of "Where the tables come from"
+made `claims.py` fail.
+
+Step 11, [`tools/format-check/cross.sh`](../tools/format-check/cross.sh): on 32-bit x86 and on s390x
+under qemu, the pages of `tools/seqlz-worst/pages/` and 4000 of two of the samples, 2000 of a desktop's
+zram and 2000 of a phone's: 12 024 blocks, 2 017 927 through every decoder, no difference on either,
+and the same counts as on x86-64. The rule pairs of step 6 are a C++ test and did not run there.
+
+Running: step 7's AFL++ run, 24 instances since 09:18 UTC on 2nd November, 6 on each of `decode`,
+`roundtrip`, `diff` and `gen`. Not run yet: step 9, the coverage of step 8, the open claims of step 10.
