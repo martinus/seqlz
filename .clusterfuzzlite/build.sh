@@ -7,12 +7,24 @@
 HOSTCC=clang tools/gen-tables/gen-tables.sh "$WORK/seqlz_tables.c"
 # the codec: every src/seqlz_*.c, a glob that $codec expands where it is used
 codec="src/seqlz_*.c $WORK/seqlz_tables.c"
-for t in decode roundtrip diff encode; do
+# the clean-room agents' decoders D and R and writer W, as they wrote them, each an object of its own
+# with D's and R's cr_decode() renamed, see fuzz/decoders.h
+cr=tools/format-check/cleanroom
+# shellcheck disable=SC2086
+{
+    $CC $CFLAGS -std=c11 -Dcr_decode=cr_decode_d -c "$cr/D/src/cr_decode.c" -o "$WORK/cleanroom_d.o"
+    $CC $CFLAGS -std=c11 -Dcr_decode=cr_decode_r -c "$cr/R/seqlz.c" -o "$WORK/cleanroom_r.o"
+    $CC $CFLAGS -std=c11 -c "$cr/W/cr.c" -o "$WORK/cleanroom_w.o"
+}
+decoders="-Itools/seqlz-ref tools/seqlz-ref/seqlz_ref.c $WORK/cleanroom_d.o $WORK/cleanroom_r.o"
+for t in decode roundtrip diff encode gen; do
     extra=""
-    if [ "$t" = diff ]; then
-        # the decoder written from docs/format.md
-        extra="-Itools/seqlz-ref tools/seqlz-ref/seqlz_ref.c"
-    fi
+    case $t in
+    # the decoders written from docs/format.md
+    diff) extra=$decoders ;;
+    # and the writer whose blocks they decode
+    gen) extra="$decoders -I$cr/W $WORK/cleanroom_w.o" ;;
+    esac
     # shellcheck disable=SC2086
     $CC $CFLAGS -Isrc $extra "fuzz/seqlz_${t}_fuzz.c" $codec -o "$OUT/seqlz_${t}_fuzz" $LIB_FUZZING_ENGINE
 done
@@ -33,3 +45,5 @@ cp "$OUT/seqlz_decode_fuzz_seed_corpus.zip" "$OUT/seqlz_diff_fuzz_seed_corpus.zi
 printf '[libfuzzer]\nmax_len = 8192\n' > "$OUT/seqlz_decode_fuzz.options"
 printf '[libfuzzer]\nmax_len = 8192\n' > "$OUT/seqlz_diff_fuzz.options"
 printf '[libfuzzer]\nmax_len = 4097\n' > "$OUT/seqlz_roundtrip_fuzz.options"
+# the choices of a writer, as fuzz/afl.sh gives them
+printf '[libfuzzer]\nmax_len = 4096\n' > "$OUT/seqlz_gen_fuzz.options"

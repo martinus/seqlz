@@ -3,9 +3,10 @@
 [format.md](format.md) says that a decoder can be written from it alone, and that it says which
 compressed blocks are valid. This file is the procedure that checks both claims, written so that
 anyone can run it again: who writes what, from which files, what runs against what, and when the check
-has passed. Phase 1 has run once, see [Runs](#runs). Of the tools it names, only those of step 1 exist,
-[`tools/format-check/`](../tools/format-check); the others come after phase 1, see
-[How to run it](#how-to-run-it). Results go to [Runs](#runs) at the end.
+has passed. Phase 1 has ended, see [Runs](#runs). Of the tools it names, those of step 1 exist,
+[`tools/format-check/`](../tools/format-check), and the fuzz targets of steps 5 and 7, with the last
+round's code in [`tools/format-check/cleanroom/`](../tools/format-check/cleanroom); the others are still
+to come, see [How to run it](#how-to-run-it). Results go to [Runs](#runs) at the end.
 
 ## Contents
 
@@ -377,10 +378,9 @@ With 200 000 pages that is about 2 * 10^7 blocks; the runner states the count.
 ## Step 5: valid blocks by construction
 
 W's `cr_write()` makes a valid block and the block it decodes to from any bytes, which turns it into a
-fuzz target: `fuzz/seqlz_gen_fuzz.c` (to be written) takes the input as choice bytes, has W write a
-block, and checks that every decoder accepts it and gives W's block. Then it uses the rest of the
-input to damage the block (a cut, bits flipped, bytes changed) and checks that the decoders agree on
-the damaged one. It starts in step 4's run with `cr-gen`'s blocks, and runs in step 7 with the other
+fuzz target: `fuzz/seqlz_gen_fuzz.c` takes the input as choice bytes, has W write a block, and checks
+that every decoder accepts it and gives W's block. Then the last three bytes of the input damage the
+block at one place, a bit flipped or a cut, and it checks that the decoders agree on the damaged one. It starts in step 4's run with `cr-gen`'s blocks, and runs in step 7 with the other
 targets.
 
 Where W and the decoders differ on an undamaged block, the decoder is not automatically right: W read
@@ -425,8 +425,10 @@ end) get their pair anyway, from the inventory's wording.
 
 ## Step 7: coverage-guided fuzzing
 
-`fuzz/seqlz_diff_fuzz.c` gets D's and R's decoders next to `seqlz_ref.c`: any input, every decoder,
-the same verdict and block. `fuzz/seqlz_gen_fuzz.c` from step 5 runs next to it. Seeds: the made-up
+`fuzz/seqlz_diff_fuzz.c` has D's and R's decoders next to `seqlz_ref.c` (`fuzz/decoders.h`): any input,
+every decoder, the same verdict and block. `fuzz/seqlz_gen_fuzz.c` from step 5 runs next to it, in
+`fuzz/smoke.sh` in CI and in `fuzz/afl.sh`. Both build the agents' code with the fuzzers' sanitizers but
+without the repository's warning flags, and rename D's and R's `cr_decode()`, so it stays as written. Seeds: the made-up
 blocks of steps 4 to 6, never blocks from the samples, which would put page contents into AFL's queue.
 A dictionary for AFL++ with the values of byte 2 (`t`) and of `dt`.
 
@@ -615,3 +617,16 @@ after the last sequence that are not 0, e.g. a token" in "How this file was chec
 audits and notes of the three rounds are in [`tools/format-check/runs/`](../tools/format-check/runs).
 
 Next: phase 2, the tools of steps 4 to 11 on round 3's code.
+
+### 2nd November 2026, phase 2: D, R and W against `src/`, no difference so far
+
+Round 3's code is in [`tools/format-check/cleanroom/`](../tools/format-check/cleanroom), in
+`seqlz_diff_fuzz` (D and R next to `seqlz_decompress()` and `seqlz_ref.c`) and the new
+`seqlz_gen_fuzz` (W's blocks through all four). A first run before they were in the repository, the
+same two targets with libFuzzer, ASan and UBSan, 6 workers each for 10 minutes on a Ryzen 9 7950X:
+115.5 million inputs, no difference and no crash. Then 30 s of each with ASan and UBSan and with MSan
+in `fuzz/smoke.sh`: none either. A planted difference, D without its check of the bits after the end
+of `B`, made both targets fail in seconds, with "seqlz_decompress invalid, seqlz_ref.c invalid, cleanroom
+D valid, cleanroom R invalid".
+
+Not run yet: the long AFL++ runs of step 7, steps 4, 6 and 8 to 11.
