@@ -104,6 +104,21 @@ target_link_libraries(seqlz-worst PRIVATE seqlz seqlz_warnings m)
 # The fuzz targets of fuzz/, in libFuzzer's interface: built with clang they are libFuzzer binaries,
 # built with AFL++'s afl-clang-lto as CC they run under afl-fuzz. seqlz itself gets the coverage
 # instrumentation too, in a library of its own; make_seeds uses the plain one.
+# The clean-room agents' code of docs/format-check.md, tools/format-check/cleanroom/, as they wrote it:
+# the decoders D and R, whose cr_decode() is renamed, and the writer W. Without our warnings, with the
+# sanitizers.
+set(cleanroom tools/format-check/cleanroom)
+add_library(seqlz_cleanroom_d STATIC ${cleanroom}/D/src/cr_decode.c)
+target_compile_definitions(seqlz_cleanroom_d PRIVATE cr_decode=cr_decode_d)
+add_library(seqlz_cleanroom_r STATIC ${cleanroom}/R/seqlz.c)
+target_compile_definitions(seqlz_cleanroom_r PRIVATE cr_decode=cr_decode_r)
+add_library(seqlz_cleanroom_w STATIC ${cleanroom}/W/cr.c)
+target_include_directories(seqlz_cleanroom_w PUBLIC ${cleanroom}/W)
+foreach(lib seqlz_cleanroom_d seqlz_cleanroom_r seqlz_cleanroom_w)
+    target_compile_options(${lib} PRIVATE -std=c11)
+    target_link_libraries(${lib} PRIVATE seqlz_sanitize)
+endforeach()
+
 option(SEQLZ_FUZZ "Build the fuzz targets of fuzz/, needs clang or afl-clang-lto" OFF)
 if(SEQLZ_FUZZ)
     add_library(seqlz_fuzz STATIC ${SEQLZ_SOURCES})
@@ -120,21 +135,12 @@ if(SEQLZ_FUZZ)
         target_link_libraries(${target} PRIVATE seqlz_fuzz seqlz_warnings)
     endforeach()
     # the decoders written from docs/format.md, instrumented like the target: seqlz_ref.c, and the
-    # clean-room agents' D and R as they wrote them, without our warnings, their cr_decode() renamed
-    set(cleanroom tools/format-check/cleanroom)
-    add_library(seqlz_cleanroom_d STATIC ${cleanroom}/D/src/cr_decode.c)
-    target_compile_definitions(seqlz_cleanroom_d PRIVATE cr_decode=cr_decode_d)
-    add_library(seqlz_cleanroom_r STATIC ${cleanroom}/R/seqlz.c)
-    target_compile_definitions(seqlz_cleanroom_r PRIVATE cr_decode=cr_decode_r)
-    add_library(seqlz_cleanroom_w STATIC ${cleanroom}/W/cr.c)
-    target_include_directories(seqlz_cleanroom_w PUBLIC ${cleanroom}/W)
-    foreach(lib seqlz_cleanroom_d seqlz_cleanroom_r seqlz_cleanroom_w)
-        target_compile_options(${lib} PRIVATE -std=c11)
-        if(NOT CMAKE_C_COMPILER MATCHES "afl-")
+    # clean-room agents' D and R
+    if(NOT CMAKE_C_COMPILER MATCHES "afl-")
+        foreach(lib seqlz_cleanroom_d seqlz_cleanroom_r seqlz_cleanroom_w)
             target_compile_options(${lib} PRIVATE -fsanitize=fuzzer-no-link)
-        endif()
-        target_link_libraries(${lib} PRIVATE seqlz_sanitize)
-    endforeach()
+        endforeach()
+    endif()
     foreach(target seqlz_diff_fuzz seqlz_gen_fuzz)
         target_sources(${target} PRIVATE tools/seqlz-ref/seqlz_ref.c)
         target_include_directories(${target} PRIVATE tools/seqlz-ref)
@@ -154,6 +160,12 @@ if(SEQLZ_FUZZ)
     target_compile_definitions(seqlz_sequence_cost_fuzz PRIVATE COST_SEQUENCES)
     add_executable(seqlz-fuzz-seeds fuzz/make_seeds.c)
     target_link_libraries(seqlz-fuzz-seeds PRIVATE seqlz seqlz_warnings)
+else()
+    # step 4 of docs/format-check.md: every decoder on the compressor's blocks of a corpus, and on them
+    # damaged
+    add_executable(seqlz-all-decoders tools/format-check/all_decoders.c tools/seqlz-ref/seqlz_ref.c)
+    target_include_directories(seqlz-all-decoders PRIVATE fuzz tools/seqlz-ref)
+    target_link_libraries(seqlz-all-decoders PRIVATE seqlz seqlz_cleanroom_d seqlz_cleanroom_r seqlz_warnings)
 endif()
 
 include(cmake/kernel_codecs.cmake)
