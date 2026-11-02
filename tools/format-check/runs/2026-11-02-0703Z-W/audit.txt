@@ -1,0 +1,40 @@
+  Bash: cat /room/BRIEF.md; ls -la /room
+  Bash: cd /room; cat format.md; ls -la tables; sha256sum tables/*
+  Read: /room/format.md
+  Bash: cd /room; ls -la tables; sha256sum tables/*; for f in tables/*; do echo $f; python3 -c " import sys,collections d=open('$f','rb').read() print(len(d), sorted(collections.Counter(d).items())) if len(d)
+  Bash: cd /room; python3 -c " d=open('tables/TOK.bin','rb').read(); print('esc len',d[3072]); print('coded tokens',sum(1 for x in d[:3072] if x)) import collections print(collections.Counter((t>>9) for t in 
+  Write: /room/QUESTIONS.md
+  Write: /room/mktables.c
+  Write: /room/cr.h
+  Write: /room/cr.c
+  Bash: python3 - <<'EOF' s=open('cr.c').read() s=s.replace(" unsigned char own_cnt_buf[19] = {0}; (void)own_cnt_buf;\n","") s=s.replace(" static unsigned char seqbuf[16384];"," unsigned char seqbuf[16384];")
+  Write: /room/cr-check.c
+  Write: /room/cr-gen.c
+  Write: /room/Makefile
+  Bash: make 2>&1 | grep -v '^cc' ; ./cr-check && mkdir -p /tmp/g && ./cr-gen 1 2000 /tmp/g > /tmp/g.txt && ./cr-check /tmp/g 2000
+  Bash: cat >> /tmp/dbg.py <<'EOF' EOF for k in 0 1 3 4; do head -c 2 /tmp/g/$k.z | xxd | head -1; ls -l /tmp/g/$k.z | awk '{print $5}'; done
+  Bash: sed -i 's|if (bl != BLOCK \|\| memcmp(out, want, BLOCK)) { if (bad++ < 10) printf("%ld: decodes to other bytes\\n", k); }|if (bl != BLOCK \|\| memcmp(out, want, BLOCK)) { int q = 0; while (q < BLOCK \
+  Bash: xxd /tmp/g/1.block | tail -3; xxd /tmp/g/1.z | head -5
+  Bash: sed -n 185,196p cr-check.c
+  Bash: cat > /tmp/dump.c <<'EOF' #include <stdio.h> #include "../room/cr.h" EOF sed -i 's| if (bl != BLOCK| if (getenv("DUMP")) { for (int q = 4080; q < BLOCK; q++) printf("%02x/%02x ", out[q], want[q]); pri
+  Bash: sed -i 's|#define COPY(k) do { for (unsigned q = 0; q < (k); q++) { |#define COPY(k) do { unsigned kk_ = (k); for (unsigned q = 0; q < kk_; q++) {|' cr-check.c && grep -n "define COPY" cr-check.c && m
+  Bash: sed -i '/getenv("DUMP")/d' cr-check.c && make cr-check >/dev/null && column -c 200 /tmp/g.txt
+  Bash: pr -4 -t -w 160 /tmp/g.txt
+  Bash: grep -n "pick_bucket\|llcap\|mlcap\|for (int pass" cr.c
+  Read: /room/cr.c
+  Bash: python3 - <<'EOF' s=open('cr.c').read() old=s[s.index("/* picks a bucket among buckets[0..cap)"):s.index("/* ---- bits, most significant first")] new='''/* picks one of the buckets[0..cap) that meet [
+  Bash: python3 - <<'EOF' s=open('cr.c').read() a=s.index(" int m = 2 + (int)pick(r, 255);") b=s.index(" int lastv = 255;") new=''' int m = (int)pick_log(r, 2, 256); /* byte values with a code, 2 to 256 */ un
+  Bash: cat > /tmp/bound.c <<'EOF' #include <stdio.h> #include "/room/cr_tables.h" static int vb(const unsigned char *L, int v){ if(v<16) return L[v]; int b=0; while((2<<b)<=v) b++; return L[b+12]+b; } static
+  Bash: python3 - <<'EOF' s=open('cr.h').read() a=s.index(" * cap: every block"); b=s.index("#define CR_MAX_BLOCK") s=s[:a]+''' * cap: every block this writer makes is at most CR_MAX_BLOCK = 5407 bytes, so ca
+  Bash: sed -i 's|or 0 if cap is too small (dst is then left partly written).|or 0 if cap is too small (dst is then not written).|' cr.h && cat > /tmp/edge.c <<'EOF' #include "/room/cr.h" #include <stdio.h> #
+  Bash: cd /tmp && rm -rf m1 m2 && mkdir m1 m2 && python3 -I - <<'EOF' import random,shutil random.seed(1) for k in range(2000): z=open(f'/tmp/g/{k}.z','rb').read(); b=open(f'/tmp/g/{k}.block','rb').read() op
+  Bash: pr -4 -t -w 170 /tmp/g.txt
+  Bash: python3 - <<'EOF' c=open('cr.c').read() c=c.replace(""" int llcap = pick(r, 2) ? 1 + (int)pick(r, 39) : 39; /* half the blocks: every bucket */ int mlcap = pick(r, 2) ? 1 + (int)pick(r, 55) : 55;""","
+  Bash: cat >> QUESTIONS.md <<'EOF' ## 8. Where the bits of `value(LL)` go: before or after the offset bits Section: *Decoding* (and *Tokens*). > token: ll, mlf, c > x = read(offset bits of class c) > off = (
+  Bash: python3 - <<'EOF' import re s=open('QUESTIONS.md').read() parts=re.split(r'(?m)^## ', s) head, qs = parts[0], parts[1:] keep=[] for q in qs: t=q.split('\n',1)[0] if any(t.startswith(p) for p in ('6.',
+  Write: /room/FEATURES.md
+  Bash: sed -i 's|`OWN_LEN + k - 1` bits, at most 8 per byte value)|`OWN[9 + k] + k - 1` bits, at most 8 per byte value)|' FEATURES.md && make clean >/dev/null && make 2>&1 | grep -iE "warning|error"; rm -rf 
+  Bash: cd /tmp/g && find . -name '*.z' -printf '%s\n' | sort -n | tail -1; cd /room; cc -std=c11 -Wall -Wextra -pedantic -fsanitize=address,undefined -o /tmp/gen-asan cr-gen.c cr.c && rm -rf /tmp/a && mkdir 
+  Bash: sed -i 's|The largest block in\n100000|X|' FEATURES.md && python3 - <<'EOF' s=open('/room/FEATURES.md').read() s=s.replace("""The largest block in 100000 from `cr-gen` was smaller (about 5 KB).""","""
+38 tool calls, 0 marked
+result: 39 turns, 13.2 min, 2.6815583999999997 USD

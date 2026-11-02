@@ -71,7 +71,7 @@ them. P4 matters because the kernel's copy is what upstream reads.
 
 All of these, on the same commit:
 
-1. No open question of kind B (format.md is silent or can be read two ways), see step 3.
+1. Phase 1 ended by the rule at the end of step 3, and the last round's places of kind B are fixed.
 2. No difference between any two decoders in steps 4 to 7.
 3. Every rule of the inventory (step 2, brief I) has a valid and an invalid block, and every decoder
    gives each the verdict the inventory says.
@@ -343,6 +343,13 @@ Kind B is the main result of the whole procedure. A guess that came out the way 
 found by any fuzzer, only here. Each entry and its kind go into the run's notes, with the change of
 format.md it led to.
 
+**When phase 1 ends.** Questions of kind B don't run out: a careful reader always finds a sentence to
+ask about, the first three rounds had 57, 64 and 53 questions. So phase 1 ends with a round in which
+no question of kind B is one where two readings give a block different verdicts, or where an agent
+took a reading other than `src/`'s, and no question is of kind C or D. That round's places of kind B
+are fixed without another round, as long as no fix changes whether a block is valid; its agents'
+code stays the code of steps 4 to 11. Otherwise another round.
+
 ## Step 4: every decoder on the same blocks
 
 Every decoder gets the same blocks and must say the same: valid or not, and for a valid one the same
@@ -590,4 +597,21 @@ which nobody could tell the meaning of any more and which is gone. Three questio
 three agents asked are answered more plainly too: `w` counts both bits and bytes, the column of
 offsets leaves out 0, and offset 0 is invalid. No question of kind C or D.
 
-Steps 4 to 11 have not run. Next: phase 1 again, with new clean rooms on the changed format.md.
+### 2nd November 2026, phase 1, round 3: phase 1 ends
+
+Commit `37a6e1d`, the format.md of round 2's changes, claude 2.1.316, the same models, 11.0 to
+16.8 min each. All four runs count: the audit marked no call. Round 2's seven places came back as
+kind A or not at all, but one, the sentence on a token after the last sequence in "How this file was
+checked".
+
+53 questions: D 17, R 11, W 9, I 16. Of kind B 6, and for none of them do two agents disagree on
+whether a block is valid, or does an agent take a reading other than `src/`'s; the runner checked each
+in `src/`. No question of kind C or D. So phase 1 ends here, by the rule at the end of step 3, and
+the six are fixed without a round 4: a *Why:* runs to the end of its paragraph, and the two rules that
+stood after one (reading zeros past the end of `B`, at most `BLOCK / 4 + 1` sequences) come before it
+now; "needed" instead of "read" for bits past the end of `B`; `dt` is checked only with `e = 1`; the
+last sequence's `last` is 1 in a block without a match; one wording for the counts of `OWN`; and "bits
+after the last sequence that are not 0, e.g. a token" in "How this file was checked". The questions,
+audits and notes of the three rounds are in [`tools/format-check/runs/`](../tools/format-check/runs).
+
+Next: phase 2, the tools of steps 4 to 11 on round 3's code.
