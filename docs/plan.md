@@ -951,7 +951,9 @@ phase does not start from zero.
   distribution, both architectures, paired regression analysis per page, the state of the fuzzing,
   and the workspace against the other codecs.
 - The series, as `tools/kernel-port/series.sh` writes it: (1) `x86-prefetcht0.patch`, so that clang
-  builds keep `prefetch()` on x86-64; (2) `lib/seqlz/` on blocks of 4 KiB (§3.5), the spec as
+  builds keep `prefetch()` on x86-64, sent to tip on its own on 3 Nov 2026
+  (<https://lore.kernel.org/20261103060658.696994-1-martin.ankerl@gmail.com/>), the cover letter
+  links it; (2) `lib/seqlz/` on blocks of 4 KiB (§3.5), the spec as
   `Documentation/staging/seqlz.rst` next to `lzo.rst` and `xz.rst`, and `MAINTAINERS`; (3) its KUnit
   tests; (4) the zram backend with Kconfig, Makefile and `zram.rst`, for 4 KiB pages. Each patch builds
   and passes checkpatch by itself. 16 KiB pages come in a second series, in one of the two ways of §3.5.
