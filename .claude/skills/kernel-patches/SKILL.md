@@ -35,6 +35,12 @@ Copy and check off:
       `--base` is that tree's commit, named in the cover letter; changelogs in `tools/kernel-port/series/`
 ```
 
+## Sending
+
+- Test send to self: a separate `git format-patch` without `--to`/`--cc`. `git send-email --to=me`
+  adds to the file's own To: header and `--suppress-cc=all` leaves To: alone (3 Nov 2026: a "test"
+  of the x86 patch went to the x86 maintainers).
+
 ## After sending
 
 - Resend policy: never one version per bot (Sashiko) finding or per mail. Wait for human design
