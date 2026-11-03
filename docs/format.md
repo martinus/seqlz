@@ -510,28 +510,23 @@ than 1 to 3, are invalid now and free for a format that has to tell itself apart
 <!-- not in the kernel's copy -->
 ## How this file was checked
 
-`tools/seqlz-ref/seqlz_ref.py` decodes bit by bit, from this file alone, and agreed with
-`seqlz_decompress()` on every input it was given, valid and damaged blocks, also of the 16 KiB blocks
-the format had until 1st November 2026; the numbers are in
-[explored-designs.md](explored-designs.md#the-format-written-down-one-set-of-tables-and-stream-sizes-that-hold).
-
-`tools/seqlz-ref/seqlz_ref.c` is the same in C, also from this file alone, fast enough to be fuzzed:
-`fuzz/seqlz_diff_fuzz.c` gives any input to both decoders and fails when they disagree, whether a block
-is valid or what it decodes to. `fuzz/smoke.sh` runs it for a minute in CI, `fuzz/afl.sh` for longer:
-on 6 October, 10 AFL++ instances for 2 hours, 1.7 billion inputs, found no difference, and on 9 October,
-with the encoder and decoder of `5342a9b`, 12 instances for 2 hours, 1.94 billion inputs on this target,
-found none either. Both runs were before literals as deltas; for those, the CI's seeds include blocks with
-`dt` 1 and 3, and on 22nd October both decoders got every cut and random damage of
-15 000 pages of 4 KiB from zram dumps and 2088 of 16 KiB from a process's resident pages, 5.8 million
-blocks in all, and agreed on every one.
+`tools/seqlz-ref/seqlz_ref.py` decodes bit by bit, from this file alone, and `tools/seqlz-ref/seqlz_ref.c`
+is the same in C, fast enough to be fuzzed: `fuzz/seqlz_diff_fuzz.c` gives any input to both and to
+`seqlz_decompress()`, and fails when they disagree, whether a block is valid or what it decodes to.
+`fuzz/smoke.sh` runs it for a minute in CI, `fuzz/afl.sh` for longer.
 
 `test/seqlz_ref_test.cpp` checks the example above, the compressor's blocks at every level, damaged
 blocks, blocks whose literals are deltas of each kind, and blocks made by hand for the rules that damage
 rarely reaches: the codes above 8 and the values of `dt` other than 1 to 3, a literal code outside its
 stream, a block of literals only, bits after the last sequence that are not 0, e.g. a token, which is
 invalid, and blocks' own tables that overfill the code space, name a byte value above 255 or have bits
-after their end.
+after their end. `test/seqlz_rules_test.cpp` has a valid and an invalid block for each rule of the
+clean-room list of rules.
 
-[format-check.md](format-check.md) is the procedure to check this file again, more thoroughly: decoders
-written from it in a clean room, by agents that have never seen `src/`, and fuzzed against it.
+The reference decoders changed with `src/` in the same commits, so [format-check.md](format-check.md)
+checks this file again with programs written in a clean room, by agents that never saw `src/`. On 2nd
+November 2026 two decoders, one from this file and one from the kernel's copy, and a writer that makes
+every block this file allows, against `seqlz_decompress()` and `seqlz_ref.c`: 25 billion inputs on
+x86-64, 32-bit x86 and s390x, no difference. On the way 26 places of this file changed, none of them the
+format. [format-check-results.md](format-check-results.md) has the numbers.
 <!-- end -->
