@@ -274,6 +274,27 @@ TEST_CASE("format rules: V15 and R15, an offset of |out| and one more") {
             CHECK_FALSE(valid(*r, c));
         }
     }
+    // the largest offset a block has: 4092 literals, then a match of 4 from 4092 back, class 3, which
+    // random blocks of the clean-room writer W hardly ever reach; from 4093 back is past the start
+    auto literals = bytes(SEQLZ_BLOCK_SIZE - 4U);
+    for (unsigned int k = 0; k < literals.size(); ++k) {
+        literals[k] = static_cast<unsigned char>(k * 7);
+    }
+    for (unsigned int off : {SEQLZ_BLOCK_SIZE - 4U, SEQLZ_BLOCK_SIZE - 3U}) {
+        CAPTURE(off);
+        auto w = bit_writer{};
+        w.token(r->tok, 15 + 16 * 0 + 512 * 3);
+        w.put(off, 12);
+        w.value(r->ll, SEQLZ_BLOCK_SIZE - 4U - 15U);
+        auto const c = raw_block(literals, w.bytes);
+        if (off == SEQLZ_BLOCK_SIZE - 4U) {
+            auto page = literals;
+            page.insert(page.end(), literals.begin(), literals.begin() + 4);
+            CHECK(valid(*r, c, &page));
+        } else {
+            CHECK_FALSE(valid(*r, c));
+        }
+    }
 }
 
 TEST_CASE("format rules: V1, a token escaped although it has a code") {
