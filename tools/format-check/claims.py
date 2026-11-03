@@ -178,7 +178,8 @@ cr_h = (REPO / "tools" / "format-check" / "cleanroom" / "W" / "cr.h").read_text(
 w_max = int(re.search(r"#define CR_MAX_BLOCK (\d+)", cr_h).group(1))
 claim("C77", w_max <= 2 * BLOCK, f"the clean-room writer W bounds every block it can write at {w_max} bytes")
 claim("C78", sum(1 for t in range(256) if t & 15 > 8) == 112 and 256 - 3 == 253, "112 values of byte 2, 253 of dt")
-claim("C79", "open", "the logs of those runs")
+claim("C79", "measured", "the old runs' numbers are gone; the section names the check of 2nd November, whose "
+      "numbers are in format-check.md's Runs and format-check-results.md")
 claim("C80", "argued", "the decoder's rules have not changed since 689dad5 of 22nd October; 1st November only took "
       "the 16 KiB blocks out")
 

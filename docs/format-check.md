@@ -3,10 +3,10 @@
 [format.md](format.md) says that a decoder can be written from it alone, and that it says which
 compressed blocks are valid. This file is the procedure that checks both claims, written so that
 anyone can run it again: who writes what, from which files, what runs against what, and when the check
-has passed. Phase 1 has ended, see [Runs](#runs). Of the tools it names, those of step 1 exist,
-[`tools/format-check/`](../tools/format-check), and the fuzz targets of steps 5 and 7, with the last
-round's code in [`tools/format-check/cleanroom/`](../tools/format-check/cleanroom); the others are still
-to come, see [How to run it](#how-to-run-it). Results go to [Runs](#runs) at the end.
+has passed. The first check ran on 1st and 2nd November 2026 and passed: the result is in
+[format-check-results.md](format-check-results.md), each number in [Runs](#runs) at the end. Its tools are
+in [`tools/format-check/`](../tools/format-check), `fuzz/` and `test/`, with the last round's code in
+[`tools/format-check/cleanroom/`](../tools/format-check/cleanroom).
 
 ## Contents
 
@@ -108,8 +108,8 @@ format.md.
 
 ## How to run it
 
-The tools come in two parts. Step 1's, `tools/format-check/cleanroom.sh`, exists. Before its first
-real run, and after a new version of claude or of the image, one trial:
+The tools come in two parts. Step 1's is `tools/format-check/cleanroom.sh`. Before its first real run,
+and after a new version of claude or of the image, one trial:
 
 ```sh
 tools/format-check/cleanroom.sh tools/format-check/trial-brief.md <dir> <model>
@@ -122,7 +122,8 @@ directory but its own empty one, wrote `hello.txt` into its room, and `audit.txt
 The tools of steps 4 to 11 (`all-decoders`, `claims.py`, `fuzz/seqlz_gen_fuzz.c`,
 `test/seqlz_rules_test.cpp`, the decoders added to the `diff` target) come after phase 1, once
 format.md no longer changes: they link D's, R's and W's code and are built from I's lists, and each
-change of format.md in phase 1 replaces all of those. They are ordinary changes of the repository,
+change of format.md in phase 1 replaces all of those. They exist for the code of 2nd November; a new
+phase 1 replaces that code and the lists, and the tools follow, as ordinary changes of the repository,
 made and reviewed as such.
 
 Then the runner is an agent session, e.g. Claude Code, started in a fresh checkout of the commit under
@@ -560,7 +561,8 @@ That holds for a change of the format's text, what a decoder writer reads, the k
 included. The parts of format.md between the comments "not in the kernel's copy" and "end" that are
 no rule of the format (the Status, "What the compressor writes", "How this file was checked") are
 fixed without a new round: a clean room that read the old sentence would not read the format any
-differently.
+differently. The same holds for a number in a *Why:* sentence that step 10 measured again: it gives a
+reason, not a rule, and no block's verdict depends on it.
 
 A later change of the format, or a clearer sentence in format.md, needs at least: new D, W and I
 from step 1, steps 3 to 6, step 7 for 2 hours, and step 9 for the reject sites the change
@@ -782,4 +784,10 @@ queue again, through the coverage build's targets: `diff` on the queues of `deco
 and `roundtrip` on their own, and the 7777 pages of `roundtrip`'s queue through `seqlz-all-decoders`,
 23 331 blocks and 4 778 380 through every decoder, no difference.
 
-Not done yet: "How this file was checked" in format.md with this run, which also closes C79.
+Then "How this file was checked" in format.md names this run instead of the old ones, which settles
+C79: all 80 claims are settled, none wrong. The three *Why:* sentences of step 10 changed after the clean
+rooms had read them, in text that the kernel's copy has too; "After a change of format.md" had no new
+round only for the parts outside the kernel's copy, and now says the same for a *Why:* sentence's
+number, as such a sentence is no rule. With that every item of
+[When the check has passed](#when-the-check-has-passed) holds, and
+[format-check-results.md](format-check-results.md) has the result in one place.
