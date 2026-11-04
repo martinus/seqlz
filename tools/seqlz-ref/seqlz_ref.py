@@ -19,7 +19,9 @@ class Invalid(Exception):
 
 
 def numbers(text):
-    return [int(x) for x in re.findall(r"\b\d+\b", re.sub(r"/\*.*?\*/|//[^\n]*", "", text, flags=re.DOTALL))]
+    """the numbers of C text, without its comments and its preprocessor lines, e.g. #if SEQLZ_LEVELS >= 3"""
+    text = re.sub(r"/\*.*?\*/|//[^\n]*|^#[^\n]*", "", text, flags=re.DOTALL | re.MULTILINE)
+    return [int(x) for x in re.findall(r"\b\d+\b", text)]
 
 
 def spec_hashes():
