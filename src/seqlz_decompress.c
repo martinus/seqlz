@@ -487,7 +487,6 @@ static __always_inline int decode_block(const void *src, unsigned int src_len,
 		lit_end = lit + n_lit;
 		lit_bound = lit + SEQLZ_SCRATCH;
 	} else {
-#endif
 		/* raw, right after the u16, the bitstream follows them */
 		if ((u64)SEQLZ_HEADER + n_lit > src_len)
 			return -EINVAL;
@@ -495,8 +494,15 @@ static __always_inline int decode_block(const void *src, unsigned int src_len,
 		lit_end = lit + n_lit;
 		lit_bound = s_end;
 		br = (struct seqlz_bit_reader){ .p = lit_end, .end = s_end };
-#if SEQLZ_LEVELS >= 2
 	}
+#else
+	/* raw, right after the u16, the bitstream follows them */
+	if ((u64)SEQLZ_HEADER + n_lit > src_len)
+		return -EINVAL;
+	lit = s + SEQLZ_HEADER;
+	lit_end = lit + n_lit;
+	lit_bound = s_end;
+	br = (struct seqlz_bit_reader){ .p = lit_end, .end = s_end };
 #endif
 
 	/*

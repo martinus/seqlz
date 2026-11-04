@@ -89,12 +89,15 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - {name: asan, cmake: ''}
-          - {name: msan, cmake: '-DSEQLZ_SANITIZE=OFF -DSEQLZ_MSAN=ON'}
+          - {name: asan, cmake: '', levels: 3}
+          - {name: msan, cmake: '-DSEQLZ_SANITIZE=OFF -DSEQLZ_MSAN=ON', levels: 3}
+          # the decoder of the kernel series' first patches, built with fewer levels, see SEQLZ_LEVELS
+          - {name: asan-level1, cmake: '', levels: 1}
+          - {name: asan-level2, cmake: '', levels: 2}
     name: fuzz (${{ matrix.name }})
     steps:
       - uses: actions/checkout@v7
-      - run: fuzz/smoke.sh 60 build-fuzz ${{ matrix.cmake }}
+      - run: LEVELS=${{ matrix.levels }} fuzz/smoke.sh 60 build-fuzz ${{ matrix.cmake }}
       - if: failure()
         uses: actions/upload-artifact@v7
         with:

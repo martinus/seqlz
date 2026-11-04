@@ -264,9 +264,14 @@ lit_finish(u8 *d, unsigned int n_literals, unsigned int bitstream,
  * bitstream stays behind the raw literals until it moves down behind the coded
  * ones at the end. So d needs no room beyond len, and the block is coded in any
  * dst it fits into raw.
+ *
+ * One copy for level 2 and level 3, which calls it for blocks with too few
+ * literals for a table of their own: it has no code of level 3. Inlined into
+ * seqlz_code_own(), its arrays made that function's stack frame, the deepest
+ * of the compressor, larger.
  */
-static __always_inline unsigned int
-code_sampled(u8 *d, unsigned int len, u8 *slots, unsigned int coded_min)
+static noinline unsigned int code_sampled(u8 *d, unsigned int len, u8 *slots,
+					  unsigned int coded_min)
 {
 	const unsigned int n_literals = get_unaligned_le16(d);
 	const unsigned int bitstream = len - SEQLZ_HEADER - n_literals;
@@ -347,11 +352,7 @@ static_assert((SEQLZ_BLOCK_SIZE / LIT_SAMPLE_STEP + 1U) * SEQLZ_LIT_BITS <
 		      1U << 16,
 	      "the bits of the sampled literals fit a lane");
 
-/*
- * The literals with the fixed tables only, at SEQLZ_LEVEL_CODED. The coder is
- * inlined, compiled for this caller alone: a copy shared with level 3 ran
- * level 3's code with its arguments checked at run time.
- */
+/* the literals with the fixed tables only, at SEQLZ_LEVEL_CODED */
 unsigned int seqlz_code_literals(u8 *d, unsigned int len, u8 *slots)
 {
 	return code_sampled(d, len, slots, SEQLZ_LIT_CODED_MIN);
@@ -918,17 +919,6 @@ static_assert((SEQLZ_BLOCK_SIZE / DELTA_STEP + 1U) * SEQLZ_LIT_BITS < 1U << 16,
 static_assert(OWN_LITERALS_MAX < 1U << 15,
 	      "own_code() takes the counts' top bit for its presence test");
 
-/*
- * code_sampled() at level 3, for blocks with too few literals for a table of
- * their own. A call: inlined into seqlz_code_own(), its arrays made that
- * function's stack frame, the deepest of the compressor, larger.
- */
-static noinline unsigned int code_sampled_own(u8 *d, unsigned int len,
-					      u8 *slots)
-{
-	return code_sampled(d, len, slots, SEQLZ_LIT_CODED_MIN_OWN);
-}
-
 /* behind the literals in the matcher's state, see OWN_WORK */
 static struct own_work *own_work(struct seqlz_state *st)
 {
@@ -974,7 +964,7 @@ unsigned int seqlz_code_own(u8 *d, unsigned int len, struct seqlz_state *st,
 	if (n_literals < OWN_LITERALS_MIN || n_literals > OWN_LITERALS_MAX)
 		own = NULL;
 	if (!own && spare)
-		return code_sampled_own(d, len, spare);
+		return code_sampled(d, len, spare, SEQLZ_LIT_CODED_MIN_OWN);
 	if (own)
 		memset(own->freq, 0, sizeof(own->freq));
 	lit_sums(literals, n_literals, even, odd, own ? own->freq : NULL);

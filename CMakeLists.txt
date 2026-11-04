@@ -120,14 +120,37 @@ foreach(lib seqlz_cleanroom_d seqlz_cleanroom_r seqlz_cleanroom_w)
 endforeach()
 
 option(SEQLZ_FUZZ "Build the fuzz targets of fuzz/, needs clang or afl-clang-lto" OFF)
+# the fuzz targets' seqlz with fewer levels, as the kernel series' first patches have it, see SEQLZ_LEVELS
+set(SEQLZ_FUZZ_LEVELS 3 CACHE STRING "SEQLZ_LEVELS of the fuzz targets' seqlz, 1 to 3")
 if(SEQLZ_FUZZ)
-    add_library(seqlz_fuzz STATIC ${SEQLZ_SOURCES})
+    set(fuzz_sources ${SEQLZ_SOURCES})
+    if(NOT SEQLZ_FUZZ_LEVELS EQUAL 3)
+        set(fuzz_tables ${CMAKE_BINARY_DIR}/seqlz_tables_${SEQLZ_FUZZ_LEVELS}.c)
+        add_custom_command(OUTPUT ${fuzz_tables}
+            COMMAND ${CMAKE_SOURCE_DIR}/tools/gen-tables/gen-tables.sh ${fuzz_tables} -DSEQLZ_LEVELS=${SEQLZ_FUZZ_LEVELS}
+            DEPENDS tools/gen-tables/gen-tables.sh tools/gen-tables/gen_seqlz_tables.c src/seqlz_codes.c
+                src/seqlz_lengths.c ${SEQLZ_HEADERS}
+            VERBATIM)
+        set_source_files_properties(${fuzz_tables} PROPERTIES INCLUDE_DIRECTORIES ${CMAKE_SOURCE_DIR}/src)
+        list(REMOVE_ITEM fuzz_sources ${SEQLZ_TABLES})
+        list(APPEND fuzz_sources ${fuzz_tables})
+        # level 1 has no coded literals, and these files are about nothing else
+        if(SEQLZ_FUZZ_LEVELS EQUAL 1)
+            list(REMOVE_ITEM fuzz_sources src/seqlz_compress_literals.c src/seqlz_decompress_literals.c)
+        endif()
+    endif()
+    add_library(seqlz_fuzz STATIC ${fuzz_sources})
     target_include_directories(seqlz_fuzz PUBLIC src)
+    target_compile_definitions(seqlz_fuzz PUBLIC SEQLZ_LEVELS=${SEQLZ_FUZZ_LEVELS})
     # afl-clang-lto instruments every file anyway, and with this flag it would need libFuzzer's runtime
     if(NOT CMAKE_C_COMPILER MATCHES "afl-")
         target_compile_options(seqlz_fuzz PRIVATE -fsanitize=fuzzer-no-link)
     endif()
-    target_link_libraries(seqlz_fuzz PRIVATE seqlz_warnings)
+    # as the kernel's W=1: below level 3 some parameters are there for it alone. Behind seqlz_warnings,
+    # whose -Wextra would turn it on again
+    add_library(seqlz_fuzz_levels INTERFACE)
+    target_compile_options(seqlz_fuzz_levels INTERFACE -Wno-unused-parameter)
+    target_link_libraries(seqlz_fuzz PRIVATE seqlz_warnings seqlz_fuzz_levels)
     foreach(target seqlz_decode_fuzz seqlz_roundtrip_fuzz seqlz_diff_fuzz seqlz_encode_fuzz seqlz_gen_fuzz)
         add_executable(${target} fuzz/${target}.c)
         target_compile_options(${target} PRIVATE -fsanitize=fuzzer)

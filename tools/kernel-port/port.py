@@ -52,7 +52,8 @@ WIDTH = 80
 # the levels the copy has, see SEQLZ_LEVELS in src/linux/seqlz.h
 LEVELS = 3
 # src/linux/seqlz.h's default of SEQLZ_LEVELS, which the copy does not have: the number replaces it
-LEVELS_DEFAULT = r"/\*\n \* The levels built, 1 to 3:.*?#ifndef SEQLZ_LEVELS\n#define SEQLZ_LEVELS 3\n#endif\n\n"
+LEVELS_DEFAULT = (r"/\*\n \* The levels built, 1 to 3:.*?#ifndef SEQLZ_LEVELS\n#define SEQLZ_LEVELS 3\n#endif\n"
+                  r"#if SEQLZ_LEVELS < 1 \|\| SEQLZ_LEVELS > 3\n#error [^\n]*\n#endif\n\n")
 
 # what only the harness and the tests of src/ use, left out of the kernel's copy
 HARNESS_ONLY = re.compile(r"\bseqlz_find\b|\bseqlz_encode\b|\bseqlz_sequence\b|\bSEQLZ_MAX_SEQUENCES\b")
@@ -292,15 +293,16 @@ def resolve_levels(text):
     their #if, #else and #endif; other #if, #ifdef and #ifndef as they are, also nested; SEQLZ_LEVELS
     itself the number"""
     out, stack = [], []  # per open #if: whether it is one of SEQLZ_LEVELS, and whether its part is kept
+    comment = r"(?:\s*/\*.*\*/)?"
     for line in text.split("\n"):
-        m = re.fullmatch(r"#if SEQLZ_LEVELS (>=|<) ([1-9])", line)
+        m = re.fullmatch(r"#if SEQLZ_LEVELS (>=|<) ([1-9])" + comment, line)
         if m:
             n = int(m.group(2))
             stack.append((True, LEVELS >= n if m.group(1) == ">=" else LEVELS < n))
             continue
         if re.match(r"#if", line):
             stack.append((False, True))
-        elif line == "#else" and stack[-1][0]:
+        elif re.fullmatch("#else" + comment, line) and stack[-1][0]:
             stack[-1] = (True, not stack[-1][1])
             continue
         elif re.match(r"#endif\b", line):
@@ -310,6 +312,9 @@ def resolve_levels(text):
         if all(keep for _, keep in stack):
             out.append(line)
     assert not stack, "#if without #endif"
+    # a condition on SEQLZ_LEVELS that the patterns above did not take, e.g. #if SEQLZ_LEVELS > 1
+    left = [line for line in out if re.match(r"#\s*(if|elif)", line) and "SEQLZ_LEVELS" in line]
+    assert not left, left
     # a part that went can leave two blank lines in a row
     return re.sub(r"\n{3,}", "\n\n", "\n".join(out)).replace("SEQLZ_LEVELS", str(LEVELS))
 

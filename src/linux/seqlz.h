@@ -38,6 +38,9 @@
 #ifndef SEQLZ_LEVELS
 #define SEQLZ_LEVELS 3
 #endif
+#if SEQLZ_LEVELS < 1 || SEQLZ_LEVELS > 3
+#error "SEQLZ_LEVELS is 1, 2 or 3"
+#endif
 
 /*
  * The levels of seqlz_compress(), from the fastest to the smallest blocks: 1

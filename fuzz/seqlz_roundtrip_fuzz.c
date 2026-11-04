@@ -30,7 +30,7 @@ int LLVMFuzzerTestOneInput(const uint8_t* data, size_t size);
 static int decodes_to(const unsigned char* page, unsigned int len, void* scr) {
     memset(out, 0xa5, SEQLZ_BLOCK_SIZE);
     unwritten(out, SEQLZ_BLOCK_SIZE);
-    unwritten(scratch, SEQLZ_SCRATCH);
+    unwritten(scratch, SEQLZ_MEM_DECOMPRESS);
     return seqlz_decompress(dst, len, out, scr) == 0 && memcmp(out, page, SEQLZ_BLOCK_SIZE) == 0;
 }
 
@@ -85,7 +85,7 @@ int LLVMFuzzerTestOneInput(const uint8_t* data, size_t size) {
         dst = malloc(DST_CAP);
         again = malloc(DST_CAP);
         out = malloc(SEQLZ_BLOCK_SIZE);
-        scratch = malloc(SEQLZ_SCRATCH);
+        scratch = malloc(SEQLZ_MEM_DECOMPRESS);
         if (!dst || !again || !out || !scratch)
             abort();
     }

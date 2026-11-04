@@ -36,15 +36,6 @@ static_assert((8U << SEQLZ_CLASS5_BITS) <= SEQLZ_BLOCK_SIZE,
  * no faster; with 8192 in-order cores wrote blocks slower.
  */
 #define SEQLZ_HASH_BITS 12U
-/*
- * The levels of seqlz_compress_block(), 1 to SEQLZ_LEVEL_MAX, from the fastest
- * to the one with the smallest blocks. Level 1 keeps the literals raw. From
- * SEQLZ_LEVEL_CODED on they are Huffman coded where that saves enough, with one
- * of the fixed tables. SEQLZ_LEVEL_OWN looks one position ahead before it takes
- * a short match, extends matches backwards, gives a block a literal table of
- * its own where that saves enough, and codes the literals as deltas where that
- * looks like it saves bits, see SEQLZ_LIT_DELTA_AT.
- */
 
 /* the token of a sequence with a match, see the top of seqlz_format.h */
 static inline unsigned int seqlz_token(unsigned int ll, unsigned int ml,
@@ -110,6 +101,11 @@ static_assert(sizeof_field(struct value_table, decode) % PREFETCH_STEP == 0,
 	      "the length values' tables");
 
 #if SEQLZ_LEVELS >= 2
+/*
+ * The levels of seqlz_compress_block() go from the fastest to the one with the
+ * smallest blocks. Level 1 keeps the literals raw. From SEQLZ_LEVEL_CODED on
+ * they are Huffman coded where that saves enough, with one of the fixed tables.
+ */
 #define SEQLZ_LEVEL_CODED 2U
 static_assert(SEQLZ_LEVEL_CODED <= SEQLZ_LEVEL_MAX);
 
@@ -156,6 +152,12 @@ const u8 *seqlz_decode_literals(const u8 *s, unsigned int src_len,
 #endif /* SEQLZ_LEVELS >= 2 */
 
 #if SEQLZ_LEVELS >= 3
+/*
+ * SEQLZ_LEVEL_OWN looks one position ahead before it takes a short match,
+ * extends matches backwards, gives a block a literal table of its own where
+ * that saves enough, and codes the literals as deltas where that looks like it
+ * saves bits, see SEQLZ_LIT_DELTA_AT.
+ */
 #define SEQLZ_LEVEL_OWN 3U
 static_assert(SEQLZ_LEVEL_OWN == SEQLZ_LEVEL_MAX);
 
