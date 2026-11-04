@@ -15,6 +15,7 @@
 
 #include "seqlz_internal.h"
 
+#if SEQLZ_LEVELS >= 2
 /*
  * The bits of sum j in literal table k, from its lane of 16 bits in even or
  * odd, as lanes_spill() adds them: even has tables 0, 2, 4 and 6.
@@ -191,16 +192,14 @@ static void lit_sizes(u8 *p, const unsigned int *sizes, unsigned int width)
 }
 
 /*
- * code_sampled() picks the fixed table from every LIT_SAMPLE_STEP-th literal,
- * not from all of them, and writes the streams into slots in the matcher's
- * state, LIT_SLOT bytes each, then moves them into place once their sizes are
- * known. Without the slots every literal had to be priced
- * first, since the header needs each stream's size. A prime step: every 4th or
- * 8th literal is the same byte of each 4- or 8-byte field; a larger step saves
- * less than its coarser sample costs in bytes. Where the sample says the
- * literals stay raw by LIT_SAMPLE_MARGIN bytes or more, they do, and the
- * streams are not written: most blocks that stay raw are far from the rule, and
- * a block the sample misjudges by more is rare.
+ * The sample and the slots of code_sampled(). The slots of LIT_SLOT bytes
+ * spare a pass that prices every literal, which the header would need for each
+ * stream's size. A prime step: every 4th or 8th literal is the same byte of
+ * each 4- or 8-byte field; a larger step saves less than its coarser sample
+ * costs in bytes. Where the sample says the literals stay raw by
+ * LIT_SAMPLE_MARGIN bytes or more, they do, and the streams are not written:
+ * most blocks that stay raw are far from the rule, and a block the sample
+ * misjudges by more is rare.
  */
 #define LIT_SAMPLE_STEP 7U
 #define LIT_SAMPLE_MARGIN 8U
@@ -346,8 +345,6 @@ static_assert(SEQLZ_LIT_HEADER(SEQLZ_SIZE_BITS_MAX) <=
 static_assert(sizeof_field(struct seqlz_state, table) >= SEQLZ_BLOCK_SIZE,
 	      "the raw literals take no memory beyond the matcher's table");
 /* the sums in 16-bit lanes */
-static_assert(SEQLZ_BLOCK_SIZE / SEQLZ_LIT_STREAMS * SEQLZ_LIT_BITS < 1U << 16,
-	      "the bits of one stream fit a lane");
 static_assert((SEQLZ_BLOCK_SIZE / LIT_SAMPLE_STEP + 1U) * SEQLZ_LIT_BITS <
 		      1U << 16,
 	      "the bits of the sampled literals fit a lane");
@@ -776,10 +773,10 @@ static unsigned int own_describe(struct own_work *w, unsigned int n)
  * literals' entropy, or their bits with the code and the description with the
  * smallest header, say it cannot save OWN_SAVES_MIN bytes against limit, the
  * bytes of the best fixed table with its header, or that the literals would
- * stay raw with coded_min, see seqlz_code_own().
+ * stay raw with SEQLZ_LIT_CODED_MIN_OWN, see seqlz_code_own().
  */
 static unsigned int own_code(struct own_work *w, unsigned int n_literals,
-			     unsigned int limit, unsigned int coded_min)
+			     unsigned int limit)
 {
 	/* the low 15 bits of each lane */
 	const u64 low = 0x7fff7fff7fff7fffULL;
@@ -842,7 +839,7 @@ static unsigned int own_code(struct own_work *w, unsigned int n_literals,
 	est = h / 2048U + n * 115U / 256U;
 	if (est + SEQLZ_LIT_HEADER(SEQLZ_SIZE_BITS_MIN) + OWN_SAVES_MIN >
 		    limit ||
-	    est + coded_min >= n_literals - n_literals / 16U)
+	    est + SEQLZ_LIT_CODED_MIN_OWN >= n_literals - n_literals / 16U)
 		return 0;
 	own_lengths(w, n, n_literals);
 
@@ -911,9 +908,11 @@ static unsigned int own_sizes(struct own_work *w, const u8 *literals,
 }
 
 static_assert(SEQLZ_LIT_HEADER(SEQLZ_SIZE_BITS_MAX) + 1U <=
-			      SEQLZ_HEADER + SEQLZ_LIT_CODED_MIN_OWN &&
-		      SEQLZ_LIT_CODED_MIN_OWN <= SEQLZ_LIT_CODED_MIN,
+		      SEQLZ_HEADER + SEQLZ_LIT_CODED_MIN_OWN,
 	      "the coded literals fit before the bitstream");
+/* the sums of lit_sums() in 16-bit lanes */
+static_assert(SEQLZ_BLOCK_SIZE / SEQLZ_LIT_STREAMS * SEQLZ_LIT_BITS < 1U << 16,
+	      "the bits of one stream fit a lane");
 static_assert((SEQLZ_BLOCK_SIZE / DELTA_STEP + 1U) * SEQLZ_LIT_BITS < 1U << 16,
 	      "the bits of one delta fit a lane of seqlz_delta_literals()");
 static_assert(OWN_LITERALS_MAX < 1U << 15,
@@ -987,8 +986,7 @@ unsigned int seqlz_code_own(u8 *d, unsigned int len, struct seqlz_state *st,
 	header = SEQLZ_LIT_HEADER(width) + delta_byte;
 	enc = seqlz_tables.lit[set].enc;
 	if (own) {
-		unsigned int n = own_code(own, n_literals, header + coded,
-					  SEQLZ_LIT_CODED_MIN_OWN);
+		unsigned int n = own_code(own, n_literals, header + coded);
 		unsigned int own_coded, own_width;
 
 		if (n) {
@@ -1035,3 +1033,4 @@ unsigned int seqlz_code_own(u8 *d, unsigned int len, struct seqlz_state *st,
 			  header + coded);
 }
 #endif /* SEQLZ_LEVELS >= 3 */
+#endif /* SEQLZ_LEVELS >= 2 */

@@ -91,19 +91,19 @@ static void make_page(unsigned char* p, unsigned int k) {
  * SEQLZ_LEVELS=1 coded literals, the top bit of the u16; with 2 a block's own table, literal code 8,
  * and deltas, bit 7 of byte 2. Each such change of a block it wrote must fail to decode.
  */
-static unsigned int higher_levels_rejected(unsigned char* dst, unsigned int n, unsigned char* out, void* scratch) {
-    unsigned int failed = 0;
+static unsigned int count_accepted(unsigned char* dst, unsigned int n, unsigned char* out, void* scratch) {
+    unsigned int accepted = 0;
 
 #if SEQLZ_LEVELS < 2
     dst[1] ^= 0x80U;
-    failed += seqlz_decompress(dst, n, out, scratch) == 0;
+    accepted += seqlz_decompress(dst, n, out, scratch) == 0;
     dst[1] ^= 0x80U;
 #elif SEQLZ_LEVELS < 3
     if (n > 3 && (dst[1] & 0x80U)) {
         unsigned char b2 = dst[2];
 
         dst[2] = (unsigned char)((b2 & ~SEQLZ_LIT_CODE_MASK) | SEQLZ_LIT_SETS);
-        failed += seqlz_decompress(dst, n, out, scratch) == 0;
+        accepted += seqlz_decompress(dst, n, out, scratch) == 0;
         /*
          * deltas as level 3 writes them, the delta's byte after byte 2: the rest of the block is as it
          * was, and it would decode, to literals that are not the page's
@@ -111,12 +111,12 @@ static unsigned int higher_levels_rejected(unsigned char* dst, unsigned int n, u
         memmove(dst + 4, dst + 3, n - 3);
         dst[3] = 1; /* SEQLZ_DELTA_4 */
         dst[2] = (unsigned char)(b2 | 1U << SEQLZ_LIT_DELTA_AT);
-        failed += seqlz_decompress(dst, n + 1, out, scratch) == 0;
+        accepted += seqlz_decompress(dst, n + 1, out, scratch) == 0;
         memmove(dst + 3, dst + 4, n - 3);
         dst[2] = b2;
     }
 #endif
-    return failed;
+    return accepted;
 }
 
 int main(void) {
@@ -147,7 +147,7 @@ int main(void) {
 #if SEQLZ_LEVELS >= 3
             own_pages += n > 2 && (dst[1] & 0x80U) && (dst[2] & SEQLZ_LIT_CODE_MASK) == SEQLZ_LIT_OWN;
 #endif
-            accepted += higher_levels_rejected(dst, n, out, scratch);
+            accepted += count_accepted(dst, n, out, scratch);
             for (i = 0; i < n; i++) {
                 hash = (hash ^ dst[i]) * 0x100000001b3ULL;
                 level_hash[level] = (level_hash[level] ^ dst[i]) * 0x100000001b3ULL;

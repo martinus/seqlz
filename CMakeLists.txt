@@ -70,17 +70,21 @@ target_link_libraries(seqlz-score PRIVATE seqlz_bench seqlz_warnings)
 add_executable(seqlz-swap-bursts tools/swap-bursts/swap-bursts.c)
 target_link_libraries(seqlz-swap-bursts PRIVATE seqlz_warnings)
 
-# seqlz's codes and decode tables, generated from the code lengths by a program for the build host
-set(SEQLZ_TABLES ${CMAKE_BINARY_DIR}/seqlz_tables.c)
+# seqlz's codes and decode tables, generated from the code lengths by a program for the build host, into
+# out, for a build of the given SEQLZ_LEVELS
 file(GLOB SEQLZ_HEADERS CONFIGURE_DEPENDS src/*.h src/linux/*.h)
-add_custom_command(OUTPUT ${SEQLZ_TABLES}
-    COMMAND ${CMAKE_SOURCE_DIR}/tools/gen-tables/gen-tables.sh ${SEQLZ_TABLES}
-    DEPENDS tools/gen-tables/gen-tables.sh tools/gen-tables/gen_seqlz_tables.c src/seqlz_codes.c
-        src/seqlz_lengths.c ${SEQLZ_HEADERS}
-    COMMENT "seqlz's tables"
-    VERBATIM)
-# it includes seqlz_tables.h, and is not in src/ next to it
-set_source_files_properties(${SEQLZ_TABLES} PROPERTIES INCLUDE_DIRECTORIES ${CMAKE_SOURCE_DIR}/src)
+function(seqlz_tables out levels)
+    add_custom_command(OUTPUT ${out}
+        COMMAND ${CMAKE_SOURCE_DIR}/tools/gen-tables/gen-tables.sh ${out} -DSEQLZ_LEVELS=${levels}
+        DEPENDS tools/gen-tables/gen-tables.sh tools/gen-tables/gen_seqlz_tables.c src/seqlz_codes.c
+            src/seqlz_lengths.c ${SEQLZ_HEADERS}
+        COMMENT "seqlz's tables"
+        VERBATIM)
+    # it includes seqlz_tables.h, and is not in src/ next to it
+    set_source_files_properties(${out} PROPERTIES INCLUDE_DIRECTORIES ${CMAKE_SOURCE_DIR}/src)
+endfunction()
+set(SEQLZ_TABLES ${CMAKE_BINARY_DIR}/seqlz_tables.c)
+seqlz_tables(${SEQLZ_TABLES} 3)
 
 # seqlz without kernel code, for the tests and tools. seqlz's sources, for every target that builds it:
 # this library, the kernel codecs, the fuzzers
@@ -126,18 +130,9 @@ if(SEQLZ_FUZZ)
     set(fuzz_sources ${SEQLZ_SOURCES})
     if(NOT SEQLZ_FUZZ_LEVELS EQUAL 3)
         set(fuzz_tables ${CMAKE_BINARY_DIR}/seqlz_tables_${SEQLZ_FUZZ_LEVELS}.c)
-        add_custom_command(OUTPUT ${fuzz_tables}
-            COMMAND ${CMAKE_SOURCE_DIR}/tools/gen-tables/gen-tables.sh ${fuzz_tables} -DSEQLZ_LEVELS=${SEQLZ_FUZZ_LEVELS}
-            DEPENDS tools/gen-tables/gen-tables.sh tools/gen-tables/gen_seqlz_tables.c src/seqlz_codes.c
-                src/seqlz_lengths.c ${SEQLZ_HEADERS}
-            VERBATIM)
-        set_source_files_properties(${fuzz_tables} PROPERTIES INCLUDE_DIRECTORIES ${CMAKE_SOURCE_DIR}/src)
+        seqlz_tables(${fuzz_tables} ${SEQLZ_FUZZ_LEVELS})
         list(REMOVE_ITEM fuzz_sources ${SEQLZ_TABLES})
         list(APPEND fuzz_sources ${fuzz_tables})
-        # level 1 has no coded literals, and these files are about nothing else
-        if(SEQLZ_FUZZ_LEVELS EQUAL 1)
-            list(REMOVE_ITEM fuzz_sources src/seqlz_compress_literals.c src/seqlz_decompress_literals.c)
-        endif()
     endif()
     add_library(seqlz_fuzz STATIC ${fuzz_sources})
     target_include_directories(seqlz_fuzz PUBLIC src)
@@ -149,7 +144,9 @@ if(SEQLZ_FUZZ)
     # as the kernel's W=1: below level 3 some parameters are there for it alone. Behind seqlz_warnings,
     # whose -Wextra would turn it on again
     add_library(seqlz_fuzz_levels INTERFACE)
-    target_compile_options(seqlz_fuzz_levels INTERFACE -Wno-unused-parameter)
+    if(NOT SEQLZ_FUZZ_LEVELS EQUAL 3)
+        target_compile_options(seqlz_fuzz_levels INTERFACE -Wno-unused-parameter)
+    endif()
     target_link_libraries(seqlz_fuzz PRIVATE seqlz_warnings seqlz_fuzz_levels)
     foreach(target seqlz_decode_fuzz seqlz_roundtrip_fuzz seqlz_diff_fuzz seqlz_encode_fuzz seqlz_gen_fuzz)
         add_executable(${target} fuzz/${target}.c)

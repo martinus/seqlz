@@ -11,6 +11,7 @@
 
 #include "seqlz_internal.h"
 
+#if SEQLZ_LEVELS >= 2
 /*
  * The literals' streams are read as zstd reads its Huffman coded literals,
  * most significant bit first. A stream is a pointer ip and 64 bits: the 8
@@ -416,3 +417,4 @@ noinline const u8 *seqlz_decode_literals(const u8 *s, unsigned int src_len,
 			return NULL;
 	return q + total;
 }
+#endif /* SEQLZ_LEVELS >= 2 */

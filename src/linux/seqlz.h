@@ -29,13 +29,13 @@
  */
 #define SEQLZ_MEM_DECOMPRESS (SEQLZ_BLOCK_SIZE + 16)
 
+#ifndef SEQLZ_LEVELS
 /*
  * The levels built, 1 to 3: a build with fewer has no code and no tables of the
  * levels above, and its decoder takes their blocks for invalid. Each level is a
  * patch of its own in the kernel's series; tools/kernel-port/port.py resolves
  * the #if SEQLZ_LEVELS in the copy it writes.
  */
-#ifndef SEQLZ_LEVELS
 #define SEQLZ_LEVELS 3
 #endif
 #if SEQLZ_LEVELS < 1 || SEQLZ_LEVELS > 3

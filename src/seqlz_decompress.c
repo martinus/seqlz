@@ -453,16 +453,11 @@ static __always_inline int decode_block(const void *src, unsigned int src_len,
 			     sizeof(seqlz_tables.ll.decode));
 	seqlz_prefetch_lines(seqlz_tables.ml.decode,
 			     sizeof(seqlz_tables.ml.decode));
-#if SEQLZ_LEVELS >= 2
 	n_lit = get_unaligned_le16(s) & (SEQLZ_LIT_CODED - 1U);
-#else
-	/* the top bit, coded literals at level 2, makes it too large */
-	n_lit = get_unaligned_le16(s);
-#endif
 	if (n_lit > SEQLZ_BLOCK_SIZE)
 		return -EINVAL;
-#if SEQLZ_LEVELS >= 2
 	if (get_unaligned_le16(s) & SEQLZ_LIT_CODED) {
+#if SEQLZ_LEVELS >= 2
 		/* decoded into the scratch first, the bitstream follows them */
 		const u8 *q;
 
@@ -486,6 +481,10 @@ static __always_inline int decode_block(const void *src, unsigned int src_len,
 		lit = scratch;
 		lit_end = lit + n_lit;
 		lit_bound = lit + SEQLZ_SCRATCH;
+#else
+		/* coded literals are level 2's */
+		return -EINVAL;
+#endif
 	} else {
 		/* raw, right after the u16, the bitstream follows them */
 		if ((u64)SEQLZ_HEADER + n_lit > src_len)
@@ -495,15 +494,6 @@ static __always_inline int decode_block(const void *src, unsigned int src_len,
 		lit_bound = s_end;
 		br = (struct seqlz_bit_reader){ .p = lit_end, .end = s_end };
 	}
-#else
-	/* raw, right after the u16, the bitstream follows them */
-	if ((u64)SEQLZ_HEADER + n_lit > src_len)
-		return -EINVAL;
-	lit = s + SEQLZ_HEADER;
-	lit_end = lit + n_lit;
-	lit_bound = s_end;
-	br = (struct seqlz_bit_reader){ .p = lit_end, .end = s_end };
-#endif
 
 	/*
 	 * The fast path below copies without checking the room left, so it is

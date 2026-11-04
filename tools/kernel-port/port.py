@@ -49,11 +49,9 @@ REPO = HERE.parent.parent
 SRC = REPO / "src"
 WIDTH = 80
 
-# the levels the copy has, see SEQLZ_LEVELS in src/linux/seqlz.h
+# the levels the copy has, see SEQLZ_LEVELS in src/linux/seqlz.h. Only 3 so far: the Makefile, the
+# Kconfig help, the KUnit test and the specification of the copy assume all three
 LEVELS = 3
-# src/linux/seqlz.h's default of SEQLZ_LEVELS, which the copy does not have: the number replaces it
-LEVELS_DEFAULT = (r"/\*\n \* The levels built, 1 to 3:.*?#ifndef SEQLZ_LEVELS\n#define SEQLZ_LEVELS 3\n#endif\n"
-                  r"#if SEQLZ_LEVELS < 1 \|\| SEQLZ_LEVELS > 3\n#error [^\n]*\n#endif\n\n")
 
 # what only the harness and the tests of src/ use, left out of the kernel's copy
 HARNESS_ONLY = re.compile(r"\bseqlz_find\b|\bseqlz_encode\b|\bseqlz_sequence\b|\bSEQLZ_MAX_SEQUENCES\b")
@@ -289,16 +287,19 @@ def put_doc(text, name, doc):
 
 
 def resolve_levels(text):
-    """the #if SEQLZ_LEVELS >= n and < n parts kept for a copy of LEVELS levels and the others gone, with
-    their #if, #else and #endif; other #if, #ifdef and #ifndef as they are, also nested; SEQLZ_LEVELS
-    itself the number"""
+    """the #if SEQLZ_LEVELS >= n parts kept for a copy of LEVELS levels and the others gone, with their #if,
+    #else and #endif; also the default and the range check of SEQLZ_LEVELS in src/linux/seqlz.h, which the
+    copy does not need; other #if, #ifdef and #ifndef as they are, also nested; SEQLZ_LEVELS itself the
+    number"""
     out, stack = [], []  # per open #if: whether it is one of SEQLZ_LEVELS, and whether its part is kept
     comment = r"(?:\s*/\*.*\*/)?"
     for line in text.split("\n"):
-        m = re.fullmatch(r"#if SEQLZ_LEVELS (>=|<) ([1-9])" + comment, line)
+        m = re.fullmatch(r"#if SEQLZ_LEVELS >= ([1-9])" + comment, line)
         if m:
-            n = int(m.group(2))
-            stack.append((True, LEVELS >= n if m.group(1) == ">=" else LEVELS < n))
+            stack.append((True, LEVELS >= int(m.group(1))))
+            continue
+        if line in ("#ifndef SEQLZ_LEVELS", "#if SEQLZ_LEVELS < 1 || SEQLZ_LEVELS > 3"):
+            stack.append((True, False))
             continue
         if re.match(r"#if", line):
             stack.append((False, True))
@@ -326,7 +327,7 @@ def read_src(path):
 
 def port_interface():
     """include/linux/seqlz.h: src/linux/seqlz.h"""
-    return resolve_levels(cut((SRC / "linux" / "seqlz.h").read_text(), LEVELS_DEFAULT))
+    return read_src(SRC / "linux" / "seqlz.h")
 
 
 def port_format():
