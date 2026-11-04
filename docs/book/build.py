@@ -187,15 +187,39 @@ def src_lines(path):
 
 
 COVERED = {}  # path -> set of line numbers
-# the files of src/ with notes, annotate.py: each is a chapter of Part II, the code with a note next
-# to each block, and every listing of it links to the same lines there
+# the files of src/ with notes, annotate.py: each is a chapter of Parts II to IV, the code with a note
+# next to each block, and every listing of it links to the same lines there
 NOTES = annotate.notes_files(HERE)
-# those files in the order a part of book.json reads them, "code": (group, its title, file); the
-# part's chapter {"code": true} is where they go
-CODE = [(g["group"], g["title"], f) for part in BOOK["parts"] for g in part.get("code", []) for f in g["files"]]
-if set(f for *_, f in CODE) != set(NOTES):
-    sys.exit(f"book.json's code and annotated/*.md differ: in book.json only {sorted(set(f for *_, f in CODE) - set(NOTES))}, "
-             f"with notes only {sorted(set(NOTES) - set(f for *_, f in CODE))}")
+# those files in the order the parts of book.json read them, "code": (group, its title, file, the
+# part's level); a part's chapter {"code": true} is where they go, with the blocks of its level
+CODE = [(g["group"], g["title"], f, part.get("level")) for part in BOOK["parts"] for g in part.get("code", [])
+        for f in g["files"]]
+if set(f for _, _, f, _ in CODE) != set(NOTES):
+    sys.exit(f"book.json's code and annotated/*.md differ: in book.json only "
+             f"{sorted(set(f for _, _, f, _ in CODE) - set(NOTES))}, "
+             f"with notes only {sorted(set(NOTES) - set(f for _, _, f, _ in CODE))}")
+# the level of each file's first part, and each level's part, for the line that says where the blocks of
+# another level are
+FIRST_LEVEL = {}
+for _, _, f, lv in CODE:
+    FIRST_LEVEL.setdefault(f, lv)
+PART_OF = {p["level"]: f'level {p["level"]}, {p["label"]}' for p in BOOK["parts"] if p.get("level")}
+
+
+def view_id(src, level):
+    """the id of a file's chapter in the part of that level: the file's id in its first part"""
+    fid = annotate.file_id(src)
+    return fid if level == FIRST_LEVEL[src] else f"{fid}-l{level}"
+
+
+def has_blocks(src, level):
+    """whether a file has blocks of that level, so a chapter in its part"""
+    if level is None:
+        return True
+    _, secs, _ = annotate.parse_notes(NOTES[src])
+    blocks = [b for s in secs for b in s["blocks"]]
+    return level in annotate.block_levels(NOTES[src], blocks, annotate.line_levels(src_lines(src)),
+                                          FIRST_LEVEL[src])
 LISTINGS = []  # (path, first line, last line, id)
 LANG = {".c": "c", ".h": "c", ".inc": "c", ".py": "python", ".sh": "bash", ".patch": "diff", ".cpp": "cpp"}
 
@@ -206,16 +230,21 @@ def notes_href(path, line=None):
 
 
 def render_code_list():
-    """the files of Part II in their order, by group, each with the first sentence of its notes"""
+    """the files of Parts II to IV in their order, by level and group, each with the first sentence of
+    its notes in that level's part"""
     out, group = [], None
-    for g, title, f in CODE:
-        if g != group:
-            out.append(("</ul>" if group else "") + f'<p class="codegroup">{html.escape(title)}</p><ul class="codelist">')
-            group = g
-        intro, *_ = annotate.parse_notes(NOTES[f])
+    for g, title, f, lv in CODE:
+        if not has_blocks(f, lv):
+            continue
+        if (g, lv) != group:
+            head = f"Level {lv}: {title}" if lv else title
+            out.append(("</ul>" if group else "") + f'<p class="codegroup">{html.escape(head)}</p><ul class="codelist">')
+            group = (g, lv)
+        intros, *_ = annotate.parse_notes(NOTES[f])
+        intro = intros[0] if lv is None or lv == FIRST_LEVEL[f] else intros.get(lv, "")
         first = re.split(r"(?<=\.)\s", re.sub(r"\[([^]]*)\]\([^)]*\)", r"\1", intro), maxsplit=1)[0]
-        out.append(f'<li><a href="{notes_href(f)}"><code>{html.escape(f.removeprefix("src/"))}</code></a> '
-                   f'{md(first)[3:-4]}</li>')
+        out.append(f'<li><a href="#{view_id(f, lv) if lv else annotate.file_id(f)}"><code>'
+                   f'{html.escape(f.removeprefix("src/"))}</code></a> {md(first)[3:-4] if first else ""}</li>')
     return "".join(out) + "</ul>"
 
 
@@ -242,7 +271,7 @@ def render_listing(path, a, b):
     rng = f"line {a}" if a == b else f"lines {a}&ndash;{b}"
     if path in NOTES:
         rng += (f' <a class="lnotes" href="{notes_href(path, a)}" '
-                f'title="These lines in Part II, with a short note next to each block">notes &rarr;</a>')
+                f'title="These lines in the code, with a short note next to each block">notes &rarr;</a>')
     return (f'<figure class="listing" id="{lid}">'
             f'<figcaption><a class="lfile" href="{GITHUB}/{file_commit(path)}/{path}#L{a}-L{b}">{html.escape(path)}</a>'
             f'<span class="lrange">{rng}</span></figcaption>'
@@ -307,7 +336,11 @@ def run_c(main, include_dirs=(), link=SRC_C, flags=(), extra=()):
     with tempfile.TemporaryDirectory() as tmp:
         subprocess.run(["cc", "-O1", "-ftrivial-auto-var-init=zero", *flags, *incs, str(main), *srcs, *extra,
                         "-o", f"{tmp}/a"], check=True)
-        return subprocess.run([f"{tmp}/a"], capture_output=True, text=True, check=True).stdout
+        r = subprocess.run([f"{tmp}/a"], capture_output=True, text=True)
+        if r.returncode:
+            sys.exit(f"{main.name} exited with {r.returncode}: {r.stderr.strip()}"
+                     + "".join(f"\n  {line}" for line in r.stdout.strip().split("\n")[-3:]))
+        return r.stdout
 
 
 # ---- programs, facts and asserts: what the text says that the code computes, computed at build time
@@ -929,7 +962,6 @@ def build():
     prebuild(files + [(str(NOTES[src].relative_to(HERE)), NOTES[src].read_text()) for src in NOTES])
     ids = set()
     chap_no = 0
-    CODE_MARK = "\0code\0"
     for part in BOOK["parts"]:
         part_items = []
         if part.get("title"):
@@ -938,7 +970,7 @@ def build():
                               f'<p class="partintro">{part.get("intro", "")}</p></div>')
         for ch in part["chapters"]:
             if ch.get("code"):
-                parts_html.append(CODE_MARK)
+                parts_html.append(f"\0code{part.get('level')}\0")
                 part_items.append(None)
                 continue
             f = HERE / "chapters" / ch["file"]
@@ -954,7 +986,7 @@ def build():
                 if path in NOTES:
                     notes.setdefault(path, a)
             notes_html = "".join(f'<p class="chapnotes"><a href="{notes_href(path, a)}">This chapter&rsquo;s lines of '
-                                 f'<code>{html.escape(pathlib.Path(path).name)}</code> in Part II, with a short note '
+                                 f'<code>{html.escape(pathlib.Path(path).name)}</code> in the code, with a short note '
                                  f'next to each block &rarr;</a></p>' for path, a in notes.items())
             numbered = ch.get("numbered", True)
             if numbered:
@@ -995,24 +1027,33 @@ def build():
             refs.setdefault(path, []).append((a, b, f"#{lid}", chapnos[bisect.bisect(chapnos, (pos,)) - 1][1],
                                               heads[bisect.bisect(heads, (pos,)) - 1][1]))
     names = {annotate.link_name(f) for f in NOTES}
-    order = [f for *_, f in CODE]
-    group_of = {f: t for _, t, f in CODE}
-    code_html, file_sections = [], {}
-    for k, src in enumerate(order):
-        where = str(NOTES[src].relative_to(HERE))
-        lines = highlight_lines("\n".join(src_lines(src)).rstrip("\n"), LANG.get(pathlib.Path(src).suffix, "text"))
-        near = (order[k - 1] if k else None, order[k + 1] if k + 1 < len(order) else None)
-        body = annotate.render(
-            NOTES[src], substitute(NOTES[src].read_text(), where), src, lines, refs.get(src, []),
-            lambda text, w, first: unstash(md(preprocess(text, w, first))),
-            lambda kind, name, w: render_anim(name, w) if kind == "anim" else render_stepper(name, w),
-            names, group_of[src], near)
-        body = add_ids(body, annotate.file_id(src))
-        collect_ids(body, where, ids)
-        code_html.append(body)
-        _, secs, _ = annotate.parse_notes(NOTES[src])
-        file_sections[src] = [(annotate.section_id(annotate.file_id(src), s["title"]), s["title"]) for s in secs]
-    allhtml, renumbered = chapter_numbers(chapters.replace(CODE_MARK, "\n".join(code_html)), labels)
+    # each part's files with blocks of its level, in its order
+    order = {}
+    for g, t, f, lv in CODE:
+        if has_blocks(f, lv):
+            order.setdefault(lv, []).append((g, t, f))
+    code_html, file_sections = {}, {}
+    for lv, files in order.items():
+        for k, (g, t, src) in enumerate(files):
+            where = str(NOTES[src].relative_to(HERE))
+            lines = highlight_lines("\n".join(src_lines(src)).rstrip("\n"), LANG.get(pathlib.Path(src).suffix, "text"))
+            near = tuple((view_id(f, lv) if lv else annotate.file_id(f), f.removeprefix("src/")) if f else None
+                         for f in (files[k - 1][2] if k else None, files[k + 1][2] if k + 1 < len(files) else None))
+            view = None if lv is None else {"level": lv, "first": FIRST_LEVEL[src], "fid": view_id(src, lv),
+                                            "levels": annotate.line_levels(src_lines(src)), "parts": PART_OF}
+            body, secs = annotate.render(
+                NOTES[src], substitute(NOTES[src].read_text(), where), src, lines, refs.get(src, []),
+                lambda text, w, first: unstash(md(preprocess(text, w, first))),
+                lambda kind, name, w: render_anim(name, w) if kind == "anim" else render_stepper(name, w),
+                names, t, near, view)
+            vid = view["fid"] if view else annotate.file_id(src)
+            body = add_ids(body, vid)
+            collect_ids(body, where, ids)
+            code_html.setdefault(lv, []).append(body)
+            file_sections[(src, lv)] = secs
+    for lv, bodies in code_html.items():
+        chapters = chapters.replace(f"\0code{lv}\0", "\n".join(bodies))
+    allhtml, renumbered = chapter_numbers(chapters, labels)
     if renumbered:
         print(f"{len(renumbered)} links say another chapter number now")
 
@@ -1028,10 +1069,12 @@ def build():
         for item in items:
             if item is None:
                 # the files, the group named at its first one
+                lv = part.get("level")
                 for g in part.get("code", []):
-                    for k, f in enumerate(g["files"]):
-                        fid = annotate.file_id(f)
-                        sub = "".join(f'<li><a href="#{sid}">{html.escape(t)}</a></li>' for sid, t in file_sections[f])
+                    for k, f in enumerate(x for x in g["files"] if (x, lv) in file_sections):
+                        fid = view_id(f, lv) if lv else annotate.file_id(f)
+                        sub = "".join(f'<li><a href="#{sid}">{html.escape(t)}</a></li>'
+                                      for sid, t in file_sections[(f, lv)])
                         toc_html.append(f'<li class="tocchap tocfile" data-for="{fid}"><a href="#{fid}"><span class="tocno">'
                                         f'{html.escape(g["group"]) if k == 0 else ""}</span><span class="toct">'
                                         f'<code>{html.escape(f.removeprefix("src/")).replace("_", "_<wbr>")}</code></span></a>'
@@ -1045,7 +1088,8 @@ def build():
     # and on the title page, for a reader who wants the code first
     code_first = ""
     if CODE:
-        firsts = [(t, f) for k, (g, t, f) in enumerate(CODE) if k == 0 or CODE[k - 1][0] != g]
+        firsts = [(t, f) for k, (g, t, f, lv) in enumerate(CODE) if lv == CODE[0][3]
+                  and (k == 0 or CODE[k - 1][0] != g)]
         files = ", ".join(f'{html.escape(t)} in <a href="{notes_href(f)}"><code>{html.escape(f.removeprefix("src/"))}</code></a>'
                           for t, f in firsts)
         code_first = (f'<p class="codefirst"><span class="cfhead">Code first</span> Part II is the code of '
@@ -1072,7 +1116,7 @@ def build():
     sites = [(OUT_DIR, STANDALONE.name)] + ([(SITE, "")] if SITE else [])
     for d, book in sites:
         (d / "annotated").mkdir(parents=True, exist_ok=True)
-        for src in order:
+        for src in NOTES:
             (d / "annotated" / f"{annotate.link_name(src)}.html").write_text(redirect(annotate.file_id(src), book))
         for name, target in MOVED.items():
             (d / "annotated" / f"{name}.html").write_text(moved(target, book))

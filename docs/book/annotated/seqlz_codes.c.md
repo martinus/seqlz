@@ -12,12 +12,12 @@ run it on other lengths.
 
 A reading order that follows the call:
 
-1. [`seqlz_tables_build()`](#b237), the one function: a `memset()`, then one builder per table.
+1. [`seqlz_tables_build()`](#b243), the one function: a `memset()`, then one builder per table.
 2. [`first_codes()`](#b24): the canonical codes, and the check that the lengths are a complete code.
 3. [`build_token()`](#b58), the pattern of every builder: hand out codes, fill one range of the
-   decode table per code. Then [length values](#b83), [literals](#b104),
-   [their costs](#b128) and [`OWN`](#b145) with its [`quad[]`](#b171).
-4. [`has_all_symbols()`](#b217): what the encoder needs on top of a valid code.
+   decode table per code. Then [length values](#b83), [literals](#b105),
+   [their costs](#b129) and [`OWN`](#b148) with its [`quad[]`](#b174).
+4. [`has_all_symbols()`](#b221): what the encoder needs on top of a valid code.
 
 @more {#ch-codes--kernel} How the build and the kernel get the tables: `gen_seqlz_tables.c`
 Nothing runs this file while seqlz compresses. `tools/gen-tables/gen_seqlz_tables.c` is a program
@@ -157,13 +157,13 @@ and only in some builds before
 ([explored-designs.md](https://github.com/martinus/seqlz/blob/main/docs/explored-designs.md#the-sequences-bitstream-most-significant-bit-first-the-token-tables-codes-in-one-range-on-every-cpu-kept)).
 @end
 
-@@ 83-103
+@@ 83-104
 @anchor ch-codes--build-values
 The same for `ll` and `ml`, in tables of 256 entries. `ll` symbol 18 has the 5-bit code `11011`, 27:
 `enc[18] = 27 | 5 << 16`, and the 8 entries 216 to 223 get `0x4060 | 5`. `enc[]` has 32 entries for
 the encoder's masked index; those behind the last symbol stay 0 from the `memset()`.
 
-@@ 104-127
+@@ 105-128
 The same for a literal table, codes of up to 10 bits. `enc[]` has the length low and the code above it,
 the other way round from the token's, because that is what `lit_put()` wants
 ([layout](book:#ch-internal--lit-table)). The comment is for readers who know deflate: deflate reads its bits
@@ -180,7 +180,7 @@ reads its Huffman coded literals, so the codes go into the tables as `first_code
 
 ## Literal costs
 
-@@ 128-144
+@@ 129-147
 @anchor ch-codes--lit-sets
 The literal tables always come from the global `seqlz_lit_sets[8][256]`, while
 `seqlz_tables_build()` takes the token and length tables as a parameter, so that the tests can build
@@ -197,16 +197,16 @@ undefined.
 
 ## OWN and quad[]
 
-@@ 145-170
+@@ 148-173
 @anchor ch-codes--own
 `OWN` is the fixed code that a level 3 page writes its own literal table in
 ([format](book:#ch-format--own)). Its 19 symbols: 0 to 9 are the lengths 1 to 10, 10 to 18 a run of
 bytes without a code. Its lengths are not in `struct seqlz_lengths`: `seqlz_own_lengths` is generated
-into `seqlz_lengths.h`, after the literal tables ([there](seqlz_lengths.h.html#b374)). Same pattern as
+into `seqlz_lengths.h`, after the literal tables ([there](seqlz_lengths.h.html#b377)). Same pattern as
 `build_lit()`, symbol in the low byte. A length of 0 is rejected here: the encoder may need any of the
 19 symbols, and the loop would read `next[0]`, which `first_codes()` never sets.
 
-@@ 171-202
+@@ 174-205
 `quad[k]` lets the decoder take up to two lengths from 8 bits with one lookup instead of one symbol at
 a time. It is filled by decoding `k` itself with `decode[]`, symbol after symbol, as far as the 8
 bits go. `w` is `k` after the first `pos` bits, moved to the top with zeros below; a code that reaches
@@ -233,7 +233,7 @@ For `k = 0xd1`, binary `{{own.q.d1.bits}}`:
 Two lengths, so the loop ends. 256 entries are 256 runs of this loop, once per build of the tables.
 @end
 
-@@ 203-216
+@@ 206-220
 The fields of the entry ([layout](book:#ch-internal--own)). No length at all: only bit 31, which sends
 the decoder to `decode[]`. One length: `end[1] = end[0]`, because the decoder reads the second end also
 when there is no second length, and must then move by the first's bits. `0xd1` gives `0x000186a9`.
@@ -342,12 +342,11 @@ field by field.
 
 ## Checks and the entry point
 
-@@ 217-236
+@@ 221-235
 @anchor ch-codes--all-symbols
 A complete code is enough for the decoder: a symbol without a code can never appear. The encoder gets
-any page and needs more: each token a code or the escape one, every length value a code, as they have
-no escape, and every byte a code. A byte without one would count 0 bits in `lit_cost`, and its table
-would look cheapest for exactly the pages it cannot code. The test `seqlz: the tables need a code for
+any page and needs more: each token a code or the escape one, and every length value a code, as they
+have no escape. The test `seqlz: the tables need a code for
 every symbol the compressor may write` gives it a complete `ml` table whose last symbol has no code:
 the decoder could use it, and the build is `-EINVAL`.
 
@@ -355,9 +354,16 @@ The escape's limit, `SEQLZ_MAX_ESCAPE_LEN`, comes from the encoder's proof that 
 two pages: the escape code, the token's 12 bits and a class 3 offset of 12 bits must stay within 31
 bits ([the escape](book:#ch-header--escape)).
 
-@@ 237-256
-The `memset()` does more than the comment says: tokens without a code need `enc[]` 0, `lit_cost` is
-built with `|=`, and a test that builds twice on the same memory keeps nothing of the first set. A
+@@ 236-239
+Level 2's literal tables need a code for every byte too. A byte without one would count 0 bits in
+`lit_cost`, and its table would look cheapest for exactly the pages it cannot code.
+
+@@ 240-242
+One answer for all of them.
+
+@@ 243-259
+The `memset()` does more than the comment says: tokens without a code need `enc[]` 0, level 2's
+`lit_cost` is built with `|=`, and a test that builds twice on the same memory keeps nothing of the first set. A
 failure leaves the struct half built, which nobody uses: the generator stops the build, and a test
 only checks the `-EINVAL`.
 @more {#ch-codes--init} Before 22nd October 2026: tables built when a program started
@@ -366,3 +372,12 @@ program had to call first. It kept tables the encoder could not use and marked t
 `all_symbols` field, which the encoder checked for every block. Now such lengths stop the build
 ([at build time](#ch-codes--kernel)).
 @end
+
+@@ 260-263
+Level 2's 8 literal tables, built from `seqlz_lit_sets`, with `lit_cost` from them.
+
+@@ 264-267
+Level 3's fixed code of a page's own table, from `seqlz_own_lengths`, with its `quad[]`.
+
+@@ 268-269
+All built: 0.

@@ -52,16 +52,24 @@ python3 docs/book/lint.py            # dashes, banned words, measurements withou
   and the line numbers in the prose move from the book's commit to that one; `--write` applies them and
   sets `"src"` to it. Then read the prose next to each listing marked CHANGED, and `build.py --check`.
 - `STYLE.md` is the brief the chapters were written to, `REVIEW.md` the one they were checked with.
-- Part II is the code itself: `annotate.py` makes a chapter of each file of `src/` with notes,
+- Parts II to IV are the code itself: `annotate.py` makes a chapter of each file of `src/` with notes,
   `annotated/<file>.md`: the file at the book's commit, a short note next to each block, and under a
   note buttons that open a figure or a longer explanation (`@more` ... `@end`, with everything a
   chapter has but listings) under the block. The build fails with notes that miss lines or link to an
-  id the book does not have; every listing of the file gets a link "notes" to its lines there. Part
-  II's `"code"` in `book.json` is the reading order of the files, in groups, and `{"code": true}` in its
+  id the book does not have; every listing of the file gets a link "notes" to its lines there. A
+  part's `"code"` in `book.json` is the reading order of the files, in groups, and `{"code": true}` in its
   chapters is where they go; `@code` in a chapter lists them, and the build fails when that list and
   `annotated/*.md` differ. `remap.py` moves the blocks with their lines. The files had pages of their
   own until October 2026: `annotated/<file>.html` is now a redirect to the same place in the book; a file
   that is gone, `MOVED` in `build.py`, to where its notes went.
+- One part per level: a part with `"level"` in `book.json` shows the blocks of that level. A line's
+  level is the first level a build has it at, from the `#if SEQLZ_LEVELS >= n` around it; the `#if`,
+  `#else` and `#endif` lines and blank lines go with any level. A block's level is that of its lines,
+  at least the level of the file's first part, and the build fails on a block with lines of two levels:
+  split it where the level changes. In each part, a run of blocks of other levels is one line that says
+  which level and links there. `@intro <level>` in the notes starts the intro of the file in that
+  level's part. A file's chapter is `f-<file>` in its first part and `f-<file>-l<level>` in the others;
+  a block keeps `f-<file>-b<line>` in whichever part shows it.
 - A chapter folded into the notes keeps its ids as `@more {#id}` and `@anchor <id>`, so links to it
   still work. Links that say "chapter 13", or only "13", get the number of the chapter they go to, and
   `{{chapter:<id>}}` is a chapter's number anywhere else, so taking a chapter out renumbers the rest.

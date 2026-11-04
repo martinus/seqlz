@@ -7,9 +7,9 @@ per level. In the kernel's copy both headers are in this file, in that order, ri
 
 A reading order that follows the call:
 
-1. [`seqlz_compress()`](#b98), the kernel's interface, which zram calls, and
-   [`seqlz_compress_block()`](#b75), which it calls: levels 1 and 2 go to
-   [`compress_block()`](#b16), level 3 to [`compress_own()`](#b34).
+1. [`seqlz_compress()`](#b109), the kernel's interface, which zram calls, and
+   [`seqlz_compress_block()`](#b77), which it calls: levels 1 and 2 go to
+   [`compress_block()`](#b16), level 3 to [`compress_own()`](#b35).
 2. The encoder, in [`seqlz_encoder.h`](seqlz_encoder.h.html), and the matcher, in
    [`seqlz_match.h`](seqlz_match.h.html).
 
@@ -18,14 +18,14 @@ A reading order that follows the call:
 The kernel headers the file uses, including those of the two headers, which the kernel's copy has in
 this file. Then the encoder and the matcher, both inlined into the functions below.
 
-@@ 16-33
+@@ 16-34
 Levels 1 and 2: the greedy matcher and the encoder, the whole compression loop once inlined.
 
 The check of `dst_cap` is here and in `compress_own()`, not once in `seqlz_compress_block()`: there it took
 1% more instructions at levels 1 and 2, on 2000 pages of a desktop dump with gcc 16.2 on x86-64, 23rd
 October 2026 (commit `75756b7`).
 
-@@ 34-74
+@@ 35-76
 Level 3: the lazy matcher with records. A page that does not fit with its records is matched once
 more without them, as `encoder_init()` clears `e.rec`; a loop and not two calls, so the inlined matcher
 is in the function once. Then `seqlz_delta_literals()` picks the delta, moves the literals down over
@@ -44,25 +44,37 @@ With the records only in the lazy matcher's copy, and the decoder's loop copied 
 run's spread.
 @end
 
-@@ 75-97
-What zram calls. `dst_cap` is cut to `SEQLZ_COMPRESS_BOUND`, since the bitstream starts at the end of
-`dst`: with a larger `dst` it would land far from the page, in memory nothing else of it touches.
+@@ 77-81
+What zram calls, through the interface's `seqlz_compress()` below.
 
-Level 1 stops after `compress_block()`. Level 2 codes the literals with one of 8 fixed tables, using
-the matcher's 8 KiB hash table for the coded streams, so it needs no memory of its own.
-Level 3 hands the delta to `seqlz_code_own()`.
+@@ 82-85
+Level 3's delta, from `compress_own()` to `seqlz_code_own()`.
+
+@@ 86-93
+`dst_cap` is cut to `SEQLZ_COMPRESS_BOUND`, since the bitstream starts at the end of `dst`: with a
+larger `dst` it would land far from the page, in memory nothing else of it touches.
+
+@@ 94-99
+Level 3: [`compress_own()`](#b35), then `seqlz_code_own()` with the delta it picked.
+
+@@ 100-100
+Levels 1 and 2: the greedy matcher and the encoder, the page with raw literals.
+
+@@ 101-104
+Level 2 codes the literals with one of 8 fixed tables where that saves enough, using the matcher's
+8 KiB hash table for the coded streams, so it needs no memory of its own.
 @more {#ch-encoder--entry} Three levels on two pages, and a `dst` larger than two pages
 `seqlz_code_literals()` codes the literals with one of the 8 fixed literal tables if that saves
 enough, and returns the new length or `len` unchanged; `seqlz_code_own()` does the same at level 3,
 also with a table of the page's own. Both use `st->literals`, the matcher's 8 KiB table as bytes
 through the union in `struct seqlz_state` ([what lies where](#ch-header--state)): level 2 writes the
 coded streams into slots there and copies them over the raw literals once all are read
-([the slots](seqlz_compress_literals.c.html#b864)), level 3 mostly reads the literals from a copy there
+([the slots](seqlz_compress_literals.c.html#b309)), level 3 mostly reads the literals from a copy there
 while it writes the coded ones over the raw ones in `dst` ([in place](#ch-literals-enc--in-place)).
 `seqlz_code_own()` also uses
-[`own_work(st)`](seqlz_compress_literals.c.html#b992), the upper half of the same 8 KiB.
+[`own_work(st)`](seqlz_compress_literals.c.html#b921), the upper half of the same 8 KiB.
 
-The text page of [chapter 4](#ch-format--own) shows what the levels do to one page: {{words.len}}
+The text page of [Part IV](#ch-format--own) shows what the levels do to one page: {{words.len}}
 bytes at level 1, {{words.coded.len}} at level 2 and {{words.l3.len}} at level 3, without deltas; the
 page of pointers {{pointers.len}} bytes at level 1, {{delta.ptr.l2.len}} at level 2 and
 {{delta.ptr.l3.len}} at level 3, with them.
@@ -75,19 +87,23 @@ page, in memory the page has nothing else in (commit `8fed16a`). zram passes exa
 pages did not change.
 
 In the kernel's copy `seqlz_compress_block()` is `static` and has no test of the level: the
-interface's `seqlz_compress()` [below](#b98) is its one caller and tests it.
+interface's `seqlz_compress()` [below](#b109) is its one caller and tests it.
 @end
+
+@@ 105-108
+A build of level 1 alone stops here: the page keeps its raw literals.
 
 ## The kernel's interface
 
-@@ 98-118
+@@ 109-128
 @anchor ch-zram-glue--api
 The interface's `seqlz_compress()`, which zram's backend calls, declared in
 [`linux/seqlz.h`](linux-seqlz.h.html). The compressor's 0 becomes `-E2BIG`, "output too small", and a
-level outside 1 to 3 is `-EINVAL`. The `static_assert`s tie the interface's numbers to the codec's:
-the work memory is the matcher's state, and the interface's levels are the codec's, so
-`seqlz_compress()` passes `level` on unchanged. The last one ties the 32 bytes that `seqlz_compress()`'s
-kernel-doc names ([`linux/seqlz.h`](linux-seqlz.h.html#b42)) to `ENC_ROOM`, so the documentation
+level outside 1 to `SEQLZ_LEVEL_MAX` is `-EINVAL`. The `static_assert`s tie the interface's numbers to
+the codec's: the work memory is the matcher's state, and the interface's levels start at 1 as the
+codec's do, so `seqlz_compress()` passes `level` on unchanged; the levels above, 2 and 3, are checked
+where a build has them ([`seqlz_internal.h`](seqlz_internal.h.html#b103)). The last one ties the 32 bytes that `seqlz_compress()`'s
+kernel-doc names ([`linux/seqlz.h`](linux-seqlz.h.html#b59)) to `ENC_ROOM`, so the documentation
 cannot drift from the encoder.
 
 ::: kernel EXPORT_SYMBOL_GPL

@@ -463,7 +463,7 @@ static void chapter11(void) {
     str("ch11.odd32", "0x%08llx", (unsigned long long)((x >> 8 & lanes) >> 32));
 
     /*
-     * level 2's pricing of the page, as code_literals() does it below SEQLZ_LEVEL_OWN: every
+     * level 2's pricing of the page, as code_sampled() does it: every
      * LIT_SAMPLE_STEP-th literal in all 8 tables, one sum per table, then the test with the margin
      */
     {
@@ -484,6 +484,8 @@ static void chapter11(void) {
         fact_num("ch11.sample.step", LIT_SAMPLE_STEP);
         fact_num("ch11.sample.margin", LIT_SAMPLE_MARGIN);
         fact_num("ch11.sample.n", sampled);
+        /* the most bits a table's sum of the sample has: every literal of a page sampled, 10 bits each */
+        fact_num("ch11.sample.max_bits", (SEQLZ_BLOCK_SIZE / LIT_SAMPLE_STEP + 1U) * SEQLZ_LIT_BITS);
         for (k = 0; k < SEQLZ_LIT_SETS; k++) {
             total[k] = lit_bits(&s_even, &s_odd, 0, k);
             order[k] = k;

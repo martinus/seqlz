@@ -234,6 +234,9 @@ kbd { border: 1px solid var(--rule); border-bottom-width: 2px; border-radius: 3p
 .secno { font-stretch: 75%; color: var(--muted); font-size: 0.9rem; font-variant-numeric: tabular-nums; }
 .blk { display: grid; grid-template-columns: minmax(0, 1fr) var(--note); column-gap: 1.75rem; border-top: 1px solid var(--rule); }
 .sec .blk:first-of-type { border-top: 0; }
+/* where a part leaves out the blocks of another level: which lines, and a link to them */
+.otherlvl { margin: 0; padding: 0.35rem 0.8rem; border-top: 1px solid var(--rule); border-left: 3px dashed var(--rule);
+            color: var(--muted); font-size: 0.85rem; font-variant-numeric: tabular-nums; }
 .anchor { position: absolute; }
 .bcode { min-width: 0; background: var(--sheet); }
 .bcode pre.code { background: transparent; padding-block: 0.55rem; box-shadow: inset 3px 0 0 transparent; transition: box-shadow 0.15s; }

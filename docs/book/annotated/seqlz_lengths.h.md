@@ -140,7 +140,7 @@ decode table of 256 entries.
 
 ## Eight tables, one per kind of page
 
-@@ 226-227
+@@ 226-228
 The 8 literal tables, and the code `OWN`, as code lengths: one byte per byte value, 16 per line, so
 line `n` of a table is the bytes `16 * n` to `16 * n + 15`. Generated from the same counts as the
 token table ([how they are trained](seqlz_lengths.c.html#b12)).
@@ -153,10 +153,10 @@ Each table is a group of training pages that k-means found, and the length-limit
 their literals. The generator adds 1 to every count, so a byte that never occurred in a group still
 gets a code, of 10 bits: the encoder needs a code for any byte zram hands it.
 
-@@ 228-245
-Table 0, text. The space, `0x20`, and `e`, `0x65`, have the shortest codes, 4 bits; `\n` (line 229, the 11th
-number) has 5. Line 235 is `` ` `` and `a` to `o`, 4 to 8 bits except `` ` `` and `j`. The bytes from `0x80` on,
-lines 237 to 244, are all 10 bits: rare in this group.
+@@ 229-246
+Table 0, text. The space, `0x20`, and `e`, `0x65`, have the shortest codes, 4 bits; `\n` (line 230, the 11th
+number) has 5. Line 236 is `` ` `` and `a` to `o`, 4 to 8 bits except `` ` `` and `j`. The bytes from `0x80` on,
+lines 238 to 245, are all 10 bits: rare in this group.
 @more {#ch-codes--table-0-line-17} The bytes `0x60` to `0x6f` of table 0, byte by byte
 Line {{ch08.litinc.line60}} is the bytes `0x60` to `0x6f`, the backtick and `a` to `o`, with their
 code lengths in table 0:
@@ -170,30 +170,30 @@ The other 7 tables differ: tables 1 and 4 give `0x00` 2 bits, table 7 gives `0xf
 {{lit.7.len.255}} bits. Every table has codes of 10 bits.
 @end
 
-@@ 246-263
+@@ 247-264
 Table 1, binary data: `0x00` has 2 bits, a quarter of the code space, then `0x01` at 5 bits and
 small numbers and powers of 2 at 6.
 
-@@ 264-299
+@@ 265-300
 Table 2: upper-case letters, `_` and digits at 5 and 6 bits. Table 3: text again, `e` at 4 bits, with
 `0x00` at 5 bits among the letters.
 
-@@ 300-335
+@@ 301-336
 Table 4: `0x00` at 2 bits, then lower-case letters. Table 5: tab and the digits at 4 bits, numbers
 written as text.
 
-@@ 336-353
+@@ 337-354
 Table 6: `0x00` at 3 bits, `0xff` at 4, then `0x48`, `0x89` and `0x8b` at 5: bytes that are common in x86-64
 machine code, where `0x48` is the prefix of a 64-bit operation and `0x89` and `0x8b` are `mov`.
 
-@@ 354-373
+@@ 355-376
 Table 7: `0xff` at 2 bits, the last number of the table, and everything else 7 to 10 bits:
 pages with many `0xff` bytes. [The measurement](book:#ch-codes--lit-sets-file) has why 8 tables and
 not 16.
 
 ## The code OWN
 
-@@ 374-379
+@@ 377-383
 The 19 code lengths of `OWN`, the code that a level 3 page writes its own literal table in. Symbols 0
 to 9 are the lengths 1 to 10, so the first line's 2, 2 at positions 8 and 9 say that lengths 9 and 10
 are the most frequent in such tables: most bytes are rare. Symbols 10 to 18 are runs of bytes without

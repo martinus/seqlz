@@ -7,9 +7,9 @@ kernel-doc, the kernel's format for documenting a function.
 
 A reading order:
 
-1. [`seqlz_compress_block()`](#b91): the compressor with the state and the level as the code has them,
+1. [`seqlz_compress_block()`](#b95): the compressor with the state and the level as the code has them,
    which the kernel's `seqlz_compress()` calls.
-2. For tests and tools: [`seqlz_find()`](#b45) and [`seqlz_encode()`](#b60), the compressor cut in
+2. For tests and tools: [`seqlz_find()`](#b49) and [`seqlz_encode()`](#b64), the compressor cut in
    two halves, in [`seqlz_harness.c`](seqlz_harness.c.html), and [`seqlz_tables_build()`](#b19).
 
 ## Types
@@ -53,37 +53,43 @@ lengths to check that bad ones are refused, into a struct of their own: the glob
 nothing can replace it.
 @end
 
-@@ 35-41
-The format's tables as code lengths, one byte per symbol: the sequences' tables, the 8 fixed literal
-tables of 256 bytes each, and the fixed code in which a page's own literal table is written. These
-arrays are the format; everything else is computed from them ([tables as code lengths](book:#ch-header--lengths)).
+@@ 35-38
+The format's tables as code lengths, one byte per symbol: the sequences' tables, the tokens' and the
+two length values'. These arrays are the format; everything else is computed from them
+([tables as code lengths](book:#ch-header--lengths)).
+
+@@ 39-41
+Level 2's: the 8 fixed literal tables, 256 bytes each.
+
+@@ 42-45
+Level 3's: the fixed code in which a page's own literal table is written.
 
 ## Compressing
 
-@@ 42-44
+@@ 46-48
 Every sequence with a match covers at least 4 bytes, so a 4 KiB block has at most 1024 of them, plus
 the last one, which only has literals: 1025.
 `seqlz_find()` needs room for that many and `seqlz_encode()` rejects more, and the decoder's work per
 page is bounded by the same count.
 
-@@ 45-59
+@@ 49-63
 The matcher alone, without the encoder, in [`seqlz_harness.c`](seqlz_harness.c.html#b39). The table trainer counts the symbols of exactly these
 sequences, and the tests and a fuzzer check that `seqlz_encode()` of them gives the same bytes as
 `seqlz_compress_block()`. At level 3 the matcher is another one, so the sequences differ. It does not copy
 the literals; a tool takes them from the block.
 
-@@ 60-90
+@@ 64-94
 The encoder alone, also in [`seqlz_harness.c`](seqlz_harness.c.html#b108), for sequences from outside: the tests, a fuzzer, and `tools/seqlz-worst/`, which
 writes valid pages the matcher would never produce, to find the slowest ones to decode.
 
-It checks the rules of lines 77 to 80 before it writes anything. It did not always: a match shorter
+It checks the rules of lines 81 to 84 before it writes anything. It did not always: a match shorter
 than 4 bytes made `ml - 4` wrap to a huge number, and 1025 such sequences wrote past the two pages of
 `dst` (fixed in commit `256768e`, with `fuzz/seqlz_encode_fuzz.c`, a fuzzer that feeds the encoder
 raw sequences). Nothing checks that `block` matches the sequences: a wrong one gives
 a page that decodes to something else. 0 can mean failure because every page has at least its 2-byte
 header.
 
-@@ 91-118
+@@ 95-122
 What the harness's zram glue calls, and the kernel's `seqlz_compress()`. A `dst` smaller than two blocks also works, e.g. the single page of
 zswap, the kernel's other compressed swap, a cache in RAM in front of a swap device. But a page that
 does not fit fails up to 32 bytes early: before each sequence the encoder checks for its literals plus
@@ -94,6 +100,6 @@ ones then go over them, and meanwhile `st` holds the coded streams, or at level 
 the raw literals or their deltas ([the coder](book:#ch-literals-enc--overview)). Level 3
 also needs a 6-byte record per sequence with literals, for its deltas
 ([records](book:#ch-encoder--records)); if they do not fit, it matches the page again without them.
-In the kernel copy it is `static`: the kernel's [`seqlz_compress()`](seqlz_compress.c.html#b98)
+In the kernel copy it is `static`: the kernel's [`seqlz_compress()`](seqlz_compress.c.html#b109)
 calls it, returns `-EINVAL` for a level outside 1 to 3, and `-E2BIG` instead of 0.
 @anim ends The buffer dst during a real page, from both ends, then turned around

@@ -17,7 +17,7 @@ sense given here.
 - **coded literals**: literals written as Huffman codes of one literal table in 8 streams, from level 2
   on where that saves $\frac{1}{16}$ of them plus {{ch15.coded_min}} bytes, at level 3
   {{ch11.coded_min_own}}.
-  [`code_literals()`](#ch-literals-enc)
+  [`code_sampled()`](#ch-literals-enc)
 - **complete**: a prefix code whose codes use up every bit pattern, Kraft sum 1, so a decode table has no
   empty entry. [Chapter 2](#ch-compression--complete)
 - **decoder, encoder, matcher**: the matcher finds the matches of a page (`src/seqlz_match.h`), the encoder
@@ -27,7 +27,7 @@ sense given here.
   modulo 256, before it is coded, one of three ways per page, which the byte `dt` before the stream
   sizes names: the byte 4 or 8 before, or the byte at the offset of the sequence before, for every
   literal at least that far into the page; bit 7 of byte 2 says the page has deltas. The decoder
-  adds the byte back. [Chapter 4](#ch-format--deltas)
+  adds the byte back. [Part IV](#ch-format--deltas)
 - **dictionary**: data compressor and decoder share before the first byte; zram can pass one, seqlz's
   kernel backend refuses it. [Why](#ch-zram-glue--head)
 - **entropy**: the fewest bits per symbol any code can reach for given frequencies,
@@ -68,7 +68,7 @@ sense given here.
   64-bit register. [Chapter 2](#ch-compression--msb)
 - **own table, `OWN`**: a literal table of the page's own, at level 3: code lengths for the byte values
   the page has, sent in front of the streams as symbols of the fixed code `OWN`, in byte order, with
-  runs for the byte values without a code. [Chapter 4](#ch-format--own)
+  runs for the byte values without a code. [Part IV](#ch-format--own)
 - **offset bits, offset class**: the class, in the token, says how the offset is stored: the repeat
   offset in 0 bits, offset 2 in {{ch18.class_bits.1}}, below 256 and below the page size in
   {{ch18.class_bits.2}} and {{ch18.class_bits.3}}, multiples of 8 below 256 and 2048, divided by 8, in

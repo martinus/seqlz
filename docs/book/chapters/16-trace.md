@@ -1,6 +1,6 @@
 # One page, through every function {#ch-trace}
 
-Part II explained each function on its own. This chapter follows one page through all of them in the
+Parts II to IV explained each function on its own. This chapter follows one page through all of them in the
 order they run: the tables are built, the page is compressed with `seqlz-2`, and decoded again.
 Every number was printed by a small program that calls the real code of `src/`, or by a copy of the
 decoder with two counters added. The program is at the end, so you can change the page and watch the
