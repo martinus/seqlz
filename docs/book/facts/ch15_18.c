@@ -106,10 +106,14 @@ static void fact_lines(const char* key, unsigned int first, unsigned int last) {
     putchar('"');
 }
 
-/* test/seqlz_endian.c, its main() renamed and its line kept instead of printed */
+/*
+ * test/seqlz_endian.c, its main() renamed and its first line kept instead of printed: the hash of all
+ * levels; the lines after it, one per level, are left out
+ */
 static char endian_out[256];
+static int endian_lines;
 #define main endian_main
-#define printf(...) snprintf(endian_out, sizeof endian_out, __VA_ARGS__)
+#define printf(...) (endian_lines++ ? 0 : snprintf(endian_out, sizeof endian_out, __VA_ARGS__))
 #define next endian_next
 #include "../../test/seqlz_endian.c" /* found through -I docs/book */
 #undef printf

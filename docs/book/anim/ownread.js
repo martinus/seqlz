@@ -58,7 +58,7 @@ BookAnim.define('ownread', function (ctx) {
   var plan = build(PAGES[pageId]);
 
   function sayOf(k) {
-    var p = plan, st = p.S[k], P = p.P, s = st.s, what = P.id === 'text' ? 'chapter 4’s text page' : 'the base64 page';
+    var p = plan, st = p.S[k], P = p.P, s = st.s, what = P.id === 'text' ? 'the text page' : 'the base64 page';
     if (st.intro) {
       return 'The description of ' + what + '’s own table, ' + p.DBYTES + ' bytes from byte ' + P.at + ' of the compressed page. bits is empty, avail = 0, ' +
         'space = 0 of ' + FULL + ', b = 0: the next length is for byte value 0.';
@@ -98,7 +98,7 @@ BookAnim.define('ownread', function (ctx) {
   }
 
   var choice = ctx.el('div', 'an-choice', null, ctx.bar);
-  var btns = [['text', 'chapter 4’s text page'], ['base64', 'the base64 page']].map(function (m) {
+  var btns = [['text', 'the text page'], ['base64', 'the base64 page']].map(function (m) {
     var b = ctx.el('button', null, m[1], choice);
     b.type = 'button'; b.setAttribute('aria-pressed', m[0] === pageId ? 'true' : 'false');
     b.addEventListener('click', function () {

@@ -94,7 +94,7 @@ BookAnim.define('ownlens', function (ctx) {
   var choice = ctx.el('div', 'an-choice', null, ctx.bar);
   var root = ctx.svg('svg', { role: 'img', 'aria-label': 'Each byte’s share of the literals and the share of the code space its code length takes, the gain buckets, and the code space' }, ctx.stage);
   var flat = ctx.svg('g', {}, root), cols = ctx.svg('g', {}, root);
-  var btns = [['text', 'chapter 4’s text page'], ['base64', 'the base64 page']].map(function (m) {
+  var btns = [['text', 'the text page'], ['base64', 'the base64 page']].map(function (m) {
     var b = ctx.el('button', null, m[1], choice);
     b.type = 'button'; b.setAttribute('aria-pressed', m[0] === pageId ? 'true' : 'false');
     b.addEventListener('click', function () {

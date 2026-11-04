@@ -17,6 +17,8 @@ paths:
   Then reread the prose next to each listing marked CHANGED, grep the chapters for every name the
   changes removed or renamed, then `docs/book/build.py --check` (`npm install` in `docs/book` once, or
   `ln -s` another worktree's `docs/book/node_modules`; git ignores it).
+- Parts II to IV are one level each (`"level"` in `book.json`). A note block has the lines of one level,
+  from the `#if SEQLZ_LEVELS` around them: a new or moved `#if` fails the build with the line to split at.
 - Computed values are `{{key}}` from `docs/book/facts/*.c`, `@program`/`@output` or `@assert`
   (`docs/book/README.md`): format/table changes fail the build where prose needs a look.
 - Writing chapters: `docs/book/STYLE.md` (the reader knows C and C++; one number per measurement, the

@@ -10,13 +10,13 @@ every CPU.
 Almost every line is a bit layout: which bits of an entry hold what, and `static_assert()`s that the
 fields are wide enough. A reading order:
 
-1. [How a decode table works](#b14), and the [length values' table](#b39).
-2. The [token table](#b45) and the [literal tables](#b62), sized for the L1 cache.
-3. [`lit_cost`](#b67): all 8 literal tables priced with one add per literal.
-4. [`quad[]`](#b95): two code lengths of a page's own table per lookup.
-5. [`struct seqlz_tables`](#b121), the one global.
-6. The end of the file, the part to read closely: the [token entry's fields](#b140) and
-   [`token_entry()`](#b172), which builds them.
+1. [How a decode table works](#b14), and the [length values' table](#b38).
+2. The [token table](#b44) and the [literal tables](#b61), sized for the L1 cache.
+3. [`lit_cost`](#b69): all 8 literal tables priced with one add per literal.
+4. [`quad[]`](#b102): two code lengths of a page's own table per lookup.
+5. [`struct seqlz_tables`](#b129), the one global.
+6. The end of the file, the part to read closely: the [token entry's fields](#b152) and
+   [`token_entry()`](#b184), which builds them.
 
 ## Decode tables
 
@@ -59,15 +59,16 @@ Its {{ll.len.18}}-bit code is `{{ll.code.18}}`, so the entry
 ([`seqlz_br_value()`](#ch-dec-basics--value)). The largest base is {{ch07.len_base_max}}.
 @end
 
-@@ 30-38
+@@ 30-37
 The length tables have fewer than 32 symbols, but the encoder indexes `enc[]` with
 `symbol & (ENC_LEN_SYMBOLS - 1U)`, and that mask is a proof only if the array has a power of 2
 entries. The first assert keeps the mask from folding a real symbol onto another one.
 
 `CODE_LENGTHS` sizes the arrays that [`first_codes()`](book:#ch-codes--first-codes) and
 [`own_code()`](book:#ch-literals-enc--own) index with a code's length, so no table may have codes of 16
-bits. Three asserts and not one, because the kernel's `checkpatch` warns about a condition that
-compares two constants inside a longer one ([checks](book:#ch-zram-glue--check)).
+bits; the literals' assert follows [from level 2 on](#b61). One assert per table and not one for all,
+because the kernel's `checkpatch` warns about a condition that compares two constants inside a longer
+one ([checks](book:#ch-zram-glue--check)).
 @more {#ch-internal--masks} Which masks, and what they saved
 `enc_put()` shifts the accumulator by `n & 63U`, its count of bits masked
 ([the encoder](#ch-encoder--put)), and `put_len_value()` indexes the length values' `enc[]` with the
@@ -81,7 +82,7 @@ has the cycles).
 
 ## The tables
 
-@@ 39-44
+@@ 38-43
 Both forms in one struct, because one computation makes them: `build_values()` works out each
 symbol's code once and writes it to both. No function reads both, so a CPU loads only the cache lines
 of the array it uses. `enc[]` has the code in the low 16 bits and its length from bit 16 on. The
@@ -96,15 +97,15 @@ entries [the decode tables](#ch-internal--decode-tables) show, is
 apart with `entry >> 16 & 15U` and `entry & 0xffffU` ([the encoder](#ch-encoder--codes)).
 @end
 
-@@ 45-53
+@@ 44-52
 The decoder's table: 2048 entries of 4 bytes, 8 KiB, indexed by the next 11 bits. What an entry holds
-is [the end of the file](#b140). The encoder's: one `u16` per token, 3072 tokens and the escape, about
+is [the end of the file](#b152). The encoder's: one `u16` per token, 3072 tokens and the escape, about
 6 KiB. The compressor reads the matcher's hash table of 8 KiB at every position and `enc[]` at every
 sequence; 14 KiB together leave room in an L1 data cache of 32 KiB. Until 23rd September 2026 the
 entries were `u32`, {{ch07.size.token_enc_u32|grp}} bytes, 20 KiB with the hash table (commit
 `c84ba25`).
 
-@@ 54-61
+@@ 53-60
 An `enc[]` entry is the code in bits 0 to 11 and its length in bits 12 to 15. E.g. a 5-bit code `10110`
 is stored as `0x5016`. A code can be the number 0, but its entry is not 0, because the length is in it
 too. So an entry of 0 means only one thing, "no code": the encoder then writes the escape's code and
@@ -124,7 +125,10 @@ Token 49's code is the number 0, and its entry is not 0. Token 1797 has no code:
 goes out as the escape's code and 1797 in 12 bits.
 @end
 
-@@ 62-66
+@@ 61-68
+From level 2 on, the literal tables. The assert keeps a literal's code length below `CODE_LENGTHS`, as
+[the asserts above](#b30) do for the tokens and the length values.
+
 `decode[]` has the code's length in the low byte and the literal in the high byte. A byte and a length
 of at most 10 fit 2 bytes, and a literal table is 2 KiB, half the cache lines it would be with 4-byte
 entries.
@@ -144,7 +148,7 @@ dropped later with `& 255`. The 8 tables are {{ch07.size.lit_table}} bytes each,
 {{ch07.size.lit|grp}} together, and a page reads one of them.
 @end
 
-@@ 67-74
+@@ 69-76
 SWAR, SIMD within a register ([chapter 3](book:#ch-cpu--swar)): byte `j` of `lit_cost[b]` is the code
 length of byte value `b` in table `j`. E.g. the zero byte has a 2-bit code in tables 1 and 4, so bytes
 1 and 4 of `lit_cost[0]` are 2. Adding `lit_cost[b]` for each literal sums all 8 tables in one add,
@@ -220,21 +224,26 @@ four literals the same way.
 @assert lit[1].len[0] == lit[4].len[0] == 2 and min(lit[0].len[0], lit[2].len[0], lit[3].len[0], lit[5].len[0], lit[6].len[0], lit[7].len[0]) > 2 and ch07.lit_best == 4
 
 A word has 8 lanes because byte 2 of the format holds the number of fixed tables at 8
-([the asserts](#b75)). `lit_sums()` adds 25 literals per stream into 8-bit lanes, then spreads them
+([the asserts](#b77)). `lit_sums()` adds 25 literals per stream into 8-bit lanes, then spreads them
 into two words of 16-bit lanes with the mask `0x00ff00ff00ff00ff`: every 200 literals of the page, 25
 for each of the 8 streams. The animation under the note shows it on a real page.
 @end
 
-@@ 75-81
+@@ 77-88
 @anchor ch-internal--byte2
-Byte 2 of a page with coded literals: bits 0 to 3 pick the table (0 to 7 the fixed ones, 8 the page's
-own), bits 4 to 6 the width of the stream sizes minus 5, bit 7 the deltas
-([coded literals](book:#ch-format--coded)). These asserts tie the constants to that layout. A 9th
-fixed table would collide with `SEQLZ_LIT_OWN`, and the decoder's `s[2] & (SEQLZ_LIT_SETS - 1U)` would
-no longer pick the table. The second assert: 3 bits hold the 8 widths, 5 to 12, and they end where
-the delta bit starts.
+Byte 2 of a page with coded literals: bits 0 to 3 pick the table, 0 to 7 the fixed ones, bits 4 to 6
+the width of the stream sizes minus 5, bit 7 the deltas ([coded literals](book:#ch-format--coded)).
+These asserts tie the constants to that layout. The second one: 3 bits hold the 8 widths, 5 to 12,
+and they end where the delta bit starts. Bit 7 and the codes 8 to 15 are level 3's; a level 2 decoder
+rejects a page with them. The last assert guards code, not the format: the encoder's `lit_streams()` and
+the decoder's `seqlz_decode_literals()` are written out by hand for 8 streams.
 
-@@ 82-91
+@@ 89-91
+Level 3's code 8, the page's own table, comes right after the fixed ones. A 9th fixed table would
+collide with `SEQLZ_LIT_OWN`, and the decoder's `s[2] & (SEQLZ_LIT_SETS - 1U)` would no longer pick the
+table.
+
+@@ 92-101
 The delta `SEQLZ_DELTA_LAST` subtracts the byte as far back as the offset of the sequence before. Here
 because the encoder and the decoder both need it. Below 4 it is the smallest multiple of `last` that is
 at least 4: `last` 1 or 2 gives 4, 3 gives 6. With offset 3 the pattern repeats every 3 bytes, so the
@@ -256,20 +265,17 @@ would have copied next, as the byte 6 back is with offset 3. An offset of 4 or m
 it is.
 @end
 
-@@ 92-94
-Guards code, not the format: the encoder's `lit_streams()` and the decoder's
-`seqlz_decode_literals()` are written out by hand for 8 streams.
 
 ## A page's own table
 
-@@ 95-114
+@@ 102-121
 A page's own literal table is sent as a description, coded with the fixed code `OWN`. Decoding it is a
 chain, where the next symbol starts is known only after this one. Most symbols are lengths of 7 to 10
 with codes of 2 or 3 bits, so 8 bits often hold two whole, and `quad[]` returns both from one lookup.
 
 E.g. `quad[0xd1]`: the 8 bits are a run of 1, then the length 9, then the length 10. The first ends
 after 6 bits, the second after 8. `OWN_QUAD_NONE`, 11, is no length: it marks a missing second one, and
-the decoder handles it without a branch ([`read_own_table()`](seqlz_decompress_literals.c.html#b239)). A
+the decoder handles it without a branch ([`read_own_table()`](seqlz_decompress_literals.c.html#b242)). A
 run longer than 7 gets only bit 31, and the decoder takes its symbol from `decode[]`.
 @anim ownread How the decoder reads a page's own table with quad[]
 @more {#ch-internal--own} `quad[0xd1]` and `quad[0xfc]`, field by field
@@ -298,23 +304,32 @@ are in the next byte, get only bit 31, `{{own.q.fc.entry}}`: the decoder then ta
 @assert own.q.fc.alone == 1 and own.q.fc.sym == 15
 @end
 
-@@ 115-120
+@@ 122-128
 The three forms of `OWN`. `decode[]` is indexed by the next 8 bits, as the token table by the next 11.
 Here the code's length is in the high byte of both `decode[]` and `enc[]`, the other way round from
-`struct lit_table`'s `enc[]`. [`build_own()`](seqlz_codes.c.html#b145) builds all three.
+`struct lit_table`'s `enc[]`. [`build_own()`](seqlz_codes.c.html#b148) builds all three.
 
 ## All tables in one global
 
-@@ 121-131
+@@ 129-130
 One `const` global, written as C when seqlz is built, in the kernel as in userspace. It sits in
 read-only data, nothing writes it at run time, and nothing has to build it before the first page.
 Lengths that are no complete code, or that leave out a symbol the encoder may write, stop the build
-instead ([`has_all_symbols()`](seqlz_codes.c.html#b217)).
+instead ([`has_all_symbols()`](seqlz_codes.c.html#b221)). A build has the tables of its levels only.
 
+@@ 131-134
+Level 2's 8 literal tables, and `lit_cost`, what each byte costs in each of them, for the encoder's
+choice. `lit_cost` comes after the literal tables with a little padding, since a `u64` needs 8-byte
+alignment.
+
+@@ 135-137
+Level 3's tables for a page's own literal table: `own.quad` and `own.decode` to read its description,
+`own.enc` to write it ([a page's own table](#b102)).
+
+@@ 138-143
 A page reads much less than all of it. The decoder reads `token.decode` (8 KiB), the `decode` of `ll`
 and `ml` (1 KiB each), and with coded literals one literal table's `decode` (2 KiB): 12 KiB, which fits
-the L1 cache. `lit_cost` comes after the literal tables with a little padding, since a `u64` needs 8-byte
-alignment.
+the L1 cache.
 @more {#ch-internal--tables} What lies where, and which parts a page reads
 The layout on x86-64, from `sizeof` and `offsetof`; arm64 aligns a `u64` the same way:
 
@@ -337,7 +352,7 @@ and one literal table's `enc`, 1 KiB, at level 3 also `own.enc`.
 
 ## The token entry
 
-@@ 132-139
+@@ 144-151
 The asserts check the widths of the entry's fields, described next. `DROP` has 5 bits, at most 31, and
 the most a token with a code moves the bitstream is 11 code bits plus class 3's 12 offset bits, 23. `ll`
 has 4 bits, `ml` 6 bits for at most 35, the shift 2 bits.
@@ -346,7 +361,7 @@ has 4 bits, `ml` 6 bits for at most 35, the shift 2 bits.
 fails here instead of being cut to 0 by the `& 3U` of `TOK_SHIFT()`. The last assert: an escaped token
 is sent in 12 bits, which must hold every token number.
 
-@@ 140-156
+@@ 152-168
 The decoder looks up the token's entry with the next 11 bits and never decodes the token's number.
 Everything it would compute from it is stored ready: `ll`, `ml` with its minimum of 4 added, the flag
 for a length value, and three shift counts that cut the offset out of the bit register.
@@ -448,7 +463,7 @@ and no cycles: there the chain from one token's lookup to the next was the limit
 ([explored-designs.md](https://github.com/martinus/seqlz/blob/main/docs/explored-designs.md#seqlzs-decoder-for-an-in-order-core-15-fewer-instructions-07-to-08-µs-less-at-cold-p99-on-the-a55-kept)).
 @end
 
-@@ 157-171
+@@ 169-183
 Each macro shifts its field down and masks it to its width. Bits 30 and 31 the decoder tests directly,
 and bit 29 is free. `TOK_N()` and `TOK_BACK()` are shift counts for a 64-bit register, so their
 `& 63U` is again the proof that keeps `CONFIG_UBSAN_SHIFT` from adding a check.
@@ -478,7 +493,7 @@ It prints
 Change `s` for any other token.
 @end
 
-@@ 172-188
+@@ 184-200
 Two callers, so it is in the header: `build_token()` fills the table with it when seqlz is built, and
 the decoder calls it at run time for an escaped token, with `n = 0` because the bits are dropped
 already. For the escape the entry is only bit 31 and `n` in `DROP`, so the decoder can drop the

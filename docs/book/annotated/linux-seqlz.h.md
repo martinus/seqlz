@@ -30,13 +30,23 @@ buffer of decoded literals, 16 bytes more than a block, which holds the buckets 
 table first, while the table is read ([own table](book:#ch-literals-dec--own)). `seqlz_compress.c` and
 `seqlz_decompress.c` check both against the codec's own sizes with a `static_assert()`.
 
-@@ 31-41
-Three levels, and the one zram uses when nothing is set: level 2, the fixed literal tables
-([the levels](book:#ch-internal)).
+@@ 31-52
+`SEQLZ_LEVELS`, the levels a build has: 3 unless the build says fewer, and 1 to 3, else the build
+fails. A build with fewer levels has no code and no tables of the levels above, and its decoder takes
+their blocks for invalid; the kernel series adds one level per patch, and `port.py` writes the copy
+without the `#if` lines ([the levels](book:#ch-internal)). Then the three levels themselves, from the
+fastest to the smallest blocks.
+
+@@ 53-54
+From level 2 on, zram's default is level 2, the fixed literal tables.
+
+@@ 55-58
+A build of level 1 alone has only level 1, which is then the default. The top level is the number of
+levels built.
 
 ## The two functions
 
-@@ 42-63
+@@ 59-80
 @anchor ch-zram-glue--kerneldoc
 The comment is **kernel-doc**, the kernel's format for documenting functions, which
 `scripts/kernel-doc` parses and checks. The work memory is `struct seqlz_state`, whose `work[]` is an
@@ -49,9 +59,9 @@ array of `u64`, so it needs 8-byte alignment; what `kmalloc()` returns has at le
   can be refused although its size with coded literals would have fit. With zram's 2 pages it never
   happens.
 
-[The function](seqlz_compress.c.html#b98) is at the end of `seqlz_compress.c`.
+[The function](seqlz_compress.c.html#b109) is at the end of `seqlz_compress.c`.
 
-@@ 64-84
+@@ 81-101
 @anchor ch-header--encode-decode
 "Safe for any input" is the most important promise of the codec, constraint C6 of the plan, the one
 hard limit ([chapter 1](book:#ch-zram--safety)). zram stores no checksum, so a page damaged in memory

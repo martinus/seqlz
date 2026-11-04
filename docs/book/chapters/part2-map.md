@@ -1,6 +1,7 @@
 # The code on one page {#map}
 
-Part II is the code itself: every file of `src/` as it is, with a short note next to each block.
+Parts II to IV are the code itself: every file of `src/` as it is, with a short note next to each block,
+level 1 here, levels 2 and 3 in the parts after it.
 Under a note, buttons open what goes deeper, below the block: why it is written this way, a worked
 example with real numbers, what it was measured at, an animation. Open them where a note leaves you
 with a question, skip them where it does not. Read the files in this order, each one links to the
@@ -39,7 +40,7 @@ link to the code of each step.
 <a href="#ch-literals-enc"><rect class="fill-sheet" x="536" y="74" width="174" height="92" rx="4" stroke="currentColor" stroke-width="1"/>
 <text x="623.0" y="92" font-size="12.5" text-anchor="middle" font-weight="700">literal coder</text>
 <g class="acc"><text x="623.0" y="107" font-size="11" text-anchor="middle">seqlz_compress_literals.c</text></g>
-<text x="623.0" y="124" font-size="11" text-anchor="middle">code_literals()</text>
+<text x="623.0" y="124" font-size="11" text-anchor="middle">code_sampled()</text>
 <text x="623.0" y="138" font-size="11" text-anchor="middle">levels 2 and 3</text>
 </a>
 <path d="M90 120 L110 120" fill="none" stroke="currentColor" stroke-width="1.3" marker-end="url(#map-arrow)"/>

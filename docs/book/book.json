@@ -1,5 +1,5 @@
 {
-  "src": "539753cf43bb5e3f538232fd8824379a5bc847b2",
+  "src": "6fa8f68ee7a0d85d83be294d5602d0644af5276e",
   "parts": [
     {
       "chapters": [
@@ -17,12 +17,12 @@
       ]
     },
     {
-      "id": "part-2", "label": "Part II", "title": "The code, line by line",
-      "intro": "The code of <code>src/</code>, file by file, with a short note next to each block, and under a note the details when you want them: why, a worked example, what it was measured at. The map comes first, then the files in the order of the contents.",
+      "id": "part-2", "label": "Part II", "title": "Level 1: an LZ with Huffman coded sequences", "level": 1,
+      "intro": "The code of <code>src/</code> that level 1 has, file by file, with a short note next to each block, and under a note the details when you want them: why, a worked example, what it was measured at. Level 1 keeps the literals as they are; a build with <code>SEQLZ_LEVELS=1</code> is this code and nothing else. Where a file has lines of levels 2 and 3, one line says which and links to them. The map comes first, then the files in the order of the contents.",
       "code": [
         {"group": "zram", "title": "zram's glue", "files": ["src/zram_seqlz.c", "src/linux/seqlz.h", "src/seqlz.h"]},
-        {"group": "write", "title": "writing a page", "files": ["src/seqlz_compress.c", "src/seqlz_match.h", "src/seqlz_encoder.h", "src/seqlz_compress_literals.c"]},
-        {"group": "read", "title": "reading a page", "files": ["src/seqlz_decompress.c", "src/seqlz_decompress_literals.c"]},
+        {"group": "write", "title": "writing a page", "files": ["src/seqlz_compress.c", "src/seqlz_match.h", "src/seqlz_encoder.h"]},
+        {"group": "read", "title": "reading a page", "files": ["src/seqlz_decompress.c"]},
         {"group": "below", "title": "what both use", "files": ["src/seqlz_format.h", "src/seqlz_internal.h", "src/seqlz_tables.h", "src/seqlz_codes.c", "src/seqlz_lengths.c", "src/seqlz_lengths.h", "src/seqlz_harness.c"]}
       ],
       "chapters": [
@@ -32,7 +32,33 @@
       ]
     },
     {
-      "id": "part-3", "label": "Part III", "title": "The whole picture",
+      "id": "part-level-2", "label": "Part III", "level": 2, "title": "Level 2: coded literals",
+      "intro": "What level 2 adds to level 1: the literals Huffman coded with one of 8 fixed tables, where that saves enough. The literal coder and decoder are files of their own; the other files get a few lines each, the hooks where level 2 joins level 1's code.",
+      "code": [
+        {"group": "write", "title": "writing a page", "files": ["src/seqlz_compress.c", "src/seqlz_compress_literals.c"]},
+        {"group": "read", "title": "reading a page", "files": ["src/seqlz_decompress.c", "src/seqlz_decompress_literals.c"]},
+        {"group": "below", "title": "what both use", "files": ["src/linux/seqlz.h", "src/seqlz.h", "src/seqlz_format.h", "src/seqlz_internal.h", "src/seqlz_tables.h", "src/seqlz_codes.c", "src/seqlz_lengths.c", "src/seqlz_lengths.h", "src/seqlz_harness.c"]}
+      ],
+      "chapters": [
+        {"file": "level2-format.md", "numbered": false, "label": "Format"},
+        {"code": true}
+      ]
+    },
+    {
+      "id": "part-level-3", "label": "Part IV", "level": 3, "title": "Level 3: a lazy matcher, deltas, a table of the page's own",
+      "intro": "What level 3 adds to level 2: a lazy step and a step back in the matcher, the literals as deltas to earlier bytes of the page, and a literal table of the page's own where that saves more. Most of it is a block at the end of the literal coder and its decoder; the other files get the hooks.",
+      "code": [
+        {"group": "write", "title": "writing a page", "files": ["src/seqlz_compress.c", "src/seqlz_match.h", "src/seqlz_encoder.h", "src/seqlz_compress_literals.c"]},
+        {"group": "read", "title": "reading a page", "files": ["src/seqlz_decompress.c", "src/seqlz_decompress_literals.c"]},
+        {"group": "below", "title": "what both use", "files": ["src/linux/seqlz.h", "src/seqlz.h", "src/seqlz_format.h", "src/seqlz_internal.h", "src/seqlz_tables.h", "src/seqlz_codes.c", "src/seqlz_lengths.c", "src/seqlz_lengths.h", "src/seqlz_harness.c"]}
+      ],
+      "chapters": [
+        {"file": "level3-format.md", "numbered": false, "label": "Format"},
+        {"code": true}
+      ]
+    },
+    {
+      "id": "part-3", "label": "Part V", "title": "The whole picture",
       "intro": "One page followed through every function, and the design decisions with the measurements behind them.",
       "chapters": [
         {"file": "16-trace.md"},

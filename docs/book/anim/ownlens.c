@@ -35,7 +35,7 @@ static unsigned int one_page(const char* id, void (*make)(u8*), int comma) {
     if ((seqlz_compress_block(&st, page, level3, sizeof level3, SEQLZ_LEVEL_OWN) == 0) ||
         (level3[2] & SEQLZ_LIT_CODE_MASK) != SEQLZ_LIT_OWN)
         fail(id, "no table of its own at level 3");
-    /* seqlz_compress_block() at level 3 up to own_code(), as seqlz_code_own() and code_literals() do it */
+    /* seqlz_compress_block() at level 3 up to own_code(), as seqlz_code_own() does it */
     len = compress_own(&st, page, dst, sizeof dst, &delta);
     if (!len || delta)
         fail(id, "the literals are deltas, which this figure does not show");
@@ -57,7 +57,7 @@ static unsigned int one_page(const char* id, void (*make)(u8*), int comma) {
         coded += sizes[j];
     }
     header = SEQLZ_LIT_HEADER(size_width(sizes));
-    if (!own_code(w, n_lit, header + coded, SEQLZ_LIT_CODED_MIN_OWN))
+    if (!own_code(w, n_lit, header + coded))
         fail(id, "own_code() builds no code");
     /* the bytes that are literals, which own_code() put in w->bytes[] in order, and summed counts */
     for (k = 0, n = 0; k < 256; k++)

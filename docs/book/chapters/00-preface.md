@@ -36,7 +36,7 @@ The book does not explain the language. You have never written kernel code or a 
 I explains what the code needs of both: what zram does with a page and why memory per CPU counts, how
 LZ matches and Huffman codes work, and why cache misses, mispredicted branches and chains of
 dependent instructions decide the speed of a decoder, more so on the small in-order cores of phones.
-Skip what you know; Part II links back where it needs a term.
+Skip what you know; the code links back where it needs a term.
 
 ## How the book is organised {#preface--parts}
 
@@ -44,12 +44,17 @@ Skip what you know; Part II links back where it needs a term.
 and [the format on one page](#ch-format), which takes two compressed pages apart bit by bit and is the
 map for everything after it.
 
-**Part II, the code**, is `src/` itself, file by file, with a short note next to each block. Under a
-note, buttons open the details: why it is written this way, a worked example with real numbers, what
-it was measured at. It opens with [a map](#map) of the path of a page through the code, and the files
-in the order to read them: zram's glue, writing a page, reading a page, then what both use.
+**Parts II to IV, the code**, are `src/` itself, file by file, with a short note next to each block,
+one part per level. Under a note, buttons open the details: why it is written this way, a worked
+example with real numbers, what it was measured at. Part II is level 1, which a build with
+`SEQLZ_LEVELS=1` has and nothing else: it opens with [a map](#map) of the path of a page through the
+code, and the files in the order to read them: zram's glue, writing a page, reading a page, then what
+both use. Where a file has lines of a higher level, one line says so and links to them. Part III adds
+[level 2's coded literals](#ch-format2), Part IV [level 3's table of the page's own and
+deltas](#ch-format3), each starting with the bytes the level adds, then its code: files of their own
+where the level has them, the few lines it adds to the others.
 
-**Part III** follows [one page through every function](#ch-trace) with the numbers each step
+**Part V** follows [one page through every function](#ch-trace) with the numbers each step
 produces, and collects [the design decisions](#ch-decisions) with what they were measured against.
 [The glossary](#glossary) is at the end.
 

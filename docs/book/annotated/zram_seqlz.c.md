@@ -103,8 +103,11 @@ on arm64. What `port.py` still changes:
   ([at build time](#ch-codes--kernel)), the one that writes the tables of `src/` too, with
   `seqlz_tables_build()` `static`.
 - **What only the harness uses is cut**: all of `src/seqlz.h` and `src/seqlz_harness.c`, and the cast
-  in `seqlz_internal.h` that the C++ of the harness needs. The `raw` parameter of `code_literals()`
-  stays: at level 3 it carries the deltas ([`seqlz_code_own()`](#ch-literals-enc--code-own)).
+  in `seqlz_internal.h` that the C++ of the harness needs.
+- **The levels' `#if`s resolved**: `resolve_levels()` keeps the code under `#if SEQLZ_LEVELS >= n`
+  for the levels the copy has, all three, and drops the `#if`, `#else` and `#endif` lines and the
+  default of `SEQLZ_LEVELS`, so a reviewer reads plain C. The kernel series adds one level per patch
+  ([`SEQLZ_LEVELS`](linux-seqlz.h.html#b31)).
 
 Every textual replacement goes through `must()` or `cut()`, which assert that the text occurs exactly as
 often as expected, so a change in `src/` that moves such a text stops `port.py` instead of writing a copy

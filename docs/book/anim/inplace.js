@@ -1,10 +1,10 @@
 /*
- * code_literals() of chapter 11 writing the coded streams over the raw literals of chapter 16's page in
- * dst: the copy of the raw literals in the matcher's table, which the runs of lit_streams() read, drawn
+ * The literal coder writing the coded streams over the raw literals of chapter 16's page in dst, as level
+ * 3's seqlz_code_own() does from a copy: the copy of the raw literals in the matcher's table, which the runs of lit_streams() read, drawn
  * under the bytes of dst where those literals were; the 8 streams' rooms from q[0] to q[8], each
  * flush's store, and the bitstream behind the raw literals, which no store reaches; then the header and
  * the move of the bitstream. Data: anim/inplace.c, the real encoder's lit_put() and lit_flush(),
- * checked against code_literals().
+ * checked against the bytes code_sampled() writes.
  */
 BookAnim.define('inplace', function (ctx) {
   var D = ctx.data, N = D.n_lit, LEN = D.len, Q = D.q, BS = 2 + N, RUNS = D.runs, CODED = D.coded;
@@ -15,7 +15,7 @@ BookAnim.define('inplace', function (ctx) {
   var S = [], wrote = [0, 0, 0, 0, 0, 0, 0, 0].map(function (_, j) { return Q[j]; });
   S.push({ say: 'dst after compress_block(): ' + LEN + ' bytes, the u16, the ' + N + ' raw literals from byte 2 and the sequences’ bitstream from byte ' + BS +
     '. The coded literals will go where the raw ones are, from the front of dst.' });
-  S.push({ copy: true, say: 'The literals get coded, so code_literals() copies the ' + N + ' raw literals into spare, the matcher’s table, which is garbage now. Drawn under dst, each literal sits below the byte it came from: literal k was at byte 2 + k.' });
+  S.push({ copy: true, say: 'The literals get coded, so seqlz_code_own() copies the ' + N + ' raw literals into spare, the matcher’s table, which is garbage now. Drawn under dst, each literal sits below the byte it came from: literal k was at byte 2 + k.' });
   S.push({ copy: true, rooms: true, say: 'The sizes say where each stream goes: q[0] = ' + Q[0] + ', right after the header, and q[8] = ' + Q[8] + '. The bitstream starts at byte ' + BS +
     ': the rule that coding has to save enough keeps them apart, here by ' + (BS - Q[8]) + ' bytes. The bytes from q[0] to q[8] still hold raw literals.' });
   RUNS.forEach(function (r, i) {
@@ -47,7 +47,7 @@ BookAnim.define('inplace', function (ctx) {
   S.push({ rooms: true, wrote: Q.slice(1), header: true, moved: true, say: 'memmove() moves the ' + (LEN - BS) + ' bytes of the bitstream from byte ' + BS + ' down to q[8] = ' + Q[8] +
     ': the page is ' + CODED + ' bytes instead of ' + LEN + '. ' + (CODED > BS ? 'A memmove(), not a memcpy(), as the two places overlap: bytes ' + BS + ' to ' + (CODED - 1) + ' are in both. ' : '') + 'Bytes ' + CODED + ' to ' + (LEN - 1) + ' keep what they held, but are no longer part of the page.' });
 
-  var root = ctx.svg('svg', { role: 'img', 'aria-label': 'dst while code_literals() writes the 8 streams over the raw literals, which it reads from a copy, and moves the bitstream down' }, ctx.stage);
+  var root = ctx.svg('svg', { role: 'img', 'aria-label': 'dst while seqlz_code_own() writes the 8 streams over the raw literals, which it reads from a copy, and moves the bitstream down' }, ctx.stage);
   function layout() {
     var n = ctx.narrow, L = { W: n ? 360 : 744, X0: n ? 6 : 20 };
     L.barW = L.W - 2 * L.X0;
@@ -67,7 +67,7 @@ BookAnim.define('inplace', function (ctx) {
   function draw(k) {
     var st = S[k], L = layout(), r = st.run != null ? RUNS[st.run] : null;
     while (root.firstChild) root.removeChild(root.firstChild);
-    // dst: the u16, the raw literals, the bitstream, and over them what code_literals() wrote
+    // dst: the u16, the raw literals, the bitstream, and over them what the coder wrote
     ctx.svg('text', { x: L.X0, y: L.dstHead, class: 'ip-head', text: 'dst, ' + (st.moved ? CODED : LEN) + ' bytes' }, root);
     box(L, 0, 2, L.dstY, L.dstH, 'ip-hdr');
     box(L, 2, st.moved ? Q[8] : BS, L.dstY, L.dstH, 'ip-raw');

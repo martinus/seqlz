@@ -1,6 +1,6 @@
 # Why seqlz is shaped this way {#ch-decisions}
 
-Every chapter of Part II ends a listing with a "why", and most answers are a measurement in
+Every file of Parts II to IV ends a listing with a "why", and most answers are a measurement in
 [`docs/explored-designs.md`](https://github.com/martinus/seqlz/blob/main/docs/explored-designs.md).
 Almost all follow from four facts about zram from [chapter 1](#ch-zram): each page is compressed alone,
 reading a page back is on the critical path of a program, the stored size is counted in zsmalloc's size
@@ -305,7 +305,7 @@ a format that has to tell itself apart ([format.md](https://github.com/martinus/
 
 Literals are 68% of `seqlz-1`'s output, and coding them is worth 3.5 points to `zstd` 3. So
 `seqlz-2` Huffman codes them, `seqlz-1` stores them raw, in one format with one decoder
-([`code_literals()`](#ch-literals-enc), [`seqlz_decode_literals()`](#ch-literals-dec)).
+([`code_sampled()`](#ch-literals-enc), [`seqlz_decode_literals()`](#ch-literals-dec)).
 
 ### 8 fixed literal tables, the page picks one
 
@@ -690,7 +690,7 @@ bench's model of zsmalloc, level 3 stored 0.30% more than `zstd` 3 on average an
 | a table of the page's own, only from 512 literals on and where it saves {{own.enc.saves_min}} bytes | a table on every page, or from 16 bytes saved | the description costs bytes, and building a decode table for every read costs time; 32 instead of 16 bytes gave up 1.07 bytes per page for writes 0.19 µs faster on the A76 and 0.47 µs on the A55, 31st October 2026 ([the thresholds](https://github.com/martinus/seqlz/blob/main/docs/explored-designs.md#the-literal-coding-thresholds-per-level-35-bytes-at-level-2-19-at-level-3-own-tables-from-32-33-and-49-bytes-per-page-less-kept)) |
 | the entropy first, then the code | building the code on every page | many pages leave after one pass over 256 counts ([the estimate](#ch-literals-enc--entropy)) |
 | code lengths from $f \cdot 2^l \ge n$, repaired in 16 buckets | a Huffman code | no sort and no tree; a few bits more on some pages |
-| the description in byte order, in a fixed code `OWN` | 256 lengths, or the bytes and their lengths | a byte value costs no bits, only its length ([chapter 4](#ch-format--own)) |
+| the description in byte order, in a fixed code `OWN` | 256 lengths, or the bytes and their lengths | a byte value costs no bits, only its length ([Part IV](#ch-format--own)) |
 | the decode table built in the output page | in work memory | no byte more per CPU ([own table](#ch-literals-dec--own)) |
 
 The description was measured six ways, bytes per table of the page's own, counted offline on the tables
@@ -707,7 +707,7 @@ samples
 | in byte order, the lengths and runs in `OWN` (level 3) | 53.1 |
 | in byte order, the changes of the length and runs | 53.0 |
 
-An Exp-Golomb code needs no table. Order 0 is the code of a run in [chapter 4](#ch-format--own):
+An Exp-Golomb code needs no table. Order 0 is the code of a run in [Part IV](#ch-format--own):
 the number's width as zeros, then its bits, only shifted by one so that 0 has a code too. Order `j`
 sends the `j` lowest bits of the number as they are, and what is left above them in order 0. A higher
 order makes the small numbers longer and the large ones shorter:
@@ -728,7 +728,7 @@ bytes per table against 68.8 and 62.7. On 9th October the description was the fo
 of 10 symbols. Exp-Golomb order 1 replaced it first: tables built 12% faster on the PC, for 2.0 bytes
 more per table. Byte order then saved 6.2 bytes against the fourth way: the byte values cost no bits,
 only the lengths and the runs between them, and a run is coded like the fourth way's distances, its
-width in `OWN` and then its bits ([chapter 4](#ch-format--own)). The last two ways are 0.1 bytes apart.
+width in `OWN` and then its bits ([Part IV](#ch-format--own)). The last two ways are 0.1 bytes apart.
 
 The literal table of the page's own was tried three times before and not kept, for the reasons
 [below](#ch-decisions--not-kept): it cost too much time for what it saved, and it was a second way to
@@ -745,7 +745,7 @@ the reference decoders cover it like the rest.
 Since 21st October 2026 level 3 stores each literal as its delta to the byte 4 or 8 before it, or to
 the byte at the offset of the sequence before, the literal minus that byte modulo 256, one choice per
 page, before the literal tables code it; since 22nd October every literal at least that many bytes
-into the page is a delta ([chapter 4](#ch-format--deltas)). On ten samples of 20 000 pages level 3
+into the page is a delta ([Part IV](#ch-format--deltas)). On ten samples of 20 000 pages level 3
 stores 869.7 bytes per page instead of 915.6, 5.0% less, and 21.1% of the pages carry deltas: 10.1% to
 the byte at the last offset, 7.9% to the byte 4 before, 3.1% to the byte 8 before. Levels 1 and 2
 write the same bytes as before. In the kernel VM on 22nd October 2026, the mean over four zram dumps,
@@ -788,7 +788,7 @@ within the noise
 | the same three choices: 4 back, 8 back, the last offset | other distances, more choices, Paeth and gradient predictors | of 131 transforms, each counted on every page, all 131 with the same pricing saved 7.6 bytes per page against the XOR, the three subtractions 7.4 |
 | one choice per page, in a byte of the header | a XOR per literal lane, with a literal table per lane ("format 3", 8 streams of lanes) | the lanes gave less, 896.5 bytes per page on the same ten samples against 880.7, both as stored after a recompression from `seqlz-1`, for more code; the size came from the XOR, not from the lanes |
 | that byte right after byte 2, before the sizes | after the sizes, as the first form had it | the header reads in order: byte 2 says whether the byte is there, and it comes next; the same bytes per page, and one add in the decoder either way |
-| priced with the fixed tables' sums of `lit_cost`, every {{delta.step}}th literal | every literal, every 5th | every literal made pages almost no smaller and the encoder slower; every 11th instead of every 5th made pages 0.08% larger and level 3's writes 2.5% to 3.1% faster on the Mi 9T, 31st October 2026 ([`DELTA_STEP`](#f-seqlz_compress_literals-c-b17), [explored-designs.md](https://github.com/martinus/seqlz/blob/main/docs/explored-designs.md#the-deltas-priced-on-every-11th-literal-instead-of-every-5th-008-more-bytes-level-3-writes-25-and-31-faster-on-the-mi-9t-kept)) |
+| priced with the fixed tables' sums of `lit_cost`, every {{delta.step}}th literal | every literal, every 5th | every literal made pages almost no smaller and the encoder slower; every 11th instead of every 5th made pages 0.08% larger and level 3's writes 2.5% to 3.1% faster on the Mi 9T, 31st October 2026 ([`DELTA_STEP`](#f-seqlz_compress_literals-c-b358), [explored-designs.md](https://github.com/martinus/seqlz/blob/main/docs/explored-designs.md#the-deltas-priced-on-every-11th-literal-instead-of-every-5th-008-more-bytes-level-3-writes-25-and-31-faster-on-the-mi-9t-kept)) |
 | a prime step | every 4th | every 4th is the same byte of each 4- or 8-byte field, and made pages 1.0 byte larger |
 | where the deltas stay raw, the literals stay raw | a second try of the literals as they are, with the fixed tables and a table of their own | it saved 0.71 bytes per page, for writes 0.39 µs slower on the A76 and 0.93 µs on the A55 in zram in the Mi 9T's kernel, 24th October 2026 ([`seqlz_code_own()`](#ch-literals-enc--code-own)) |
 | the records and the deltas in copies of the loops for level 3 | a test for every sequence in the loops all levels share | the test made levels 1 and 2 about 6% slower to write on the A76, and slower to read ([the two receivers](#ch-encoder--wrappers), [the two copies of the loop](#ch-decode--deltas)) |
