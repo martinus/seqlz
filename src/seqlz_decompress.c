@@ -217,6 +217,7 @@ static inline unsigned int seqlz_br_value(struct seqlz_bit_reader *r,
 	return v;
 }
 
+#if SEQLZ_LEVELS >= 3
 /*
  * Adds the 4 (8) bytes dist before p to the 4 (8) bytes at p, each byte apart,
  * modulo 256: the top bit of each byte is added apart, so that no carry goes
@@ -312,6 +313,7 @@ static __always_inline void undelta_fast(unsigned int delta_fixed, u8 *d,
 	else
 		undelta16(d, dist);
 }
+#endif /* SEQLZ_LEVELS >= 3 */
 
 /*
  * The fast path's match of len bytes, at most 34, off bytes before d: with room
@@ -431,7 +433,13 @@ static __always_inline int decode_block(const void *src, unsigned int src_len,
 	u8 *d_fast;
 	unsigned long lit_fast, in_fast, end_gap;
 	struct seqlz_bit_reader br;
-	unsigned int n_lit, last = 1, tok, skip = 0, delta = 0, delta_fixed = 0;
+	unsigned int n_lit, last = 1, tok, skip = 0;
+#if SEQLZ_LEVELS >= 2
+	unsigned int delta = 0;
+#endif
+#if SEQLZ_LEVELS >= 3
+	unsigned int delta_fixed = 0;
+#endif
 
 	if (src_len < SEQLZ_HEADER)
 		return -EINVAL;
@@ -449,6 +457,7 @@ static __always_inline int decode_block(const void *src, unsigned int src_len,
 	if (n_lit > SEQLZ_BLOCK_SIZE)
 		return -EINVAL;
 	if (get_unaligned_le16(s) & SEQLZ_LIT_CODED) {
+#if SEQLZ_LEVELS >= 2
 		/* decoded into the scratch first, the bitstream follows them */
 		const u8 *q;
 
@@ -458,6 +467,7 @@ static __always_inline int decode_block(const void *src, unsigned int src_len,
 					  &delta);
 		if (!q)
 			return -EINVAL;
+#if SEQLZ_LEVELS >= 3
 		/*
 		 * The distance of SEQLZ_DELTA_4 and SEQLZ_DELTA_8, picked once
 		 * here and not per sequence, where it took two tests instead of
@@ -466,10 +476,15 @@ static __always_inline int decode_block(const void *src, unsigned int src_len,
 		delta_fixed = delta == SEQLZ_DELTA_4 ? 4U :
 			      delta == SEQLZ_DELTA_8 ? 8U :
 						       0U;
+#endif
 		br = (struct seqlz_bit_reader){ .p = q, .end = s_end };
 		lit = scratch;
 		lit_end = lit + n_lit;
 		lit_bound = lit + SEQLZ_SCRATCH;
+#else
+		/* coded literals are level 2's */
+		return -EINVAL;
+#endif
 	} else {
 		/* raw, right after the u16, the bitstream follows them */
 		if ((u64)SEQLZ_HEADER + n_lit > src_len)
@@ -555,9 +570,11 @@ static __always_inline int decode_block(const void *src, unsigned int src_len,
 			 * block because lit > lit_end.
 			 */
 			copy16(d, lit);
+#if SEQLZ_LEVELS >= 3
 			if (deltas)
 				undelta_fast(delta_fixed, d, dst, d_end, nl,
 					     last);
+#endif
 			d += nl;
 			lit += nl;
 			last = off;
@@ -576,8 +593,10 @@ static __always_inline int decode_block(const void *src, unsigned int src_len,
 		    nl > (unsigned int)(d_end - d))
 			return -EINVAL;
 		copy_literals(d, d_end, lit, lit_bound, nl);
+#if SEQLZ_LEVELS >= 3
 		if (deltas)
 			undelta_literals(delta_fixed, d, dst, d_end, nl, last);
+#endif
 		d += nl;
 		lit += nl;
 		if (len == SEQLZ_ML_CAP + SEQLZ_MIN_MATCH) {
@@ -606,9 +625,11 @@ last_literals:
 	 * the last sequence: the literals left, as many as the block has room
 	 */
 	copy_literals(d, d_end, lit, lit_bound, (unsigned int)(lit_end - lit));
+#if SEQLZ_LEVELS >= 3
 	if (deltas)
 		undelta_literals(delta_fixed, d, dst, d_end,
 				 (unsigned int)(lit_end - lit), last);
+#endif
 	/*
 	 * The block must end where its bits end: every byte read, fewer than 8
 	 * bits left in the last one, and those 0, as the compressor writes
@@ -624,6 +645,7 @@ last_literals:
 int seqlz_decompress(const void *src, unsigned int src_len, void *dst,
 		     void *wrkmem)
 {
+#if SEQLZ_LEVELS >= 3
 	const u8 *s = src;
 
 	/* bit 7 of byte 2, with coded literals */
@@ -631,12 +653,11 @@ int seqlz_decompress(const void *src, unsigned int src_len, void *dst,
 	    (get_unaligned_le16(s) & SEQLZ_LIT_CODED) &&
 	    s[2] >> SEQLZ_LIT_DELTA_AT)
 		return decode_block(src, src_len, dst, wrkmem, true);
+#endif
 	return decode_block(src, src_len, dst, wrkmem, false);
 }
 EXPORT_SYMBOL_GPL(seqlz_decompress);
 
-/* the interface's work memory is the buffer of coded literals */
-static_assert(SEQLZ_MEM_DECOMPRESS == SEQLZ_SCRATCH);
 static_assert(SEQLZ_BLOCK_SIZE == 1U << SEQLZ_BLOCK_BITS);
 
 MODULE_LICENSE("Dual MIT/GPL");

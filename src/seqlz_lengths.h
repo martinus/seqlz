@@ -224,6 +224,7 @@ const struct seqlz_lengths seqlz_default_lengths = {
 	},
 };
 
+#if SEQLZ_LEVELS >= 2
 const u8 seqlz_lit_sets[SEQLZ_LIT_SETS][256] = {
 	{
 		10, 10, 10, 10, 10, 10, 10, 10, 10, 6, 5, 10, 10, 10, 10, 10,
@@ -370,10 +371,13 @@ const u8 seqlz_lit_sets[SEQLZ_LIT_SETS][256] = {
 		10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 2,
 	},
 };
+#endif
 
+#if SEQLZ_LEVELS >= 3
 const u8 seqlz_own_lengths[SEQLZ_OWN_SYMBOLS] = {
 	8, 8, 7, 7, 5, 4, 3, 3, 2, 2, 4, 5, 6, 8, 8, 8,
 	8, 8, 8,
 };
+#endif
 
 #endif

@@ -80,11 +80,13 @@ struct seqlz_encoder {
 	u8 *lit; /* where the next literal goes */
 	const u8 *src_end; /* copies of 16 literals may read up to here */
 	unsigned int last; /* the offset of the sequence before, class 0 */
+#if SEQLZ_LEVELS >= 3
 	/*
 	 * at SEQLZ_LEVEL_OWN: write a record before the literals, see LIT_REC
 	 */
 	bool rec;
 	unsigned int pos; /* with rec: where the next sequence starts */
+#endif
 };
 
 /* appends the n bits of v, which has no higher bits set; n < 64 - cnt */
@@ -165,9 +167,12 @@ static __always_inline void encode_seq(struct seqlz_encoder *e, const u8 *in,
 				       unsigned int ll, unsigned int ml,
 				       unsigned int off, bool rec)
 {
-	unsigned int k = 0, tlen, raw_bits, cls;
-	unsigned int n_rec = rec && e->rec && ll ? LIT_REC : 0;
+	unsigned int k = 0, tlen, raw_bits, cls, n_rec = 0;
 	u32 code;
+
+#if SEQLZ_LEVELS >= 3
+	n_rec = rec && e->rec && ll ? LIT_REC : 0;
+#endif
 
 	/*
 	 * The block does not fit: no more writes. With p at lit, every later
@@ -177,6 +182,7 @@ static __always_inline void encode_seq(struct seqlz_encoder *e, const u8 *in,
 		e->p = e->lit;
 		return;
 	}
+#if SEQLZ_LEVELS >= 3
 	if (n_rec) {
 		put_unaligned_le16((u16)e->pos, e->lit);
 		put_unaligned_le16((u16)ll, e->lit + 2);
@@ -185,6 +191,7 @@ static __always_inline void encode_seq(struct seqlz_encoder *e, const u8 *in,
 	}
 	if (rec)
 		e->pos += ll + ml;
+#endif
 	/*
 	 * The literals, 16 bytes at a time as long as the input has 16 bytes
 	 * more; dst has room for what goes past ll. The first 16 bytes without

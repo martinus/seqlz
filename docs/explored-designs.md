@@ -358,13 +358,14 @@ One line per entry, by area, newest first: date measured, verdict, link, result,
 
 **Kernel copy, zram glue, compilers**
 
-- 2026-11-01 **kept** [Level 2's coder without the pricing of every literal, the stream sizes without memcpy()](#level-2s-coder-without-the-pricing-of-every-literal-the-stream-sizes-without-memcpy-half-the-coders-text-level-2-writes-13-faster-on-the-a76-the-same-in-the-vm-kept): a constant `sampled` drops the dead pricing branch from `seqlz_code_literals()`, 14 896 to 7 350 bytes with gcc, 7 456 to 3 460 on arm64; the stream sizes with two fixed-size loads instead of a variable `__builtin_memcpy()`. Mi 9T p3, two copies each: level 2 writes 0.15 µs faster on the A76 (1.3%), copies 0.03, ~700 instructions per page fewer; A55 and reads within the copies; kernel VM gcc and clang within the control. gcc user space +155 instructions per page at level 2 (`lit_streams()` spills). Testing `raw` instead: gcc level 3 +0.58%, not kept. Code: `code_literals()`, `lit_stream_sizes()`, branch level2-coder. Now: current.
+- 2026-11-04 **kept** [The levels in one block per file, level 2's coder apart](#the-levels-in-one-block-per-file-level-2s-coder-apart-from-level-3s-68-guards-to-43-the-same-speed-in-the-vm-the-a55s-cold-reads-14-µs-slower-from-where-the-code-lies-kept): level 3's code in one block of `seqlz_compress_literals.c`, the headers one block per level, `code_literals()` split into `code_sampled()` (level 2) and `seqlz_code_own()` (level 3); kernel-copy guards 68 to 43. samecode: level 1 and the decoder the same, the coders not; `seqlz_code_own()`'s frame 608 bytes (696); after the review `code_sampled()` one noinline copy for levels 2 and 3, level 2 +3.8 instructions per page. Kernel VM, gcc and clang, four samples: every level within the control, level 1 moves as much. Mi 9T: writes and warm reads within 0.1 µs, A55 cold reads +1.4 µs at levels 1 and 2 with the same decoder instructions (layout). gcc userspace level 3 +0.61% instructions from SSE in `lit_sums()`, +0.04% without it. Code: `code_sampled()`, `lit_finish()`, `seqlz_code_own()`; PR #340. Now: current. Untried: the A55's cold reads with the layout held; `SEQLZ_LEVELS=1`, `2` builds timed.
+- 2026-11-01 **kept** [Level 2's coder without the pricing of every literal, the stream sizes without memcpy()](#level-2s-coder-without-the-pricing-of-every-literal-the-stream-sizes-without-memcpy-half-the-coders-text-level-2-writes-13-faster-on-the-a76-the-same-in-the-vm-kept): a constant `sampled` drops the dead pricing branch from `seqlz_code_literals()`, 14 896 to 7 350 bytes with gcc, 7 456 to 3 460 on arm64; the stream sizes with two fixed-size loads instead of a variable `__builtin_memcpy()`. Mi 9T p3, two copies each: level 2 writes 0.15 µs faster on the A76 (1.3%), copies 0.03, ~700 instructions per page fewer; A55 and reads within the copies; kernel VM gcc and clang within the control. gcc user space +155 instructions per page at level 2 (`lit_streams()` spills). Testing `raw` instead: gcc level 3 +0.58%, not kept. Code: `code_literals()`, `lit_stream_sizes()`, branch level2-coder. Now: `code_literals()` is `code_sampled()` and `seqlz_code_own()` since 4 Nov (The levels in one block per file).
 - 2026-10-30 **not kept** [The matcher's first candidate as a constant](#the-matchers-first-candidate-as-a-constant-instead-of-a-load-from-the-cleared-table-levels-1-and-2-write-2-slower-with-clang-not-kept): `cand = 0` instead of `table[h]` after the table's clear; userspace folds the load, the kernel copy does not, and the matcher gets other registers. Same bytes. Mi 9T p2, 4 rounds: levels 1 and 2 write 0.5 to 0.6 µs slower on the A55, 0.3 to 0.4 on the A76 (1.8% to 3.4%, `main` twice within 0.10). Kernel VM, four samples, 3 boots: clang +2.7% / +2.2% / +0.5% at levels 1 / 2 / 3, gcc -1.4% / -1.4% / -0.8%, control within 0.8%. Code: `seqlz_match_block()`, a comment why the load stays. Now: current.
 - 2026-10-30 **kept** [The matcher calls encode_seq() itself](#the-matcher-calls-encode_seq-itself-as-in-the-kernel-copy-level-3-writes-06-faster-in-the-vm-with-clang-levels-1-and-2-the-same-kept): `src/` as the kernel copy since #284; kernel VM, clang 22.1.8, four VM samples, 3 boots: level 3 writes 0.6% faster (0.2% to 0.8% per sample, control -0.3% to +0.2%), levels 1 and 2 and swap-ins the same. `Code:` PR #284. `Now:` current.
 - 2026-10-25 **measurement** [Kernel copy on arm, riscv64 and powerpc](#the-kernel-copy-on-arm-riscv64-and-powerpc-with-gcc-and-clang-no-warning-frames-below-1024-bytes--os-no-deeper-on-32-bit-arm): 15 builds with gcc 16.2.0 and clang 22.1.8, W=1 without a warning, no libgcc division, deepest frame 896 bytes (riscv64 gcc). 32-bit arm -Os no deeper than -O3: gcc 472 vs 536, 768 vs 864 with KASAN+UBSan; clang 648 vs 600. The Makefile's -O3 keeps speed as its only reason. Code: tools/kernel-port/port.py MAKEFILE; branch os-frames. Now: -O3 only with CC_OPTIMIZE_FOR_PERFORMANCE since 25 Oct, -Os builds keep -Os.
 - 2026-10-24 **kept in part** [Kernel copy against coding-style.rst](#the-kernel-copy-against-coding-stylerst-shorter-functions-the-same-instructions-kept-decode_block-split-12-slower-swap-ins-not-kept): pick_delta(), own_describe(), own_fill(), read_lit_header() split out, one declaration per line: instructions within 0.12%, VM within control. decode_block() split into three always-inline helpers: +1.6% instructions at level 1, swap-ins 1.1 to 1.9% slower, not kept. -O3 only with CC_OPTIMIZE_FOR_PERFORMANCE: -Os frames up to 976 bytes, not kept. Code: src/seqlz_compress_literals.c, src/seqlz_decompress_literals.c, tools/kernel-port/port.py; branch kernel-review. Now: -Os is no deeper on 32-bit arm (Kernel copy on arm, riscv64 and powerpc); -O3 only with CC_OPTIMIZE_FOR_PERFORMANCE since 25 Oct.
 - 2026-10-24 **kept** [Compressor uses no more of dst than SEQLZ_COMPRESS_BOUND](#the-compressor-uses-no-more-of-dst-than-seqlz_compress_bound-the-same-bytes-in-zram-kept-the-internal-names-keep-no-prefix): the bitstream no longer lands at the end of a large dst; the ten samples give the same bytes in 8 KiB and 64 KiB at level 3, the same instructions. Not done: a prefix on the 41 macros of the kernel copy's headers, none clashes and lib/lz4 has unprefixed ones too. Code: `seqlz_compress()`, `seqlz_encode()`; branch kernel-cleanup-2. Now: current.
-- 2026-10-23 **kept** [Kernel copy reviewed again](#the-kernel-copy-reviewed-again-code_literals-once-per-level-20-fewer-instructions-at-level-2-kept-two-simplifications-that-cost-1-and-7-not-kept): `code_literals()` inlined into each entry point, as its comment said: `seqlz-2` compress 2.0% fewer instructions (156.6M to 153.5M per 2000 pages), cycles -1.4%; not kept, as they cost on hot loops: the `n_lit` check only in `decode_block()` with the literal header parsed after a length check (+7.0% to decode `seqlz-2`), the `dst_cap` check once in `seqlz_compress()` (+1.0% at level 1). Userspace, gcc 16.2.1, x86-64. Mi 9T, zram in its kernel, p3: `seqlz-2` writes 0.25 to 0.35 µs faster on the A55 (about 1%), the rest within `main` built twice. Code: `code_literals()`, `seqlz_code_own()`, `seqlz_decode_literals()`, `compress_block()`; branch kernel-cleanup. Now: the header is parsed in read_lit_header() since 24 Oct (Kernel copy against coding-style.rst), the same instructions. Untried: the kernel VM.
+- 2026-10-23 **kept** [Kernel copy reviewed again](#the-kernel-copy-reviewed-again-code_literals-once-per-level-20-fewer-instructions-at-level-2-kept-two-simplifications-that-cost-1-and-7-not-kept): `code_literals()` inlined into each entry point, as its comment said: `seqlz-2` compress 2.0% fewer instructions (156.6M to 153.5M per 2000 pages), cycles -1.4%; not kept, as they cost on hot loops: the `n_lit` check only in `decode_block()` with the literal header parsed after a length check (+7.0% to decode `seqlz-2`), the `dst_cap` check once in `seqlz_compress()` (+1.0% at level 1). Userspace, gcc 16.2.1, x86-64. Mi 9T, zram in its kernel, p3: `seqlz-2` writes 0.25 to 0.35 µs faster on the A55 (about 1%), the rest within `main` built twice. Code: `code_literals()`, `seqlz_code_own()`, `seqlz_decode_literals()`, `compress_block()`; branch kernel-cleanup. Now: `code_literals()` split into `code_sampled()` and `seqlz_code_own()` on 4 Nov (The levels in one block per file); the header is parsed in read_lit_header() since 24 Oct (Kernel copy against coding-style.rst), the same instructions. Untried: the kernel VM.
 - 2026-10-10 **measurement** [Numbers formerly in source comments](#numbers-that-were-only-in-the-codecs-comments-until-10th-october-2026): Eight choices whose numbers left src/ comments (#156), e.g. copy_match() 8 bytes at a time (byte loop: slowest pages 10 times lz4), 2-byte stream sizes (5.2 and 5.5 bytes larger), token_entry() (unpacking took 18 instructions per sequence). Not re-measured. Code: commits cf5dedb, 34080eb, 21b71c9, 0cc300e, 61299db, 5c769f5; #156. Now: Numbers hold only for the commits named; none re-measured (line 6141).
 - 2026-10-10 **kept** [Kernel copy choices: -O3, one decode loop, prefetch()](#the-kernel-copys-choices-measured-in-one-boot-and-on-the-phone--o3-kept-one-decode-loop-prefetch-no-__aligned64-no-load16): -O3 vs -O2: writes 0.1 to 0.19 µs faster in x86-64 VM, 0.93 µs on A55: kept. Taken for simpler code: one out-of-order decode loop for all cores (A55 warm reads up to 0.3 µs slower), prefetch() (A55 up to 0.2 µs), no __aligned(64), get_unaligned_le16(). Code: tools/zram-vm/run.sh VARIANTS, tools/zram-phone/build.sh OPT/ALIGN; main = 9ae946f; #151, #152, #157. Now: Leftovers of #157 done in "seqlz.c split in three". Verdict current.
 - 2026-10-10 **kept** [seqlz.c split into three files like lib/lz4](#seqlzc-split-in-three-as-liblz4-is-the-kernel-copy-the-same-speed-measured-on-the-kernel-copy-itself): #157: seqlz_compress.c, seqlz_decompress.c, seqlz_codes.c, seqlz_internal.h; static helpers, __init table build, global tables. First x86-64 VM run of the kernel copy itself (PORT=1): within 0.03 µs, clang 0.02 to 0.03 µs faster. Code: src/, tools/kernel-port/port.py, tools/zram-vm/run.sh PORT=1; before = bad6224; #157. Now: current.
@@ -8232,9 +8233,99 @@ and clang and on arm64.
 Not measured: the kernel VM; the encoder taking the previous offset as an argument instead of
 `e->last`, which changes `encode_seq()` for the harness and the book's step-through too.
 
+## The levels in one block per file, level 2's coder apart from level 3's: 68 guards to 43, the same speed in the VM, the A55's cold reads 1.4 µs slower from where the code lies, kept
+
+Status: kept, 2026-11-04. Now: current.
+
+*Can the `#if SEQLZ_LEVELS` guards of #340 shrink without costing time? Level 3's code moved into one
+block at the end of `seqlz_compress_literals.c`, the whole-file guards of both literal files went (a
+build of one level leaves the files out), the headers got one block per level, and `code_literals()`
+became `code_sampled()` for level 2 and the body of `seqlz_code_own()` for level 3, both ending in
+`lit_finish()`. Kernel-copy files: 68 guards to 43, the `(void)` stand-ins gone; the rest are hooks in
+`decode_block()`, `encode_seq()`, `seqlz_match_block()` and `read_lit_header()`. Machine code
+(`tools/samecode/samecode.sh` against `origin/main`): level 1 and the decoder the same with gcc and
+clang on x86-64 and clang on arm64, the coders of levels 2 and 3 not. Inlined into `seqlz_code_own()`,
+`code_sampled()` made its frame 792 bytes instead of 696, so level 3 calls it, `code_sampled_own()`,
+and the frame is 608. Bytes the same on ten samples. Kernel VM, gcc and clang, four samples: every
+level within the control copy, and level 1, the same code, moves as much as levels 2 and 3. Mi 9T,
+two modules of each: writes and warm reads the same within 0.1 µs, the A76's cold reads 0.1 to 0.16
+µs faster, the A55's cold reads 1.4 µs slower at levels 1 and 2 in both copies of the branch, beyond
+the 1.0 µs between two copies of `main`. The modules' decoders are the same instructions
+(`seqlz_decompress()`, `seqlz_decode_literals()`, `read_own_table()`), the text is 512 bytes larger
+in front of them: where the code lies, not what it is. Kept: the decoder is the same, and the A55's
+cold reads moved as much as level 1, which did not change.* Code: `code_sampled()`, `lit_finish()`,
+`code_sampled_own()`, `seqlz_code_own()` in `src/seqlz_compress_literals.c`, `src/seqlz_internal.h`;
+branch `level-split`, PR #340.
+
+**Setup.** Base `origin/main` at `6f33d12`, the worktree with the branch uncommitted on top of
+`7763717`. The gcc VM run and the instruction counts of ten samples are of the code before `own` was
+set to NULL first, as `main` does; the Mi 9T and the clang VM run of the code as kept. Kernel VM: `tools/zram-vm/run.sh` with `VARIANTS="main=<worktree of main> same=."`,
+`ALGOS=seqlz-1,seqlz-2,seqlz-3,main-1,main-2,main-3,same-2,same-3`, `BOOTS=3 MODE=swap`, p3, p5,
+zram0, zram0-2026-09-24, kernel `finehill` with gcc 16.2.1 and with clang 22.1.8 (`LLVM=1`); the log
+has no line of the host's clocks. Mi 9T: `tools/zram-phone/run.sh` with `BUS=1 COOL=45 ROUNDS=4`, p3,
+modules `a`, `a2` of `main` and `c`, `c2` of the branch, NDK r21e's clang 9 at -O3. Instructions:
+`seqlz-worst --level N count`, ten samples, gcc 16.2.1, Ryzen 9 7950X.
+
+Kernel VM, the mean of the four samples of `main-N` against `seqlz-N` (negative: `main` faster), and
+the control `same-N` against `seqlz-N`:
+
+| | gcc swap-out | warm swap-in | flushed swap-in | clang swap-out | warm swap-in | flushed swap-in |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| level 1 | +0.2% | -0.7% | +0.6% | +1.4% | -0.3% | +0.6% |
+| level 2 | -0.2% | -0.7% | +0.4% | +0.9% | +0.3% | +0.2% |
+| level 3 | -0.2% | -0.2% | +0.2% | +0.2% | -0.2% | +0.3% |
+| control level 2 | +0.7% | +0.1% | +0.7% | +0.4% | +0.6% | -0.3% |
+| control level 3 | 0.0% | 0.0% | +0.4% | +0.4% | 0.0% | -0.1% |
+
+Mi 9T, µs per page, the mean of the two copies, `main` to the branch:
+
+| | write | warm | cold |
+| --- | ---: | ---: | ---: |
+| A55 level 1 | 28.09 to 28.14 | 11.40 to 11.50 | 28.55 to 29.93 |
+| A55 level 2 | 30.99 to 30.97 | 13.04 to 13.10 | 31.85 to 33.31 |
+| A55 level 3 | 48.61 to 48.59 | 15.76 to 15.78 | 38.17 to 38.25 |
+| A76 level 1 | 10.38 to 10.41 | 3.88 to 3.89 | 7.25 to 7.14 |
+| A76 level 2 | 11.33 to 11.35 | 4.56 to 4.55 | 8.38 to 8.22 |
+| A76 level 3 | 18.24 to 18.23 | 5.77 to 5.74 | 9.97 to 9.96 |
+
+The A55's cold reads of the two copies: `main` 28.24 / 28.86 at level 1, 32.36 / 31.34 at level 2; the
+branch 29.89 / 29.97 and 33.03 / 33.58. Two copies are two modules of the same source, loaded at other
+addresses, but with the same layout inside: they do not show what moving the decoder within the
+module does.
+
+Instructions per page, ten samples: levels 1 and 2 the same to 0.01%, decoding the same at every
+level. Level 3 compresses with 0.61% more, 581 instructions per page, all in the loop of `lit_sums()`:
+gcc vectorized its 8 sums with SSE in the new `seqlz_code_own()` (`movq`, `movhps`, `paddq`), where
+`main` has 8 adds in registers. With `-fno-tree-slp-vectorize` on both, level 3 is +0.04%. The kernel
+builds `lib/` without SSE and NEON, so this is userspace only. `code_sampled()` inlined again into
+`seqlz_code_own()` changed nothing of it, and `own` set to NULL before the test of `code_sampled()`,
+as `main` does and as kept, 8 instructions per page on p3 and 4 on zram0.
+
+**After the review, the code as merged.** `code_sampled()` is one `noinline` copy for both levels, with
+`coded_min` an argument, where it was inlined into `seqlz_code_literals()` and into a level-3 copy;
+`SEQLZ_LIT_CODED` is in every build again, with one raw-literal path in `decode_block()`. Stack frames
+`seqlz_decode_literals()` 648, `seqlz_code_own()` 608, `code_sampled()` 504 bytes. Instructions per
+page, ten samples, against `main`: level 1 the same, level 2 compresses with 3.8 more (+0.01%), level 3
++0.60% as above, decoding the same at every level, bytes the same. Kernel VM, gcc, four samples, the
+mean of `main-N` against `seqlz-N` (negative: `main` faster):
+
+| | swap-out | warm swap-in | flushed swap-in |
+| --- | ---: | ---: | ---: |
+| level 1 | +0.5% | -0.7% | -0.4% |
+| level 2 | +0.2% | -0.5% | -0.5% |
+| level 3 | -0.4% | -0.4% | -0.4% |
+| control level 2 | 0.0% | +0.3% | +0.1% |
+| control level 3 | -0.2% | -0.1% | 0.0% |
+
+Level 1, the same code, moves by up to 0.7% again; level 3's swap-ins, the same decoder, by 0.4%. The
+Mi 9T and clang were not run again.
+
+Not measured: the A55's cold reads with the layout held, e.g. the branch's decoder at `main`'s
+address; levels 1 and 2 built alone (`SEQLZ_LEVELS=1`, `2`) in the VM or on the phone.
+
 ## Level 2's coder without the pricing of every literal, the stream sizes without memcpy(): half the coder's text, level 2 writes 1.3% faster on the A76, the same in the VM, kept
 
-Status: kept, 2026-11-01. Now: current.
+Status: kept, 2026-11-01. Now: `code_literals()` is `code_sampled()` for level 2 and `seqlz_code_own()` for level 3 since 4 Nov, `sampled` gone with it ([one block per level](#the-levels-in-one-block-per-file-level-2s-coder-apart-from-level-3s-68-guards-to-43-the-same-speed-in-the-vm-the-a55s-cold-reads-14-µs-slower-from-where-the-code-lies-kept)).
 
 *Two leftovers of the kernel copy's review of 1st November. `seqlz_code_literals()`, level 2, always
 has slots and no table of the block's own, so it always takes the table from a sample
@@ -8633,7 +8724,7 @@ Not measured: the Mi 9T.
 
 ## The kernel copy reviewed again: code_literals() once per level, 2.0% fewer instructions at level 2, kept; two simplifications that cost 1% and 7%, not kept
 
-Status: kept, 2026-10-23. Now: the header of `seqlz_decode_literals()` is parsed in `read_lit_header()` since 24 Oct, with an `if` and the `n_lit` check kept, the same instructions ([coding-style.rst](#the-kernel-copy-against-coding-stylerst-shorter-functions-the-same-instructions-kept-decode_block-split-12-slower-swap-ins-not-kept)).
+Status: kept, 2026-10-23. Now: `code_literals()` split into `code_sampled()` and `seqlz_code_own()` on 4 Nov, each still compiled for its caller ([one block per level](#the-levels-in-one-block-per-file-level-2s-coder-apart-from-level-3s-68-guards-to-43-the-same-speed-in-the-vm-the-a55s-cold-reads-14-µs-slower-from-where-the-code-lies-kept)); the header of `seqlz_decode_literals()` is parsed in `read_lit_header()` since 24 Oct, with an `if` and the `n_lit` check kept, the same instructions ([coding-style.rst](#the-kernel-copy-against-coding-stylerst-shorter-functions-the-same-instructions-kept-decode_block-split-12-slower-swap-ins-not-kept)).
 
 *Four reviewers read the kernel copy of `main` (`8a8ba61`) as a maintainer would. No memory-safety
 hole. Three findings cost or saved instructions, measured here. `code_literals()` was one out-of-line

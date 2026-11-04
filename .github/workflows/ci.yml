@@ -89,17 +89,29 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - {name: asan, cmake: ''}
-          - {name: msan, cmake: '-DSEQLZ_SANITIZE=OFF -DSEQLZ_MSAN=ON'}
+          - {name: asan, cmake: '', levels: '3'}
+          - {name: msan, cmake: '-DSEQLZ_SANITIZE=OFF -DSEQLZ_MSAN=ON', levels: '3'}
+          # the kernel series' first patches, seqlz built with fewer levels, see SEQLZ_LEVELS: both in one
+          # job, as each runs 3 of the 5 targets
+          - {name: asan-levels-1-2, cmake: '', levels: '1 2'}
     name: fuzz (${{ matrix.name }})
     steps:
       - uses: actions/checkout@v7
-      - run: fuzz/smoke.sh 60 build-fuzz ${{ matrix.cmake }}
+      - run: |
+          pids=()
+          for l in ${{ matrix.levels }}; do
+            LEVELS=$l fuzz/smoke.sh 60 build-fuzz-$l ${{ matrix.cmake }} > smoke-$l.log 2>&1 &
+            pids+=($!)
+          done
+          status=0
+          for p in "${pids[@]}"; do wait "$p" || status=1; done
+          cat smoke-*.log
+          exit $status
       - if: failure()
         uses: actions/upload-artifact@v7
         with:
           name: fuzz-crashes-${{ matrix.name }}
-          path: build-fuzz/crashes
+          path: build-fuzz-*/crashes
 
   # The same compressed bytes on every CPU, and every page decodes again: on big-endian s390x under
   # qemu, and on 32-bit x86, which the kernel's build bots build too. Plain C, so that it builds in seconds
@@ -123,6 +135,11 @@ jobs:
           docker run --rm --platform linux/s390x -v "$PWD:/w" -w /w gcc:14 sh -c "gcc -O2 -Isrc -o be $src && ./be" | tee be.txt
           diff le.txt le32.txt
           diff le.txt be.txt
+      # The kernel series adds the levels one patch at a time: builds with SEQLZ_LEVELS=1 and 2 write the
+      # same blocks at their levels, and take the blocks of the others for invalid. gcc and clang warn about
+      # different things in the code that only some of the builds have.
+      - run: test/levels.sh levels-gcc
+      - run: CC=clang test/levels.sh levels-clang
 
   # The docs against the code: the tables' hashes in docs/format.md, and pages compressed by src/
   # decoded by the decoder written from docs/format.md alone. And every relative link and #anchor in

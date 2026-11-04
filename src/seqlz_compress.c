@@ -31,6 +31,7 @@ static unsigned int compress_block(struct seqlz_state *st, const u8 *src,
 	return encoder_finish(&e, dst, dst_cap);
 }
 
+#if SEQLZ_LEVELS >= 3
 /*
  * compress_block() for SEQLZ_LEVEL_OWN: the lazy matcher, with the records for
  * the deltas, and without them if the block does not fit with them; *delta
@@ -71,12 +72,16 @@ static noinline unsigned int compress_own(struct seqlz_state *st, const u8 *src,
 	}
 	return encoder_finish(&e, dst, dst_cap);
 }
+#endif /* SEQLZ_LEVELS >= 3 */
 
 unsigned int seqlz_compress_block(struct seqlz_state *st, const void *src,
 				  void *dst, unsigned int dst_cap,
 				  unsigned int level)
 {
-	unsigned int len, delta;
+	unsigned int len;
+#if SEQLZ_LEVELS >= 3
+	unsigned int delta;
+#endif
 
 	if (level < 1 || level > SEQLZ_LEVEL_MAX)
 		return 0;
@@ -86,21 +91,26 @@ unsigned int seqlz_compress_block(struct seqlz_state *st, const void *src,
 	 * from the block, in memory nothing else of it touches
 	 */
 	dst_cap = min(dst_cap, SEQLZ_COMPRESS_BOUND);
+#if SEQLZ_LEVELS >= 3
 	if (level >= SEQLZ_LEVEL_OWN) {
 		len = compress_own(st, src, dst, dst_cap, &delta);
 		return len ? seqlz_code_own(dst, len, st, delta) : 0;
 	}
+#endif
 	len = compress_block(st, src, dst, dst_cap);
+#if SEQLZ_LEVELS >= 2
 	if (len == 0 || level < SEQLZ_LEVEL_CODED)
 		return len;
 	return seqlz_code_literals(dst, len, st->literals);
+#else
+	return len;
+#endif
 }
 
 /* the interface's work memory is the matcher's state */
 static_assert(sizeof(struct seqlz_state) == SEQLZ_MEM_COMPRESS);
 /* its levels are those of seqlz_compress_block() */
-static_assert(SEQLZ_LEVEL_MIN == 1 && SEQLZ_LEVEL_CODED == 2 &&
-	      SEQLZ_LEVEL_OWN == SEQLZ_LEVEL_MAX);
+static_assert(SEQLZ_LEVEL_MIN == 1);
 /* the room the interface's kernel-doc names, see ENC_ROOM */
 static_assert(ENC_ROOM == 32);
 

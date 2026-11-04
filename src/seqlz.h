@@ -36,8 +36,12 @@ int seqlz_tables_build(struct seqlz_tables *t,
  * the code lengths of the format, see seqlz_lengths.c
  */
 extern const struct seqlz_lengths seqlz_default_lengths;
+#if SEQLZ_LEVELS >= 2
 extern const u8 seqlz_lit_sets[SEQLZ_LIT_SETS][256];
+#endif
+#if SEQLZ_LEVELS >= 3
 extern const u8 seqlz_own_lengths[SEQLZ_OWN_SYMBOLS];
+#endif
 
 /* every sequence but the last covers at least 4 bytes of the block */
 #define SEQLZ_MAX_SEQUENCES (SEQLZ_BLOCK_SIZE / 4U + 1U)

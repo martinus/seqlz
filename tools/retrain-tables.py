@@ -47,7 +47,8 @@ def gen(*args):
 
 
 def numbers(text):
-    return [int(x) for x in re.findall(r"\d+", text)]
+    """the numbers of C text, without its preprocessor lines, e.g. #if SEQLZ_LEVELS >= 3"""
+    return [int(x) for x in re.findall(r"\d+", re.sub(r"^#[^\n]*", "", text, flags=re.MULTILINE))]
 
 
 def lit_lengths(text):

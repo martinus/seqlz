@@ -32,7 +32,7 @@ int LLVMFuzzerTestOneInput(const uint8_t* data, size_t size) {
         set_up = 1;
         with = malloc(SEQLZ_BLOCK_SIZE);
         without = malloc(SEQLZ_BLOCK_SIZE);
-        scratch = malloc(SEQLZ_SCRATCH);
+        scratch = malloc(SEQLZ_MEM_DECOMPRESS);
         if (!with || !without || !scratch)
             abort();
     }
@@ -44,10 +44,10 @@ int LLVMFuzzerTestOneInput(const uint8_t* data, size_t size) {
      * the same when the input is run again */
     memset(with, 0xa5, SEQLZ_BLOCK_SIZE);
     memset(without, 0x5a, SEQLZ_BLOCK_SIZE);
-    memset(scratch, 0x3c, SEQLZ_SCRATCH);
+    memset(scratch, 0x3c, SEQLZ_MEM_DECOMPRESS);
     unwritten(with, SEQLZ_BLOCK_SIZE);
     unwritten(without, SEQLZ_BLOCK_SIZE);
-    unwritten(scratch, SEQLZ_SCRATCH);
+    unwritten(scratch, SEQLZ_MEM_DECOMPRESS);
 
     r_with = seqlz_decompress(src, (unsigned int)size, with, scratch);
     r_without = seqlz_decompress(src, (unsigned int)size, without, NULL);

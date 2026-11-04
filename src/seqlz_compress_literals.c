@@ -1,8 +1,9 @@
 // SPDX-License-Identifier: GPL-2.0-only OR MIT
 /*
  * The compressor's literals: they stay raw, or are coded with one of the
- * fixed literal tables or with a table of the block's own, and at
- * SEQLZ_LEVEL_OWN they can be deltas to earlier bytes of the block first.
+ * fixed literal tables at SEQLZ_LEVEL_CODED, and at SEQLZ_LEVEL_OWN also with
+ * a table of the block's own, and as deltas to earlier bytes of the block
+ * first. Level 3's code follows level 2's, which it builds on.
  */
 #include <linux/build_bug.h>
 #include <linux/math64.h>
@@ -14,22 +15,10 @@
 
 #include "seqlz_internal.h"
 
-/*
- * seqlz_delta_literals() prices the deltas with every DELTA_STEP-th literal:
- * pricing more of them made blocks hardly smaller and level 3's writes slower.
- * A prime, so that it is not the same byte of each field of 2, 3, 4 or 8
- * bytes: every 4th made blocks larger.
- */
-#define DELTA_STEP 11U
-/* a delta's byte in the header, 8 bits scaled as the sums are, at least 1 */
-#define DELTA_HDR_BITS (8U / DELTA_STEP ? 8U / DELTA_STEP : 1U)
-/* the choices pick_delta() prices: no delta, and SEQLZ_DELTA_4 to _LAST */
-#define DELTA_CHOICES (SEQLZ_DELTA_LAST + 1U)
-
+#if SEQLZ_LEVELS >= 2
 /*
  * The bits of sum j in literal table k, from its lane of 16 bits in even or
- * odd, as lit_sums() sums them: even has tables 0, 2, 4 and 6. Sum j is
- * stream j in code_literals(), delta j in seqlz_delta_literals().
+ * odd, as lanes_spill() adds them: even has tables 0, 2, 4 and 6.
  */
 static __always_inline unsigned int lit_bits(const u64 *even, const u64 *odd,
 					     unsigned int j, unsigned int k)
@@ -50,6 +39,334 @@ static __always_inline void lanes_spill(u64 x, u64 *even, u64 *odd)
 	*even += x & lanes;
 	*odd += x >> 8 & lanes;
 }
+
+/*
+ * Appends one literal's code to a stream's accumulator. The enc[] entry has the
+ * code's length in its low bits and the code from bit 8 on, see build_lit(). A
+ * stream's entries are also summed: the low byte of the sum is the length of
+ * their codes, at most 4 * 10 bits between two flushes, which fits.
+ */
+static __always_inline u64 lit_put(u64 acc, unsigned int *sum, const u32 *enc,
+				   u8 b)
+{
+	u32 e = enc[b];
+
+	acc = acc << (e & 63U) | e >> 8;
+	*sum += e;
+	return acc;
+}
+
+/*
+ * the first n bytes of w as put_unaligned_le64() would write them, n < 8: at
+ * the end of a stream, where 8 bytes would run into the next one
+ */
+static void store_tail(u8 *p, u64 w, unsigned int n)
+{
+	u8 b[8];
+	unsigned int k;
+
+	put_unaligned_le64(w, b);
+	for (k = 0; k < n; k++)
+		p[k] = b[k];
+}
+
+/*
+ * Writes the whole bytes of a stream's accumulator and returns p moved on by
+ * them, as enc_flush() does for the sequences. cnt is the bits left from before
+ * the last flush, the low byte of sum the bits added since. 8 bytes at once
+ * while the stream has room for them; it ends at end, where the next stream
+ * starts. The bytes are swapped once, before the branch, not by
+ * put_unaligned_be64() in each, which the compiler did not merge.
+ */
+static __always_inline u8 *lit_flush(u8 *p, const u8 *end, u64 acc,
+				     unsigned int *cnt, unsigned int *sum)
+{
+	unsigned int n = *cnt + (*sum & 255U);
+	u64 w = swab64(acc << ((64U - n) & 63U));
+
+	if (end - p >= 8)
+		put_unaligned_le64(w, p);
+	else
+		store_tail(p, w, (n + 7U) >> 3);
+	p += n >> 3;
+	*cnt = n & 7U;
+	*sum = 0;
+	return p;
+}
+
+/*
+ * Writes the n_literals literals into the 8 streams that start at q[0] to q[7],
+ * q[8] the end of the last. Literal k goes into stream k % 8, most significant
+ * bit first, see seqlz_decode_literals(). Four streams at a time, each with an
+ * accumulator of its own, so that the four chains of shifts run side by side.
+ * One stream after the other made each literal wait for the one before.
+ * ends gets where each stream ends, the partly used last byte included.
+ */
+static __always_inline void lit_streams(const u32 *enc, const u8 *literals,
+					unsigned int n_literals, u8 *const *q,
+					u8 **ends)
+{
+	/* the literals between two flushes, 4 per stream */
+	const unsigned int run = 4U * SEQLZ_LIT_STREAMS;
+	unsigned int half, k, j;
+
+	for (half = 0; half < SEQLZ_LIT_STREAMS; half += 4) {
+		/* each stream's write position, and its end */
+		u8 *p0 = q[half], *p1 = q[half + 1];
+		u8 *p2 = q[half + 2], *p3 = q[half + 3];
+		u8 *e0 = p1, *e1 = p2, *e2 = p3, *e3 = q[half + 4];
+		/* each stream's accumulator, see lit_put() and lit_flush() */
+		u64 a0 = 0, a1 = 0, a2 = 0, a3 = 0;
+		unsigned int c0 = 0, c1 = 0, c2 = 0, c3 = 0;
+		unsigned int s0 = 0, s1 = 0, s2 = 0, s3 = 0;
+
+		/*
+		 * A run of literals, then a flush: 4 codes of up to 10 bits fit
+		 * the accumulator. The loop stops run - 4 literals before the
+		 * end, so the rest below has at most 4 per stream.
+		 */
+		for (k = half; k + run - 4U < n_literals; k += run) {
+			for (j = 0; j < run; j += SEQLZ_LIT_STREAMS) {
+				a0 = lit_put(a0, &s0, enc, literals[k + j]);
+				a1 = lit_put(a1, &s1, enc, literals[k + j + 1]);
+				a2 = lit_put(a2, &s2, enc, literals[k + j + 2]);
+				a3 = lit_put(a3, &s3, enc, literals[k + j + 3]);
+			}
+			p0 = lit_flush(p0, e0, a0, &c0, &s0);
+			p1 = lit_flush(p1, e1, a1, &c1, &s1);
+			p2 = lit_flush(p2, e2, a2, &c2, &s2);
+			p3 = lit_flush(p3, e3, a3, &c3, &s3);
+		}
+		/*
+		 * the rest, at most 4 literals per stream; the other half's 4
+		 * of every 8 are skipped
+		 */
+		for (; k < n_literals; k++) {
+			switch (k % SEQLZ_LIT_STREAMS) {
+			case 0:
+			case 4:
+				a0 = lit_put(a0, &s0, enc, literals[k]);
+				break;
+			case 1:
+			case 5:
+				a1 = lit_put(a1, &s1, enc, literals[k]);
+				break;
+			case 2:
+			case 6:
+				a2 = lit_put(a2, &s2, enc, literals[k]);
+				break;
+			default:
+				a3 = lit_put(a3, &s3, enc, literals[k]);
+			}
+			if ((k & 3U) == 3U)
+				k += 4;
+		}
+		p0 = lit_flush(p0, e0, a0, &c0, &s0);
+		p1 = lit_flush(p1, e1, a1, &c1, &s1);
+		p2 = lit_flush(p2, e2, a2, &c2, &s2);
+		p3 = lit_flush(p3, e3, a3, &c3, &s3);
+		/* a stream's end: its last byte, partly used, counts */
+		ends[half] = p0 + (c0 != 0);
+		ends[half + 1] = p1 + (c1 != 0);
+		ends[half + 2] = p2 + (c2 != 0);
+		ends[half + 3] = p3 + (c3 != 0);
+	}
+}
+
+/*
+ * The 8 stream sizes, width bits each, lowest bit first: exactly width bytes
+ * at p.
+ */
+static void lit_sizes(u8 *p, const unsigned int *sizes, unsigned int width)
+{
+	u64 acc = 0;
+	unsigned int cnt = 0, j;
+
+	for (j = 0; j < SEQLZ_LIT_STREAMS; j++) {
+		acc |= (u64)sizes[j] << cnt;
+		for (cnt += width; cnt >= 8U; cnt -= 8U) {
+			*p++ = (u8)acc;
+			acc >>= 8;
+		}
+	}
+}
+
+/*
+ * The sample and the slots of code_sampled(). The slots of LIT_SLOT bytes
+ * spare a pass that prices every literal, which the header would need for each
+ * stream's size. A prime step: every 4th or 8th literal is the same byte of
+ * each 4- or 8-byte field; a larger step saves less than its coarser sample
+ * costs in bytes. Where the sample says the literals stay raw by
+ * LIT_SAMPLE_MARGIN bytes or more, they do, and the streams are not written:
+ * most blocks that stay raw are far from the rule, and a block the sample
+ * misjudges by more is rare.
+ */
+#define LIT_SAMPLE_STEP 7U
+#define LIT_SAMPLE_MARGIN 8U
+/*
+ * a stream's slot: the bytes of the longest stream of n literals, every 8th
+ * with the longest code, and 8 more for lit_flush()'s 8-byte stores
+ */
+#define LIT_SLOT(n) (((n) / SEQLZ_LIT_STREAMS + 1U) * SEQLZ_LIT_BITS / 8U + 9U)
+static_assert(SEQLZ_LIT_STREAMS * LIT_SLOT(SEQLZ_BLOCK_SIZE) <=
+		      sizeof(struct seqlz_state),
+	      "the streams' slots fit the matcher's state");
+
+/*
+ * The bits the stream sizes are written in: as many as the largest needs, at
+ * least SEQLZ_SIZE_BITS_MIN.
+ */
+static unsigned int size_width(const unsigned int *sizes)
+{
+	unsigned int all = 1U << (SEQLZ_SIZE_BITS_MIN - 1U), j;
+
+	for (j = 0; j < SEQLZ_LIT_STREAMS; j++)
+		all |= sizes[j];
+	return 32U - (unsigned int)__builtin_clz(all);
+}
+
+/*
+ * The rest of a block with coded literals once the streams are in place: the
+ * u16 with SEQLZ_LIT_CODED, byte 2, the stream sizes at d + at, width bits
+ * each, and the bitstream of bitstream bytes moved down from behind the
+ * n_literals raw literals to d + end, right after the coded ones. Returns the
+ * block's length.
+ */
+static __always_inline unsigned int
+lit_finish(u8 *d, unsigned int n_literals, unsigned int bitstream,
+	   unsigned int byte2, unsigned int at, const unsigned int *sizes,
+	   unsigned int width, unsigned int end)
+{
+	put_unaligned_le16((u16)(SEQLZ_LIT_CODED | n_literals), d);
+	/*
+	 * byte 2: the literals' code in bits 0 to 3,
+	 * width - SEQLZ_SIZE_BITS_MIN in bits 4 to 6, in bit 7 whether they are
+	 * deltas
+	 */
+	d[2] = (u8)byte2;
+	lit_sizes(d + at, sizes, width);
+	memmove(d + end, d + SEQLZ_HEADER + n_literals, bitstream);
+	return end + bitstream;
+}
+
+/*
+ * Turns the block of len bytes in d, with raw literals as the encoder wrote it,
+ * into one with Huffman coded literals, where that saves more than 1/16 of them
+ * plus coded_min bytes, SEQLZ_LIT_CODED_MIN at level 2, not counting the header
+ * of the coded literals, 8 to 16 bytes. Decoding coded literals costs time for
+ * every byte, and coding them wherever they save anything at all saved almost
+ * no more memory. Returns the new length, or len if the literals stay raw.
+ *
+ * The code is the fixed table that codes every LIT_SAMPLE_STEP-th literal in
+ * the fewest bits. The streams are written into slots, LIT_SLOT bytes each of
+ * the matcher's state, and moved over the raw literals once all are read. The
+ * bitstream stays behind the raw literals until it moves down behind the coded
+ * ones at the end. So d needs no room beyond len, and the block is coded in any
+ * dst it fits into raw.
+ *
+ * One copy for level 2 and level 3, which calls it for blocks with too few
+ * literals for a table of their own: it has no code of level 3. Inlined into
+ * seqlz_code_own(), its arrays made that function's stack frame, the deepest
+ * of the compressor, larger.
+ */
+static noinline unsigned int code_sampled(u8 *d, unsigned int len, u8 *slots,
+					  unsigned int coded_min)
+{
+	const unsigned int n_literals = get_unaligned_le16(d);
+	const unsigned int bitstream = len - SEQLZ_HEADER - n_literals;
+	const u8 *literals = d + SEQLZ_HEADER;
+	const unsigned int slot = LIT_SLOT(n_literals);
+	unsigned int bits = ~0U, k, j, n = 0, coded, set = 0,
+		     sizes[SEQLZ_LIT_STREAMS], width, header;
+	/* the sampled bits in all tables, in the lanes of lanes_spill() */
+	u64 x = 0, s_even = 0, s_odd = 0;
+	/* where each stream starts, and the end of the last; where each ends */
+	u8 *q[SEQLZ_LIT_STREAMS + 1], *ends[SEQLZ_LIT_STREAMS];
+	u8 *out;
+
+	for (k = 0; k < n_literals; k += LIT_SAMPLE_STEP) {
+		if (n == LIT_COST_RUN) {
+			lanes_spill(x, &s_even, &s_odd);
+			x = 0;
+			n = 0;
+		}
+		x += seqlz_tables.lit_cost[literals[k]];
+		n++;
+	}
+	lanes_spill(x, &s_even, &s_odd);
+	for (k = 0; k < SEQLZ_LIT_SETS; k++) {
+		unsigned int b = lit_bits(&s_even, &s_odd, 0, k);
+
+		if (b < bits) {
+			bits = b;
+			set = k;
+		}
+	}
+	/* raw by the sample, with the margin: no streams */
+	if ((bits * LIT_SAMPLE_STEP + 7U) / 8U + coded_min >=
+	    n_literals - n_literals / 16U + LIT_SAMPLE_MARGIN)
+		return len;
+	for (j = 0; j <= SEQLZ_LIT_STREAMS; j++)
+		q[j] = slots + j * slot;
+	lit_streams(seqlz_tables.lit[set].enc, literals, n_literals, q, ends);
+	for (j = 0, coded = 0; j < SEQLZ_LIT_STREAMS; j++) {
+		sizes[j] = (unsigned int)(ends[j] - q[j]);
+		coded += sizes[j];
+	}
+	width = size_width(sizes);
+	header = SEQLZ_LIT_HEADER(width);
+	if (coded + coded_min >= n_literals - n_literals / 16U)
+		return len;
+	/*
+	 * The streams into place, 8 bytes at a time, up to 7 past a stream's end
+	 * into the next one's place, which is written next; the last stream's
+	 * tail exactly, the bitstream may start right after it. Reads past a
+	 * stream's end stay in its slot.
+	 */
+	out = d + header;
+	for (j = 0; j < SEQLZ_LIT_STREAMS - 1U; j++) {
+		for (k = 0; k < sizes[j]; k += 8)
+			put_unaligned_le64(get_unaligned_le64(q[j] + k),
+					   out + k);
+		out += sizes[j];
+	}
+	for (k = 0; k + 8U <= sizes[j]; k += 8)
+		put_unaligned_le64(get_unaligned_le64(q[j] + k), out + k);
+	store_tail(out + k, get_unaligned_le64(q[j] + k), sizes[j] - k);
+	return lit_finish(d, n_literals, bitstream,
+			  set | (width - SEQLZ_SIZE_BITS_MIN)
+					  << SEQLZ_LIT_WIDTH_AT,
+			  SEQLZ_LIT_HEADER(0), sizes, width, header + coded);
+}
+
+static_assert(SEQLZ_LIT_HEADER(SEQLZ_SIZE_BITS_MAX) <=
+		      SEQLZ_HEADER + SEQLZ_LIT_CODED_MIN,
+	      "the coded literals fit before the bitstream");
+static_assert(sizeof_field(struct seqlz_state, table) >= SEQLZ_BLOCK_SIZE,
+	      "the raw literals take no memory beyond the matcher's table");
+/* the sums in 16-bit lanes */
+static_assert((SEQLZ_BLOCK_SIZE / LIT_SAMPLE_STEP + 1U) * SEQLZ_LIT_BITS <
+		      1U << 16,
+	      "the bits of the sampled literals fit a lane");
+
+/* the literals with the fixed tables only, at SEQLZ_LEVEL_CODED */
+unsigned int seqlz_code_literals(u8 *d, unsigned int len, u8 *slots)
+{
+	return code_sampled(d, len, slots, SEQLZ_LIT_CODED_MIN);
+}
+
+#if SEQLZ_LEVELS >= 3
+/*
+ * seqlz_delta_literals() prices the deltas with every DELTA_STEP-th literal:
+ * pricing more of them made blocks hardly smaller and level 3's writes slower.
+ * A prime, so that it is not the same byte of each field of 2, 3, 4 or 8
+ * bytes: every 4th made blocks larger.
+ */
+#define DELTA_STEP 11U
+/* a delta's byte in the header, 8 bits scaled as the sums are, at least 1 */
+#define DELTA_HDR_BITS (8U / DELTA_STEP ? 8U / DELTA_STEP : 1U)
+/* the choices pick_delta() prices: no delta, and SEQLZ_DELTA_4 to _LAST */
+#define DELTA_CHOICES (SEQLZ_DELTA_LAST + 1U)
 
 /* lanes_spill() of the DELTA_CHOICES sums s, which are cleared */
 static __always_inline void delta_spill(u64 *s, u64 *even, u64 *odd)
@@ -91,7 +408,7 @@ static __always_inline void read_rec(const u8 *p, unsigned int *pos,
  * before each sequence's literals, see LIT_REC and SEQLZ_LIT_DELTA_AT: the one
  * whose best fixed table takes the fewest bits, 0 for none.
  *
- * Each delta is priced as code_literals() prices the fixed tables, with the
+ * Each delta is priced as seqlz_code_own() prices the fixed tables, with the
  * code lengths of seqlz_tables.lit_cost, on every DELTA_STEP-th literal. A
  * delta also pays for its byte in the header, DELTA_HDR_BITS. The bits of the
  * fixed tables also tell which delta suits a table of the block's own.
@@ -226,60 +543,6 @@ unsigned int seqlz_delta_literals(u8 *d, u8 **lit_end, const u8 *block,
 }
 
 /*
- * Appends one literal's code to a stream's accumulator. The enc[] entry has the
- * code's length in its low bits and the code from bit 8 on, see build_lit(). A
- * stream's entries are also summed: the low byte of the sum is the length of
- * their codes, at most 4 * 10 bits between two flushes, which fits.
- */
-static __always_inline u64 lit_put(u64 acc, unsigned int *sum, const u32 *enc,
-				   u8 b)
-{
-	u32 e = enc[b];
-
-	acc = acc << (e & 63U) | e >> 8;
-	*sum += e;
-	return acc;
-}
-
-/*
- * the first n bytes of w as put_unaligned_le64() would write them, n < 8: at
- * the end of a stream, where 8 bytes would run into the next one
- */
-static void store_tail(u8 *p, u64 w, unsigned int n)
-{
-	u8 b[8];
-	unsigned int k;
-
-	put_unaligned_le64(w, b);
-	for (k = 0; k < n; k++)
-		p[k] = b[k];
-}
-
-/*
- * Writes the whole bytes of a stream's accumulator and returns p moved on by
- * them, as enc_flush() does for the sequences. cnt is the bits left from before
- * the last flush, the low byte of sum the bits added since. 8 bytes at once
- * while the stream has room for them; it ends at end, where the next stream
- * starts. The bytes are swapped once, before the branch, not by
- * put_unaligned_be64() in each, which the compiler did not merge.
- */
-static __always_inline u8 *lit_flush(u8 *p, const u8 *end, u64 acc,
-				     unsigned int *cnt, unsigned int *sum)
-{
-	unsigned int n = *cnt + (*sum & 255U);
-	u64 w = swab64(acc << ((64U - n) & 63U));
-
-	if (end - p >= 8)
-		put_unaligned_le64(w, p);
-	else
-		store_tail(p, w, (n + 7U) >> 3);
-	p += n >> 3;
-	*cnt = n & 7U;
-	*sum = 0;
-	return p;
-}
-
-/*
  * Sums the code lengths of each stream's literals in all tables, into the
  * 16-bit lanes of even and odd: even has tables 0, 2, 4 and 6, odd tables 1,
  * 3, 5 and 7. LIT_COST_RUN literals per stream in the 8-bit lanes of x, then
@@ -319,103 +582,6 @@ static __always_inline void lit_sums(const u8 *literals,
 }
 
 /*
- * Writes the n_literals literals into the 8 streams that start at q[0] to q[7],
- * q[8] the end of the last. Literal k goes into stream k % 8, most significant
- * bit first, see seqlz_decode_literals(). Four streams at a time, each with an
- * accumulator of its own, so that the four chains of shifts run side by side.
- * One stream after the other made each literal wait for the one before.
- * ends gets where each stream ends, the partly used last byte included.
- */
-static __always_inline void lit_streams(const u32 *enc, const u8 *literals,
-					unsigned int n_literals, u8 *const *q,
-					u8 **ends)
-{
-	/* the literals between two flushes, 4 per stream */
-	const unsigned int run = 4U * SEQLZ_LIT_STREAMS;
-	unsigned int half, k, j;
-
-	for (half = 0; half < SEQLZ_LIT_STREAMS; half += 4) {
-		/* each stream's write position, and its end */
-		u8 *p0 = q[half], *p1 = q[half + 1];
-		u8 *p2 = q[half + 2], *p3 = q[half + 3];
-		u8 *e0 = p1, *e1 = p2, *e2 = p3, *e3 = q[half + 4];
-		/* each stream's accumulator, see lit_put() and lit_flush() */
-		u64 a0 = 0, a1 = 0, a2 = 0, a3 = 0;
-		unsigned int c0 = 0, c1 = 0, c2 = 0, c3 = 0;
-		unsigned int s0 = 0, s1 = 0, s2 = 0, s3 = 0;
-
-		/*
-		 * A run of literals, then a flush: 4 codes of up to 10 bits fit
-		 * the accumulator. The loop stops run - 4 literals before the
-		 * end, so the rest below has at most 4 per stream.
-		 */
-		for (k = half; k + run - 4U < n_literals; k += run) {
-			for (j = 0; j < run; j += SEQLZ_LIT_STREAMS) {
-				a0 = lit_put(a0, &s0, enc, literals[k + j]);
-				a1 = lit_put(a1, &s1, enc, literals[k + j + 1]);
-				a2 = lit_put(a2, &s2, enc, literals[k + j + 2]);
-				a3 = lit_put(a3, &s3, enc, literals[k + j + 3]);
-			}
-			p0 = lit_flush(p0, e0, a0, &c0, &s0);
-			p1 = lit_flush(p1, e1, a1, &c1, &s1);
-			p2 = lit_flush(p2, e2, a2, &c2, &s2);
-			p3 = lit_flush(p3, e3, a3, &c3, &s3);
-		}
-		/*
-		 * the rest, at most 4 literals per stream; the other half's 4
-		 * of every 8 are skipped
-		 */
-		for (; k < n_literals; k++) {
-			switch (k % SEQLZ_LIT_STREAMS) {
-			case 0:
-			case 4:
-				a0 = lit_put(a0, &s0, enc, literals[k]);
-				break;
-			case 1:
-			case 5:
-				a1 = lit_put(a1, &s1, enc, literals[k]);
-				break;
-			case 2:
-			case 6:
-				a2 = lit_put(a2, &s2, enc, literals[k]);
-				break;
-			default:
-				a3 = lit_put(a3, &s3, enc, literals[k]);
-			}
-			if ((k & 3U) == 3U)
-				k += 4;
-		}
-		p0 = lit_flush(p0, e0, a0, &c0, &s0);
-		p1 = lit_flush(p1, e1, a1, &c1, &s1);
-		p2 = lit_flush(p2, e2, a2, &c2, &s2);
-		p3 = lit_flush(p3, e3, a3, &c3, &s3);
-		/* a stream's end: its last byte, partly used, counts */
-		ends[half] = p0 + (c0 != 0);
-		ends[half + 1] = p1 + (c1 != 0);
-		ends[half + 2] = p2 + (c2 != 0);
-		ends[half + 3] = p3 + (c3 != 0);
-	}
-}
-
-/*
- * The 8 stream sizes, width bits each, lowest bit first: exactly width bytes
- * at p.
- */
-static void lit_sizes(u8 *p, const unsigned int *sizes, unsigned int width)
-{
-	u64 acc = 0;
-	unsigned int cnt = 0, j;
-
-	for (j = 0; j < SEQLZ_LIT_STREAMS; j++) {
-		acc |= (u64)sizes[j] << cnt;
-		for (cnt += width; cnt >= 8U; cnt -= 8U) {
-			*p++ = (u8)acc;
-			acc >>= 8;
-		}
-	}
-}
-
-/*
  * A literal table of the block's own, see SEQLZ_LIT_OWN: what the encoder needs
  * for it, in the matcher's state behind the copy of the literals. So a block
  * gets one only if its literals leave OWN_WORK bytes of the state free, which
@@ -433,30 +599,7 @@ static void lit_sizes(u8 *p, const unsigned int *sizes, unsigned int width)
 #define OWN_DESC_ROOM 512U
 /* a block's own table only for blocks with this many literals or more */
 #define OWN_LITERALS_MIN 512U
-/*
- * Where a block tries neither deltas nor a table of its own, below
- * SEQLZ_LEVEL_OWN and at it for blocks without deltas and with fewer than
- * OWN_LITERALS_MIN literals, the fixed table is picked from every
- * LIT_SAMPLE_STEP-th literal, not from all of them, and the streams are written
- * into slots in the matcher's state, LIT_SLOT bytes each, then moved into place
- * once their sizes are known. Without the slots every literal had to be priced
- * first, since the header needs each stream's size. A prime step: every 4th or
- * 8th literal is the same byte of each 4- or 8-byte field; a larger step saves
- * less than its coarser sample costs in bytes. Where the sample says the
- * literals stay raw by LIT_SAMPLE_MARGIN bytes or more, they do, and the
- * streams are not written: most blocks that stay raw are far from the rule, and
- * a block the sample misjudges by more is rare.
- */
-#define LIT_SAMPLE_STEP 7U
-#define LIT_SAMPLE_MARGIN 8U
-/*
- * a stream's slot: the bytes of the longest stream of n literals, every 8th
- * with the longest code, and 8 more for lit_flush()'s 8-byte stores
- */
-#define LIT_SLOT(n) (((n) / SEQLZ_LIT_STREAMS + 1U) * SEQLZ_LIT_BITS / 8U + 9U)
-static_assert(SEQLZ_LIT_STREAMS * LIT_SLOT(SEQLZ_BLOCK_SIZE) <=
-		      sizeof(struct seqlz_state),
-	      "the streams' slots fit the matcher's state");
+
 /* and only where it saves this many bytes against the best fixed table */
 #define OWN_SAVES_MIN 32U
 
@@ -630,10 +773,10 @@ static unsigned int own_describe(struct own_work *w, unsigned int n)
  * literals' entropy, or their bits with the code and the description with the
  * smallest header, say it cannot save OWN_SAVES_MIN bytes against limit, the
  * bytes of the best fixed table with its header, or that the literals would
- * stay raw with code_literals()' coded_min.
+ * stay raw with SEQLZ_LIT_CODED_MIN_OWN, see seqlz_code_own().
  */
 static unsigned int own_code(struct own_work *w, unsigned int n_literals,
-			     unsigned int limit, unsigned int coded_min)
+			     unsigned int limit)
 {
 	/* the low 15 bits of each lane */
 	const u64 low = 0x7fff7fff7fff7fffULL;
@@ -688,7 +831,7 @@ static unsigned int own_code(struct own_work *w, unsigned int n_literals,
 	 * The code is built only where an estimate says it can pay: the
 	 * entropy, plus about 0.45 bytes, 115 / 256, of description per byte
 	 * with a code, has to be OWN_SAVES_MIN bytes below limit, and small
-	 * enough that the literals do not stay raw, see code_literals(). On
+	 * enough that the literals do not stay raw, see seqlz_code_own(). On
 	 * many blocks it is not built.
 	 */
 	h = n_literals * log2_256(n_literals) - h;
@@ -696,7 +839,7 @@ static unsigned int own_code(struct own_work *w, unsigned int n_literals,
 	est = h / 2048U + n * 115U / 256U;
 	if (est + SEQLZ_LIT_HEADER(SEQLZ_SIZE_BITS_MIN) + OWN_SAVES_MIN >
 		    limit ||
-	    est + coded_min >= n_literals - n_literals / 16U)
+	    est + SEQLZ_LIT_CODED_MIN_OWN >= n_literals - n_literals / 16U)
 		return 0;
 	own_lengths(w, n, n_literals);
 
@@ -764,231 +907,17 @@ static unsigned int own_sizes(struct own_work *w, const u8 *literals,
 	return sum;
 }
 
-/*
- * The bits the stream sizes are written in: as many as the largest needs, at
- * least SEQLZ_SIZE_BITS_MIN.
- */
-static unsigned int size_width(const unsigned int *sizes)
-{
-	unsigned int all = 1U << (SEQLZ_SIZE_BITS_MIN - 1U), j;
-
-	for (j = 0; j < SEQLZ_LIT_STREAMS; j++)
-		all |= sizes[j];
-	return 32U - (unsigned int)__builtin_clz(all);
-}
-
-/*
- * Turns the block of len bytes in d, with raw literals as the encoder wrote it,
- * into one with Huffman coded literals, where that saves more than 1/16 of them
- * plus coded_min bytes, SEQLZ_LIT_CODED_MIN or SEQLZ_LIT_CODED_MIN_OWN, not
- * counting the header of the coded literals, 8 to 16 bytes. Decoding coded
- * literals costs time for every byte, and coding them wherever they save
- * anything at all saved almost no more memory. Returns the new length, or len
- * if the literals stay raw.
- *
- * The code is the fixed table that codes them in the fewest bits, or, with own
- * not NULL, a table of the block's own, where that and its description take at
- * least OWN_SAVES_MIN bytes less.
- *
- * The coded literals are written over the raw ones in d, which are read from
- * raw if the caller has them elsewhere, else from d. Without own and with a
- * spare, the streams are first written into spare, the matcher's state, see
- * LIT_SLOT, and moved over the raw literals once all are read. Else spare, at
- * least a block, gets a copy of the raw literals once it is clear they get
- * coded, and the streams are written into d from it; with raw given, spare may
- * be NULL. The bitstream stays behind the raw literals until it moves down
- * behind the coded ones at the end. So d needs no room beyond len, and the
- * block is coded in any dst it fits into raw. sampled says that own is NULL
- * and spare is not, so that a copy of this function for such a caller has no
- * code for the other way.
- *
- * With delta not 0, raw has the literals' deltas, see SEQLZ_LIT_DELTA_AT, which
- * are coded instead, and the header says so; if they stay raw, d keeps them as
- * they are.
- */
-static __always_inline unsigned int
-code_literals(u8 *d, unsigned int len, const u8 *raw, u8 *spare,
-	      struct own_work *own, unsigned int delta, unsigned int coded_min,
-	      bool sampled)
-{
-	const unsigned int n_literals = get_unaligned_le16(d);
-	const unsigned int bitstream = len - SEQLZ_HEADER - n_literals;
-	const u8 *literals = raw ? raw : d + SEQLZ_HEADER;
-	/* with a delta, its byte before the sizes */
-	const unsigned int delta_byte = delta != 0;
-	unsigned int bits = ~0U, k, j, coded, set = 0, sizes[SEQLZ_LIT_STREAMS],
-		     width, header, desc = 0;
-	const u32 *enc;
-	/* the bits of each stream in each table, see lit_sums() */
-	u64 even[SEQLZ_LIT_STREAMS] = { 0 }, odd[SEQLZ_LIT_STREAMS] = { 0 };
-	/* where each stream starts, and the end of the last; where each ends */
-	u8 *q[SEQLZ_LIT_STREAMS + 1], *ends[SEQLZ_LIT_STREAMS];
-
-	if (own &&
-	    (n_literals < OWN_LITERALS_MIN || n_literals > OWN_LITERALS_MAX))
-		own = NULL;
-	if (sampled || (!own && spare)) {
-		/*
-		 * The table from every LIT_SAMPLE_STEP-th literal: the bits of
-		 * each in all tables, in the lanes as lit_sums() has them. The
-		 * streams then go into slots in spare, and their sizes come
-		 * from where they end, see LIT_SLOT.
-		 */
-		const unsigned int slot = LIT_SLOT(n_literals);
-		u64 x = 0, s_even = 0, s_odd = 0;
-		unsigned int n = 0;
-		u8 *out;
-
-		for (k = 0; k < n_literals; k += LIT_SAMPLE_STEP) {
-			if (n == LIT_COST_RUN) {
-				lanes_spill(x, &s_even, &s_odd);
-				x = 0;
-				n = 0;
-			}
-			x += seqlz_tables.lit_cost[literals[k]];
-			n++;
-		}
-		lanes_spill(x, &s_even, &s_odd);
-		for (k = 0; k < SEQLZ_LIT_SETS; k++) {
-			unsigned int b = lit_bits(&s_even, &s_odd, 0, k);
-
-			if (b < bits) {
-				bits = b;
-				set = k;
-			}
-		}
-		/* raw by the sample, with the margin: no streams */
-		if ((bits * LIT_SAMPLE_STEP + 7U) / 8U + coded_min >=
-		    n_literals - n_literals / 16U + LIT_SAMPLE_MARGIN)
-			return len;
-		enc = seqlz_tables.lit[set].enc;
-		for (j = 0; j <= SEQLZ_LIT_STREAMS; j++)
-			q[j] = spare + j * slot;
-		lit_streams(enc, literals, n_literals, q, ends);
-		for (j = 0, coded = 0; j < SEQLZ_LIT_STREAMS; j++) {
-			sizes[j] = (unsigned int)(ends[j] - q[j]);
-			coded += sizes[j];
-		}
-		width = size_width(sizes);
-		header = SEQLZ_LIT_HEADER(width) + delta_byte;
-		if (coded + coded_min >= n_literals - n_literals / 16U)
-			return len;
-		/*
-		 * The streams into place, 8 bytes at a time, up to 7 past a
-		 * stream's end into the next one's place, which is written
-		 * next; the last stream's tail exactly, the bitstream may
-		 * start right after it. Reads past a stream's end stay in its
-		 * slot.
-		 */
-		out = d + header;
-		for (j = 0; j < SEQLZ_LIT_STREAMS - 1U; j++) {
-			for (k = 0; k < sizes[j]; k += 8)
-				put_unaligned_le64(get_unaligned_le64(q[j] + k),
-						   out + k);
-			out += sizes[j];
-		}
-		for (k = 0; k + 8U <= sizes[j]; k += 8)
-			put_unaligned_le64(get_unaligned_le64(q[j] + k),
-					   out + k);
-		store_tail(out + k, get_unaligned_le64(q[j] + k), sizes[j] - k);
-	} else {
-		if (own)
-			memset(own->freq, 0, sizeof(own->freq));
-		lit_sums(literals, n_literals, even, odd,
-			 own ? own->freq : NULL);
-		/* the table with the fewest bits */
-		for (k = 0; k < SEQLZ_LIT_SETS; k++) {
-			unsigned int b = 0;
-
-			for (j = 0; j < SEQLZ_LIT_STREAMS; j++)
-				b += lit_bits(even, odd, j, k);
-			if (b < bits) {
-				bits = b;
-				set = k;
-			}
-		}
-		for (j = 0, coded = 0; j < SEQLZ_LIT_STREAMS; j++) {
-			sizes[j] = (lit_bits(even, odd, j, set) + 7U) / 8U;
-			coded += sizes[j];
-		}
-		width = size_width(sizes);
-		header = SEQLZ_LIT_HEADER(width) + delta_byte;
-		enc = seqlz_tables.lit[set].enc;
-		if (own) {
-			unsigned int n = own_code(own, n_literals,
-						  header + coded, coded_min);
-			unsigned int own_coded, own_width;
-
-			if (n) {
-				own_coded =
-					own_sizes(own, literals, n_literals);
-				own_width = size_width(own->sizes);
-				if (SEQLZ_LIT_HEADER(own_width) + delta_byte +
-					    n + own_coded + OWN_SAVES_MIN <=
-				    header + coded) {
-					desc = n;
-					width = own_width;
-					header = SEQLZ_LIT_HEADER(width) +
-						 delta_byte + desc;
-					coded = own_coded;
-					memcpy(sizes, own->sizes,
-					       sizeof(sizes));
-					enc = own->enc;
-				}
-			}
-		}
-		if (desc + coded + coded_min >= n_literals - n_literals / 16U)
-			return len;
-		/*
-		 * The streams end at d + header + coded, which is before the
-		 * bitstream at d + SEQLZ_HEADER + n_literals: desc + coded is
-		 * at least coded_min bytes below n_literals, see the
-		 * static_assert below.
-		 */
-		if (spare)
-			literals = memcpy(spare, literals, n_literals);
-		q[0] = d + header;
-		for (j = 0; j < SEQLZ_LIT_STREAMS; j++)
-			q[j + 1] = q[j] + sizes[j];
-		lit_streams(enc, literals, n_literals, q, ends);
-	}
-	put_unaligned_le16((u16)(SEQLZ_LIT_CODED | n_literals), d);
-	/*
-	 * byte 2: the literals' code in bits 0 to 3,
-	 * width - SEQLZ_SIZE_BITS_MIN in bits 4 to 6, in bit 7 whether they are
-	 * deltas
-	 */
-	d[2] = (u8)((desc ? SEQLZ_LIT_OWN : set) |
-		    (width - SEQLZ_SIZE_BITS_MIN) << SEQLZ_LIT_WIDTH_AT |
-		    delta_byte << SEQLZ_LIT_DELTA_AT);
-	if (delta)
-		d[SEQLZ_LIT_HEADER(0)] = (u8)delta;
-	lit_sizes(d + SEQLZ_LIT_HEADER(0) + delta_byte, sizes, width);
-	if (desc)
-		memcpy(d + SEQLZ_LIT_HEADER(width) + delta_byte, own->desc,
-		       desc);
-	/* the bitstream, down to right after the coded literals */
-	coded += header;
-	memmove(d + coded, d + SEQLZ_HEADER + n_literals, bitstream);
-	return coded + bitstream;
-}
-
 static_assert(SEQLZ_LIT_HEADER(SEQLZ_SIZE_BITS_MAX) + 1U <=
-			      SEQLZ_HEADER + SEQLZ_LIT_CODED_MIN_OWN &&
-		      SEQLZ_LIT_CODED_MIN_OWN <= SEQLZ_LIT_CODED_MIN,
+		      SEQLZ_HEADER + SEQLZ_LIT_CODED_MIN_OWN,
 	      "the coded literals fit before the bitstream");
-static_assert(sizeof_field(struct seqlz_state, table) >= SEQLZ_BLOCK_SIZE,
-	      "the raw literals take no memory beyond the matcher's table");
-/* the sums in 16-bit lanes, and the counts below the top bit of one */
+/* the sums of lit_sums() in 16-bit lanes */
 static_assert(SEQLZ_BLOCK_SIZE / SEQLZ_LIT_STREAMS * SEQLZ_LIT_BITS < 1U << 16,
-	      "the bits of one stream fit a lane of code_literals()");
+	      "the bits of one stream fit a lane");
 static_assert((SEQLZ_BLOCK_SIZE / DELTA_STEP + 1U) * SEQLZ_LIT_BITS < 1U << 16,
 	      "the bits of one delta fit a lane of seqlz_delta_literals()");
 static_assert(OWN_LITERALS_MAX < 1U << 15,
 	      "own_code() takes the counts' top bit for its presence test");
-static_assert((SEQLZ_BLOCK_SIZE / LIT_SAMPLE_STEP + 1U) * SEQLZ_LIT_BITS <
-		      1U << 16,
-	      "the bits of the sampled literals fit a lane");
+
 /* behind the literals in the matcher's state, see OWN_WORK */
 static struct own_work *own_work(struct seqlz_state *st)
 {
@@ -998,27 +927,110 @@ static struct own_work *own_work(struct seqlz_state *st)
 /*
  * The literals at SEQLZ_LEVEL_OWN: the literals' deltas, as
  * seqlz_delta_literals() left them in the matcher's state, or with delta 0 the
- * literals as they are. Where the deltas stay raw, the plain literals are not
- * tried: they would be coded on few blocks and save little, for a second
- * pricing of every such block.
+ * literals as they are. Coded as code_sampled() codes them, but where that
+ * saves more than 1/16 of them plus SEQLZ_LIT_CODED_MIN_OWN bytes, and with
+ * the fixed table that codes all literals in the fewest bits, or a table of the
+ * block's own, where that and its description take at least OWN_SAVES_MIN bytes
+ * less. A block without deltas and with too few literals for a table of its own
+ * is coded by code_sampled().
+ *
+ * Without deltas the matcher's state gets a copy of the raw literals once it is
+ * clear they get coded, and the streams are written into d from it. With
+ * deltas they are coded instead of the literals, and the header says so; if
+ * they stay raw, d keeps the literals as they are. Where the deltas stay raw,
+ * the plain literals are not tried: they would be coded on few blocks and save
+ * little, for a second pricing of every such block.
  */
 unsigned int seqlz_code_own(u8 *d, unsigned int len, struct seqlz_state *st,
 			    unsigned int delta)
 {
-	return code_literals(d, len, delta ? st->literals : NULL,
-			     delta ? NULL : st->literals, own_work(st), delta,
-			     SEQLZ_LIT_CODED_MIN_OWN, false);
-}
+	const unsigned int n_literals = get_unaligned_le16(d);
+	const unsigned int bitstream = len - SEQLZ_HEADER - n_literals;
+	/* with a delta, the deltas, else the literals and a place for a copy */
+	const u8 *literals = delta ? st->literals : d + SEQLZ_HEADER;
+	u8 *spare = delta ? NULL : st->literals;
+	struct own_work *own = own_work(st);
+	/* with a delta, its byte before the sizes */
+	const unsigned int delta_byte = delta != 0;
+	unsigned int bits = ~0U, k, j, coded, set = 0, sizes[SEQLZ_LIT_STREAMS],
+		     width, header, desc = 0, byte2;
+	const u32 *enc;
+	/* the bits of each stream in each table, see lit_sums() */
+	u64 even[SEQLZ_LIT_STREAMS] = { 0 }, odd[SEQLZ_LIT_STREAMS] = { 0 };
+	/* where each stream starts, and the end of the last; where each ends */
+	u8 *q[SEQLZ_LIT_STREAMS + 1], *ends[SEQLZ_LIT_STREAMS];
 
-/*
- * The literals with the fixed tables only, below SEQLZ_LEVEL_OWN. Each entry
- * point has code_literals() inlined, compiled for its arguments: here without
- * the counts of a block's own table and without deltas, so the table always
- * comes from a sample of the literals, and the streams go into slots, never
- * NULL, see LIT_SLOT.
- */
-unsigned int seqlz_code_literals(u8 *d, unsigned int len, u8 *slots)
-{
-	return code_literals(d, len, NULL, slots, NULL, 0, SEQLZ_LIT_CODED_MIN,
-			     true);
+	if (n_literals < OWN_LITERALS_MIN || n_literals > OWN_LITERALS_MAX)
+		own = NULL;
+	if (!own && spare)
+		return code_sampled(d, len, spare, SEQLZ_LIT_CODED_MIN_OWN);
+	if (own)
+		memset(own->freq, 0, sizeof(own->freq));
+	lit_sums(literals, n_literals, even, odd, own ? own->freq : NULL);
+	/* the table with the fewest bits */
+	for (k = 0; k < SEQLZ_LIT_SETS; k++) {
+		unsigned int b = 0;
+
+		for (j = 0; j < SEQLZ_LIT_STREAMS; j++)
+			b += lit_bits(even, odd, j, k);
+		if (b < bits) {
+			bits = b;
+			set = k;
+		}
+	}
+	for (j = 0, coded = 0; j < SEQLZ_LIT_STREAMS; j++) {
+		sizes[j] = (lit_bits(even, odd, j, set) + 7U) / 8U;
+		coded += sizes[j];
+	}
+	width = size_width(sizes);
+	header = SEQLZ_LIT_HEADER(width) + delta_byte;
+	enc = seqlz_tables.lit[set].enc;
+	if (own) {
+		unsigned int n = own_code(own, n_literals, header + coded);
+		unsigned int own_coded, own_width;
+
+		if (n) {
+			own_coded = own_sizes(own, literals, n_literals);
+			own_width = size_width(own->sizes);
+			if (SEQLZ_LIT_HEADER(own_width) + delta_byte + n +
+				    own_coded + OWN_SAVES_MIN <=
+			    header + coded) {
+				desc = n;
+				width = own_width;
+				header = SEQLZ_LIT_HEADER(width) + delta_byte +
+					 desc;
+				coded = own_coded;
+				memcpy(sizes, own->sizes, sizeof(sizes));
+				enc = own->enc;
+			}
+		}
+	}
+	if (desc + coded + SEQLZ_LIT_CODED_MIN_OWN >=
+	    n_literals - n_literals / 16U)
+		return len;
+	/*
+	 * The streams end at d + header + coded, which is before the bitstream
+	 * at d + SEQLZ_HEADER + n_literals: desc + coded is at least
+	 * SEQLZ_LIT_CODED_MIN_OWN bytes below n_literals, see the static_assert
+	 * above.
+	 */
+	if (spare)
+		literals = memcpy(spare, literals, n_literals);
+	q[0] = d + header;
+	for (j = 0; j < SEQLZ_LIT_STREAMS; j++)
+		q[j + 1] = q[j] + sizes[j];
+	lit_streams(enc, literals, n_literals, q, ends);
+	if (delta)
+		d[SEQLZ_LIT_HEADER(0)] = (u8)delta;
+	if (desc)
+		memcpy(d + SEQLZ_LIT_HEADER(width) + delta_byte, own->desc,
+		       desc);
+	byte2 = (desc ? SEQLZ_LIT_OWN : set) |
+		(width - SEQLZ_SIZE_BITS_MIN) << SEQLZ_LIT_WIDTH_AT |
+		delta_byte << SEQLZ_LIT_DELTA_AT;
+	return lit_finish(d, n_literals, bitstream, byte2,
+			  SEQLZ_LIT_HEADER(0) + delta_byte, sizes, width,
+			  header + coded);
 }
+#endif /* SEQLZ_LEVELS >= 3 */
+#endif /* SEQLZ_LEVELS >= 2 */

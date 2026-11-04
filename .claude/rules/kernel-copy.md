@@ -13,6 +13,11 @@ follows these rules; open gaps in existing code: issues #151 to #157 (review of 
   tree's `drivers/block/zram lib/Kconfig lib/Kconfig.debug lib/Makefile MAINTAINERS
   Documentation/admin-guide/blockdev/zram.rst Documentation/staging/index.rst
   arch/x86/include/asm/processor.h` into a dir, run `port.py <dir>` (it fails without the last two).
+- Code that only levels 2 or 3 use goes under `#if SEQLZ_LEVELS >= 2` / `>= 3` (`#else`, no `#elif`):
+  the series adds one level per patch, and `port.py`'s `resolve_levels()` writes the copy without the
+  `#if`s. A refactor that keeps level 3 unchanged: `tools/samecode/samecode.sh <tree> origin/main`
+  must print "same code" for all three builds. A rewritten `if` in `seqlz_compress_block()` changed
+  `seqlz_compress()`'s code with gcc, and moving a declaration changed it with clang (4 Nov 2026).
 - Kernel helpers, not own ones: `get_unaligned_le16()`, `sizeof_field()`, `prefetch()`,
   `L1_CACHE_BYTES`, `BIT()`. No inline assembly, not even per architecture: fix a kernel gap with its
   own kernel patch, carried in `tools/kernel-port/` and applied by `port.py` (`x86-prefetcht0.patch`).
@@ -42,7 +47,8 @@ follows these rules; open gaps in existing code: issues #151 to #157 (review of 
 - `tools/kernel-port/check.sh`: W=1 warning-free on x86-64, arm64, arm, s390; no new checkpatch
   `--strict` finding; stack frames < 1024 bytes (older kernels' 32-bit `FRAME_WARN`; now 1280, 2048 on
   64-bit). It prints the three deepest and fails at 1024; deepest are `seqlz_decode_literals()` and
-  `seqlz_code_literals()`, near 1000 with KASAN+UBSan as `stress.sh` sets them; `read_own_table()` is `noinline`
+  `seqlz_code_own()`, then `code_sampled()` (`code_literals()` until 4 Nov 2026, which with
+  `seqlz_decode_literals()` was near 1000 with KASAN+UBSan as `stress.sh` sets them); `read_own_table()` is `noinline`
   to keep its locals out of `seqlz_decode_literals()`.
 - `check.sh` builds only what `port.py` keeps; the VM's and the phone's backends build all of `src/`,
   the harness-only functions (`HARNESS_ONLY`) too, with the kernel's frame limit. Keep their locals

@@ -101,6 +101,7 @@ static int build_values(const u8 *len, struct value_table *t)
 	return 0;
 }
 
+#if SEQLZ_LEVELS >= 2
 /*
  * The same for a literal table. The literals' streams are read most significant
  * bit first, as the sequences' bitstream, so the codes are not bit-reversed.
@@ -141,7 +142,9 @@ static int build_lit_sets(struct seqlz_tables *t)
 					<< (8U * (k / 256));
 	return 0;
 }
+#endif /* SEQLZ_LEVELS >= 2 */
 
+#if SEQLZ_LEVELS >= 3
 /*
  * The fixed code of a block's own literal table, seqlz_own_lengths: its codes,
  * its decode table, and quad[], see struct own_table. For quad[], the symbols
@@ -213,6 +216,7 @@ static int build_own(struct own_table *t)
 	}
 	return 0;
 }
+#endif /* SEQLZ_LEVELS >= 3 */
 
 /*
  * Whether the encoder can write every block: every token has a code or the
@@ -229,8 +233,10 @@ static bool has_all_symbols(const struct seqlz_lengths *lengths)
 	all &= lengths->token[SEQLZ_ESCAPE] <= SEQLZ_MAX_ESCAPE_LEN;
 	for (k = 0; k < SEQLZ_LEN_SYMBOLS; k++)
 		all &= lengths->ll[k] != 0 && lengths->ml[k] != 0;
+#if SEQLZ_LEVELS >= 2
 	for (k = 0; k < 256 * SEQLZ_LIT_SETS; k++)
 		all &= seqlz_lit_sets[k / 256][k % 256] != 0;
+#endif
 	return all;
 }
 
@@ -249,8 +255,15 @@ int seqlz_tables_build(struct seqlz_tables *t,
 	memset(t, 0, sizeof(*t));
 	if (build_token(lengths->token, &t->token) ||
 	    build_values(lengths->ll, &t->ll) ||
-	    build_values(lengths->ml, &t->ml) || build_lit_sets(t) ||
-	    build_own(&t->own) || !has_all_symbols(lengths))
+	    build_values(lengths->ml, &t->ml) || !has_all_symbols(lengths))
 		return -EINVAL;
+#if SEQLZ_LEVELS >= 2
+	if (build_lit_sets(t))
+		return -EINVAL;
+#endif
+#if SEQLZ_LEVELS >= 3
+	if (build_own(&t->own))
+		return -EINVAL;
+#endif
 	return 0;
 }

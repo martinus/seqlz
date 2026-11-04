@@ -6,9 +6,9 @@
  * The other targets only reach seqlz_encode() with the matcher's sequences, which are always valid.
  *
  * Byte 0: bit 0 lets the last sequence's literals fill the page, bits 1 and 2 pick the level, 1 plus
- * their value mod 3, bit 3 gives seqlz_encode() the page, where the sequences make one, for level 3's
- * deltas, and bit 4 makes the literals grow by one every 4, which deltas code well. Then 4 bytes per
- * sequence: the literals, the match, and two bytes for the offset, each taken as it is.
+ * their value mod SEQLZ_LEVEL_MAX, bit 3 gives seqlz_encode() the page, where the sequences make one,
+ * for level 3's deltas, and bit 4 makes the literals grow by one every 4, which deltas code well. Then
+ * 4 bytes per sequence: the literals, the match, and two bytes for the offset, each taken as it is.
  */
 #include <stdint.h>
 #include <stdlib.h>
@@ -58,7 +58,7 @@ int LLVMFuzzerTestOneInput(const uint8_t* data, size_t size) {
         set_up = 1;
         dst = malloc(DST_CAP);
         out = malloc(SEQLZ_BLOCK_SIZE);
-        scratch = malloc(SEQLZ_SCRATCH);
+        scratch = malloc(SEQLZ_MEM_DECOMPRESS);
         if (!dst || !out || !scratch)
             abort();
     }
@@ -84,9 +84,16 @@ int LLVMFuzzerTestOneInput(const uint8_t* data, size_t size) {
     made = make_page(n);
 
     unwritten(dst, DST_CAP);
-    unwritten(scratch, SEQLZ_SCRATCH);
-    len = seqlz_encode(
-        &state, seq, n, literals, n_lit, made && (data[0] & 8) ? page : NULL, dst, DST_CAP, 1U + (data[0] >> 1 & 3U) % 3U);
+    unwritten(scratch, SEQLZ_MEM_DECOMPRESS);
+    len = seqlz_encode(&state,
+                       seq,
+                       n,
+                       literals,
+                       n_lit,
+                       made && (data[0] & 8) ? page : NULL,
+                       dst,
+                       DST_CAP,
+                       1U + (data[0] >> 1 & 3U) % SEQLZ_LEVEL_MAX);
     if (len == 0)
         return 0;
     if (len > DST_CAP || sum != SEQLZ_BLOCK_SIZE)
