@@ -27,6 +27,7 @@
  * CONFIG_FORTIFY_SOURCE, which makes each copy a call.
  */
 
+#if SEQLZ_LEVELS >= 2
 /*
  * How many literals the decoder takes from each stream after loading 8 bytes
  * of it: at least 56 bits are then left, enough for 5 codes of 10 bits.
@@ -41,8 +42,10 @@
  * cores.
  */
 #define SEQLZ_LIT_CODED_MIN 35U
+#if SEQLZ_LEVELS >= 3
 /* the same at SEQLZ_LEVEL_OWN, which trades more time for bytes */
 #define SEQLZ_LIT_CODED_MIN_OWN 19U
+#endif
 /*
  * The buffer the decoder decodes coded literals into, one per CPU. 16 bytes
  * more than a block: the decoder copies literals 16 bytes at a time and may
@@ -57,6 +60,7 @@
 	((SEQLZ_BLOCK_SIZE / SEQLZ_LIT_STREAMS * SEQLZ_LIT_BITS + 7U) / 8U)
 static_assert(LIT_STREAM_MAX < 1U << SEQLZ_SIZE_BITS_MAX,
 	      "the widest size holds the largest stream");
+#endif /* SEQLZ_LEVELS >= 2 */
 static_assert((8U << SEQLZ_CLASS5_BITS) <= SEQLZ_BLOCK_SIZE,
 	      "class 5's offsets are inside the block");
 
@@ -75,8 +79,12 @@ static_assert((8U << SEQLZ_CLASS5_BITS) <= SEQLZ_BLOCK_SIZE,
  * its own where that saves enough, and codes the literals as deltas where that
  * looks like it saves bits, see SEQLZ_LIT_DELTA_AT.
  */
+#if SEQLZ_LEVELS >= 2
 #define SEQLZ_LEVEL_CODED 2U
+#endif
+#if SEQLZ_LEVELS >= 3
 #define SEQLZ_LEVEL_OWN 3U
+#endif
 
 /* the token of a sequence with a match, see the top of seqlz_format.h */
 static inline unsigned int seqlz_token(unsigned int ll, unsigned int ml,
@@ -99,11 +107,16 @@ static inline unsigned int seqlz_token(unsigned int ll, unsigned int ml,
 struct seqlz_state {
 	union {
 		u16 table[1U << SEQLZ_HASH_BITS];
+#if SEQLZ_LEVELS >= 2
 		u8 literals[SEQLZ_BLOCK_SIZE];
+#endif
+#if SEQLZ_LEVELS >= 3
 		u64 work[(sizeof(u16) << SEQLZ_HASH_BITS) / sizeof(u64)];
+#endif
 	};
 };
 
+#if SEQLZ_LEVELS >= 3
 /*
  * At SEQLZ_LEVEL_OWN the encoder writes LIT_REC bytes before each sequence's
  * literals: where they start in the block, how many there are and the offset of
@@ -114,6 +127,7 @@ struct seqlz_state {
  * without deltas.
  */
 #define LIT_REC 6U
+#endif
 
 /*
  * Prefetches every cache line of [p, p + size); size is a multiple of
@@ -147,19 +161,25 @@ static_assert(sizeof_field(struct token_table, decode) % PREFETCH_STEP == 0,
 	      "the token table");
 static_assert(sizeof_field(struct value_table, decode) % PREFETCH_STEP == 0,
 	      "the length values' tables");
+#if SEQLZ_LEVELS >= 2
 static_assert(sizeof_field(struct lit_table, decode) % PREFETCH_STEP == 0,
 	      "the literal tables");
 
 /* the coded literals, see seqlz_compress_literals.c */
+#if SEQLZ_LEVELS >= 3
 unsigned int seqlz_delta_literals(u8 *d, u8 **lit_end, const u8 *block,
 				  u8 *deltas);
+#endif
 unsigned int seqlz_code_literals(u8 *d, unsigned int len, u8 *slots);
+#if SEQLZ_LEVELS >= 3
 unsigned int seqlz_code_own(u8 *d, unsigned int len, struct seqlz_state *st,
 			    unsigned int delta);
+#endif
 
 /* the coded literals, see seqlz_decompress_literals.c */
 const u8 *seqlz_decode_literals(const u8 *s, unsigned int src_len,
 				unsigned int n_lit, u8 *out, u8 *block,
 				unsigned int *delta);
+#endif /* SEQLZ_LEVELS >= 2 */
 
 #endif

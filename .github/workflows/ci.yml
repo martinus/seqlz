@@ -123,6 +123,11 @@ jobs:
           docker run --rm --platform linux/s390x -v "$PWD:/w" -w /w gcc:14 sh -c "gcc -O2 -Isrc -o be $src && ./be" | tee be.txt
           diff le.txt le32.txt
           diff le.txt be.txt
+      # The kernel series adds the levels one patch at a time: builds with SEQLZ_LEVELS=1 and 2 write the
+      # same blocks at their levels, and take the blocks of the others for invalid. gcc and clang warn about
+      # different things in the code that only some of the builds have.
+      - run: test/levels.sh levels-gcc
+      - run: CC=clang test/levels.sh levels-clang
 
   # The docs against the code: the tables' hashes in docs/format.md, and pages compressed by src/
   # decoded by the decoder written from docs/format.md alone. And every relative link and #anchor in

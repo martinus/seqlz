@@ -10,6 +10,7 @@
 
 #include "seqlz_internal.h"
 
+#if SEQLZ_LEVELS >= 2
 /*
  * The literals' streams are read as zstd reads its Huffman coded literals,
  * most significant bit first. A stream is a pointer ip and 64 bits: the 8
@@ -116,6 +117,7 @@ static __always_inline bool lit_stream_ends(const u8 *start, unsigned int sz,
 	       (left == 0 || !(start[sz - 1U] & ((1U << left) - 1U)));
 }
 
+#if SEQLZ_LEVELS >= 3
 /*
  * The decode table of a block's own literal table into lt, from the bytes of
  * each code length in bucket, count[l] of them for length l. Each byte's
@@ -258,6 +260,7 @@ static noinline const u8 *read_own_table(const struct own_table *own,
 	own_fill(lt, bucket, count);
 	return p + (used + 7U) / 8U;
 }
+#endif /* SEQLZ_LEVELS >= 3 */
 
 /*
  * The header of a block's coded literals, see SEQLZ_LIT_HEADER: the width of
@@ -288,13 +291,23 @@ read_lit_header(const u8 *s, unsigned int src_len, u8 *block, u8 *bucket,
 	if (src_len < SEQLZ_LIT_HEADER(*width) + deltas)
 		return NULL;
 	code = s[2] & SEQLZ_LIT_CODE_MASK;
+#if SEQLZ_LEVELS >= 3
 	if (code > SEQLZ_LIT_OWN)
 		return NULL;
 	/* the delta, SEQLZ_DELTA_4 to SEQLZ_DELTA_LAST, in byte 3 */
 	*delta = deltas ? s[SEQLZ_LIT_HEADER(0)] : 0U;
 	if (deltas && *delta - 1U >= SEQLZ_DELTA_LAST)
 		return NULL;
+#else
+	/* below level 3 a block has neither a table of its own nor deltas */
+	(void)block;
+	(void)bucket;
+	if (code >= SEQLZ_LIT_SETS || deltas)
+		return NULL;
+	*delta = 0;
+#endif
 	*q = s + SEQLZ_LIT_HEADER(*width) + deltas;
+#if SEQLZ_LEVELS >= 3
 	if (code == SEQLZ_LIT_OWN) {
 		/*
 		 * the block's own table, built in the block itself, from an
@@ -317,9 +330,12 @@ read_lit_header(const u8 *s, unsigned int src_len, u8 *block, u8 *bucket,
 			return NULL;
 		*lt = own;
 	} else {
+#endif
 		*lt = seqlz_tables.lit[code & (SEQLZ_LIT_SETS - 1U)].decode;
 		seqlz_prefetch_lines(*lt, sizeof(seqlz_tables.lit[0].decode));
+#if SEQLZ_LEVELS >= 3
 	}
+#endif
 	return s + SEQLZ_LIT_HEADER(0) + deltas;
 }
 
@@ -404,3 +420,4 @@ noinline const u8 *seqlz_decode_literals(const u8 *s, unsigned int src_len,
 			return NULL;
 	return q + total;
 }
+#endif /* SEQLZ_LEVELS >= 2 */

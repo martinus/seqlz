@@ -49,6 +49,11 @@ REPO = HERE.parent.parent
 SRC = REPO / "src"
 WIDTH = 80
 
+# the levels the copy has, see SEQLZ_LEVELS in src/linux/seqlz.h
+LEVELS = 3
+# src/linux/seqlz.h's default of SEQLZ_LEVELS, which the copy does not have: the number replaces it
+LEVELS_DEFAULT = r"/\*\n \* The levels built, 1 to 3:.*?#ifndef SEQLZ_LEVELS\n#define SEQLZ_LEVELS 3\n#endif\n\n"
+
 # what only the harness and the tests of src/ use, left out of the kernel's copy
 HARNESS_ONLY = re.compile(r"\bseqlz_find\b|\bseqlz_encode\b|\bseqlz_sequence\b|\bSEQLZ_MAX_SEQUENCES\b")
 
@@ -282,25 +287,60 @@ def put_doc(text, name, doc):
     return text[:m.start()] + doc + text[m.start():]
 
 
+def resolve_levels(text):
+    """the #if SEQLZ_LEVELS >= n and < n parts kept for a copy of LEVELS levels and the others gone, with
+    their #if, #else and #endif; other #if, #ifdef and #ifndef as they are, also nested; SEQLZ_LEVELS
+    itself the number"""
+    out, stack = [], []  # per open #if: whether it is one of SEQLZ_LEVELS, and whether its part is kept
+    for line in text.split("\n"):
+        m = re.fullmatch(r"#if SEQLZ_LEVELS (>=|<) ([1-9])", line)
+        if m:
+            n = int(m.group(2))
+            stack.append((True, LEVELS >= n if m.group(1) == ">=" else LEVELS < n))
+            continue
+        if re.match(r"#if", line):
+            stack.append((False, True))
+        elif line == "#else" and stack[-1][0]:
+            stack[-1] = (True, not stack[-1][1])
+            continue
+        elif re.match(r"#endif\b", line):
+            if stack.pop()[0]:
+                continue
+        assert not (line.startswith("#elif") and stack and stack[-1][0]), "#elif after #if SEQLZ_LEVELS"
+        if all(keep for _, keep in stack):
+            out.append(line)
+    assert not stack, "#if without #endif"
+    # a part that went can leave two blank lines in a row
+    return re.sub(r"\n{3,}", "\n\n", "\n".join(out)).replace("SEQLZ_LEVELS", str(LEVELS))
+
+
+def read_src(path):
+    """a file of src/ or tools/gen-tables/ with its levels resolved"""
+    return resolve_levels(path.read_text())
+
+
 def port_interface():
     """include/linux/seqlz.h: src/linux/seqlz.h"""
-    return (SRC / "linux" / "seqlz.h").read_text()
+    return resolve_levels(cut((SRC / "linux" / "seqlz.h").read_text(), LEVELS_DEFAULT))
 
 
 def port_format():
     """lib/seqlz/seqlz_format.h: the format's numbers; with seqlz_tables.h it builds for the host too, for
     gen_seqlz_tables, so only headers that tools/include has"""
-    return fix_comments((SRC / "seqlz_format.h").read_text())
+    t = read_src(SRC / "seqlz_format.h")
+    # for SEQLZ_LEVELS only, which the copy has resolved; tools/include does not have it
+    t = must(t, "#include <linux/seqlz.h>\n", "")
+    return fix_comments(t)
 
 
 def port_tables_h():
     """lib/seqlz/seqlz_tables.h: the tables' layout, and the tables themselves, generated"""
-    return fix_comments((SRC / "seqlz_tables.h").read_text())
+    return fix_comments(read_src(SRC / "seqlz_tables.h"))
 
 
 def port_internal():
     """lib/seqlz/seqlz_internal.h: what the codec's files share"""
-    t = (SRC / "seqlz_internal.h").read_text()
+    t = read_src(SRC / "seqlz_internal.h")
     # the cast is for C++, which src/ is compiled as too
     t = must(t, "\tconst u8 *q = (const u8 *)p; /* a cast for the C++ of the harness */\n", "\tconst u8 *q = p;\n")
     return fix_comments(t)
@@ -308,13 +348,13 @@ def port_internal():
 
 def port_c(name):
     """lib/seqlz/seqlz_<name>.c from src/"""
-    return (SRC / f"seqlz_{name}.c").read_text()
+    return read_src(SRC / f"seqlz_{name}.c")
 
 
 def header_body(name, into):
     """src/<name> without its head and its include guard, what follows its last include, for the file into;
     fails if the header includes a kernel header that into does not"""
-    h = (SRC / name).read_text()
+    h = read_src(SRC / name)
     missing = set(re.findall(r"^#include <.*>$", h, re.M)) - set(re.findall(r"^#include <.*>$", into, re.M))
     assert not missing, (name, missing)
     last = list(re.finditer(r"^#include .*\n", h, re.M))[-1]
@@ -343,7 +383,7 @@ def port_compress():
 def port_gen():
     """lib/seqlz/gen_seqlz_tables.c: src/seqlz_codes.c as a program for the build host, which writes the
     codes and decode tables as C, with the program of tools/gen-tables/gen_seqlz_tables.c"""
-    t = (SRC / "seqlz_codes.c").read_text()
+    t = read_src(SRC / "seqlz_codes.c")
     t = must(t, "/*\n * The codes and decode tables, built from the code lengths:\n * seqlz_tables_build(). A program "
                 "for the build host prints them as C, see\n * tools/gen-tables/, and every build of seqlz compiles "
                 'that.\n */\n#include <linux/errno.h>\n#include <linux/string.h>\n\n#include "seqlz.h"\n',
@@ -354,7 +394,7 @@ def port_gen():
              '#include "seqlz_tables.h"\n#include "seqlz_lengths.h"\n')
     # its one caller is main(), below
     t = make_static(t, "seqlz_tables_build")
-    gen = (REPO / "tools" / "gen-tables" / "gen_seqlz_tables.c").read_text()
+    gen = read_src(REPO / "tools" / "gen-tables" / "gen_seqlz_tables.c")
     t = t.rstrip("\n") + "\n\n" + gen[gen.index("/* ---- the tables as C"):]
     # the KUnit test, a module of its own, checks the codes in the tables
     t = must(t, '"#include \\"seqlz_tables.h\\"\\n\\n"',
@@ -392,6 +432,10 @@ obj-$(CONFIG_SEQLZ_KUNIT_TEST) += tests/seqlz_kunit.o
 def port_lengths_script():
     """scripts/gen-seqlz-lengths.py without what only the repository's userspace build uses"""
     t = (HERE / "gen-seqlz-lengths.py").read_text()
+    # the kernel's copy has all its levels, see LEVELS
+    t = cut(t, r"def at_level\(n, text\):\n.*?\n\n\n")
+    t = must(t, "at_level(2, lit_sets_initializer(tables, storage))", "lit_sets_initializer(tables, storage)")
+    t = must(t, "at_level(3, own_initializer(tables, storage))", "own_initializer(tables, storage)")
     t = must(t, "#\n# --extern writes the tables without static, for the repository's src/.\n", "")
     t = must(t, " [--extern]", "", 2)
     t = must(t, '    if args[:1] == ["--extern"]:\n        storage = ""\n        args.pop(0)\n', "")

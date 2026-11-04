@@ -13,6 +13,11 @@ follows these rules; open gaps in existing code: issues #151 to #157 (review of 
   tree's `drivers/block/zram lib/Kconfig lib/Kconfig.debug lib/Makefile MAINTAINERS
   Documentation/admin-guide/blockdev/zram.rst Documentation/staging/index.rst
   arch/x86/include/asm/processor.h` into a dir, run `port.py <dir>` (it fails without the last two).
+- Code that only levels 2 or 3 use goes under `#if SEQLZ_LEVELS >= 2` / `>= 3` (`#else`, no `#elif`):
+  the series adds one level per patch, and `port.py`'s `resolve_levels()` writes the copy without the
+  `#if`s. A refactor that keeps level 3 unchanged: `tools/samecode/samecode.sh <tree> origin/main`
+  must print "same code" for all three builds. A rewritten `if` in `seqlz_compress_block()` changed
+  `seqlz_compress()`'s code with gcc, and moving a declaration changed it with clang (4 Nov 2026).
 - Kernel helpers, not own ones: `get_unaligned_le16()`, `sizeof_field()`, `prefetch()`,
   `L1_CACHE_BYTES`, `BIT()`. No inline assembly, not even per architecture: fix a kernel gap with its
   own kernel patch, carried in `tools/kernel-port/` and applied by `port.py` (`x86-prefetcht0.patch`).

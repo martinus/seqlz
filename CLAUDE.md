@@ -86,6 +86,7 @@ fuzz/smoke.sh 10 $S/build-fuzz -DFETCHCONTENT_SOURCE_DIR_DOCTEST=...  # clang, A
 fuzz/smoke.sh 10 $S/build-msan -DSEQLZ_SANITIZE=OFF -DSEQLZ_MSAN=ON  # MSan, fuzz targets only
 tools/gen-tables/gen-tables.sh $S/t.c   # the tables, which every build of src/ outside CMake needs too
 gcc -O2 -Isrc -o le test/seqlz_endian.c $S/t.c src/seqlz_*.c
+test/levels.sh $S/levels      # builds with SEQLZ_LEVELS=1, 2, 3: same blocks per level; CC=clang too
 python3 tools/seqlz-ref/seqlz_ref.py <compressed page>...           # spec decoder, checks table hashes
 tools/seqlz-ref/check.sh && tools/check-links.py                    # before pushing docs or tables
 K=/home/martinus/gra/linux/finehill   # src/ or tools/kernel-port/ changed:

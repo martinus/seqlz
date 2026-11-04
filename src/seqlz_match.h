@@ -72,6 +72,7 @@ static inline unsigned int seqlz_match_len(const u8 *p, const u8 *q,
 	return (unsigned int)(p - start);
 }
 
+#if SEQLZ_LEVELS >= 3
 /*
  * Level 3 takes a match of this many bytes or more as it is, without looking at
  * the next position: a longer one there is rare, and looking takes time.
@@ -115,6 +116,7 @@ seqlz_lazy(u16 *table, const u8 *src, unsigned int *pos, unsigned int *m,
 	}
 	return best;
 }
+#endif /* SEQLZ_LEVELS >= 3 */
 
 /*
  * Finds the sequences of a block, greedy like lz4's fast mode: at each position
@@ -212,6 +214,7 @@ seqlz_match_block(u16 *table, const u8 *src, bool lazy, struct seqlz_encoder *e)
 		 * every match for the few it makes longer.
 		 */
 		len = 4U + seqlz_match_len(src + pos + 4, src + m + 4, end);
+#if SEQLZ_LEVELS >= 3
 		if (lazy) {
 			if (len < SEQLZ_LAZY_LEN)
 				len = seqlz_lazy(table, src, &pos, &m, len,
@@ -223,6 +226,7 @@ seqlz_match_block(u16 *table, const u8 *src, bool lazy, struct seqlz_encoder *e)
 				len++;
 			}
 		}
+#endif
 		last = pos - m;
 		back = -(long)last;
 		encode_seq(e, src + anchor, pos - anchor, len, last, lazy);

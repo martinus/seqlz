@@ -34,7 +34,6 @@ static_assert(SEQLZ_LEN_SYMBOLS <= ENC_LEN_SYMBOLS,
 #define CODE_LENGTHS 16U
 static_assert(SEQLZ_TOKEN_BITS < CODE_LENGTHS, "a token's code length");
 static_assert(SEQLZ_MAX_BITS < CODE_LENGTHS, "a length value's code length");
-static_assert(SEQLZ_LIT_BITS < CODE_LENGTHS, "a literal's code length");
 
 struct value_table {
 	/* code length | extra bits << 4 | base << 8, see length_entry() */
@@ -59,6 +58,9 @@ static_assert(SEQLZ_TOKEN_BITS <= TOK_ENC_LEN_AT,
 static_assert(SEQLZ_TOKEN_BITS < 16U && TOK_ENC_LEN_AT + 4U <= 16U,
 	      "a token's length fits enc[]'s u16 in 4 bits");
 
+#if SEQLZ_LEVELS >= 2
+static_assert(SEQLZ_LIT_BITS < CODE_LENGTHS, "a literal's code length");
+
 struct lit_table {
 	u16 decode[1U << SEQLZ_LIT_BITS]; /* code length | byte << 8 */
 	u32 enc[256]; /* code length | code << 8, see lit_put() */
@@ -73,12 +75,20 @@ struct lit_table {
  */
 #define LIT_COST_RUN (255U / SEQLZ_LIT_BITS) /* 25 */
 /* byte 2 of a block with coded literals, see SEQLZ_LIT_HEADER */
-static_assert((SEQLZ_LIT_SETS == 8U && SEQLZ_LIT_OWN == 8U &&
-	       SEQLZ_LIT_CODE_MASK == 15U && SEQLZ_LIT_WIDTH_AT == 4),
-	      "byte 2: the fixed tables, then the block's own, in 4 bits");
+static_assert((SEQLZ_LIT_SETS == 8U && SEQLZ_LIT_CODE_MASK == 15U &&
+	       SEQLZ_LIT_WIDTH_AT == 4),
+	      "byte 2: the fixed tables in 4 bits");
 static_assert((SEQLZ_SIZE_BITS_MAX - SEQLZ_SIZE_BITS_MIN == 7U &&
 	       SEQLZ_LIT_DELTA_AT - SEQLZ_LIT_WIDTH_AT == 3),
 	      "byte 2 has 3 bits for the width");
+
+static_assert(SEQLZ_LIT_STREAMS == 8U,
+	      "the literal coder is written out for 8 streams");
+#endif /* SEQLZ_LEVELS >= 2 */
+
+#if SEQLZ_LEVELS >= 3
+static_assert(SEQLZ_LIT_OWN == SEQLZ_LIT_SETS,
+	      "byte 2: the block's own table after the fixed ones");
 /*
  * How far before a literal the byte is that SEQLZ_DELTA_LAST takes its delta
  * to, for the offset last of the sequence before: the smallest multiple of last
@@ -88,9 +98,6 @@ static inline unsigned int seqlz_delta_last(unsigned int last)
 {
 	return last < 4U ? (last == 3U ? 6U : 4U) : last;
 }
-
-static_assert(SEQLZ_LIT_STREAMS == 8U,
-	      "the literal coder is written out for 8 streams");
 
 /*
  * The code of a block's own literal table, see SEQLZ_LIT_OWN. quad[] decodes
@@ -117,12 +124,17 @@ struct own_table {
 	u16 enc[SEQLZ_OWN_SYMBOLS]; /* code | code length << 8 */
 	u32 quad[1U << SEQLZ_OWN_CODE_BITS];
 };
+#endif /* SEQLZ_LEVELS >= 3 */
 
 struct seqlz_tables {
 	struct token_table token;
+#if SEQLZ_LEVELS >= 2
 	struct lit_table lit[SEQLZ_LIT_SETS];
 	u64 lit_cost[256];
+#endif
+#if SEQLZ_LEVELS >= 3
 	struct own_table own;
+#endif
 	struct value_table ll, ml;
 };
 

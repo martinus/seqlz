@@ -44,7 +44,11 @@ unsigned int seqlz_find(struct seqlz_state *st, const void *src,
 
 	if (level < 1 || level > SEQLZ_LEVEL_MAX)
 		return 0;
+#if SEQLZ_LEVELS >= 3
 	seqlz_match_block(st->table, src, level >= SEQLZ_LEVEL_OWN, &f);
+#else
+	seqlz_match_block(st->table, src, false, &f);
+#endif
 	return f.n;
 }
 
@@ -82,8 +86,13 @@ static unsigned int encode_raw(const struct seqlz_sequence *seq, unsigned int n,
 	if (pos != SEQLZ_BLOCK_SIZE || lits != n_literals)
 		return 0;
 	encoder_init(&e, dst, dst_cap, literals + n_literals);
+#if SEQLZ_LEVELS >= 3
 	/* with a block, the records for the deltas, as compress_own() */
 	e.rec = block != NULL;
+#else
+	(void)block;
+	(void)deltas;
+#endif
 	for (;;) {
 		for (i = 0; i < n; i++) {
 			unsigned int ll = seq[i].literals;
@@ -92,6 +101,7 @@ static unsigned int encode_raw(const struct seqlz_sequence *seq, unsigned int n,
 				   seq[i].offset, true);
 			in += ll;
 		}
+#if SEQLZ_LEVELS >= 3
 		/*
 		 * encoder_init() clears rec: the pass without records is the
 		 * last
@@ -100,8 +110,15 @@ static unsigned int encode_raw(const struct seqlz_sequence *seq, unsigned int n,
 			break;
 		encoder_init(&e, dst, dst_cap, literals + n_literals);
 		in = literals;
+#else
+		break;
+#endif
 	}
+#if SEQLZ_LEVELS >= 3
 	*delta = e.rec ? seqlz_delta_literals(dst, &e.lit, block, deltas) : 0;
+#else
+	*delta = 0;
+#endif
 	return encoder_finish(&e, dst, dst_cap);
 }
 
@@ -113,17 +130,27 @@ unsigned int seqlz_encode(struct seqlz_state *st,
 {
 	unsigned int len, delta;
 
-	if (level < 1 || level > SEQLZ_LEVEL_MAX ||
-	    (level >= SEQLZ_LEVEL_OWN && !st))
+	if (level < 1 || level > SEQLZ_LEVEL_MAX)
 		return 0;
 	/* as seqlz_compress_block() */
 	dst_cap = min(dst_cap, SEQLZ_COMPRESS_BOUND);
+#if SEQLZ_LEVELS >= 3
+	if (level >= SEQLZ_LEVEL_OWN && !st)
+		return 0;
 	len = encode_raw(seq, n, literals, n_literals,
 			 level >= SEQLZ_LEVEL_OWN ? block : NULL,
 			 st ? st->literals : NULL, &delta, dst, dst_cap);
+#else
+	(void)block;
+	len = encode_raw(seq, n, literals, n_literals, NULL, NULL, &delta, dst,
+			 dst_cap);
+#endif
+#if SEQLZ_LEVELS >= 2
 	if (len == 0 || level < SEQLZ_LEVEL_CODED)
 		return len;
+#if SEQLZ_LEVELS >= 3
 	if (level < SEQLZ_LEVEL_OWN) {
+#endif
 		/*
 		 * dst has the raw literals now, as seqlz_compress_block() has
 		 * them. The streams' slots: st, or without one these, for one
@@ -132,6 +159,12 @@ unsigned int seqlz_encode(struct seqlz_state *st,
 		static u8 slots[sizeof(struct seqlz_state)];
 
 		return seqlz_code_literals(dst, len, st ? st->literals : slots);
+#if SEQLZ_LEVELS >= 3
 	}
 	return seqlz_code_own(dst, len, st, delta);
+#endif
+#else
+	(void)st;
+	return len;
+#endif
 }

@@ -42,8 +42,10 @@ static void print_array(const char *name, const void *p, size_t size,
 
 int main(void)
 {
+#if SEQLZ_LEVELS >= 2
 	char name[64];
 	unsigned int k;
+#endif
 
 	if (seqlz_tables_build(&tables, &seqlz_default_lengths)) {
 		fprintf(stderr, "gen_seqlz_tables: the lengths are invalid\n");
@@ -60,6 +62,7 @@ int main(void)
 		    sizeof(tables.token.decode[0]));
 	print_array(".token.enc", tables.token.enc, sizeof(tables.token.enc),
 		    sizeof(tables.token.enc[0]));
+#if SEQLZ_LEVELS >= 2
 	for (k = 0; k < SEQLZ_LIT_SETS; k++) {
 		snprintf(name, sizeof(name), ".lit[%u].decode", k);
 		print_array(name, tables.lit[k].decode,
@@ -71,12 +74,15 @@ int main(void)
 	}
 	print_array(".lit_cost", tables.lit_cost, sizeof(tables.lit_cost),
 		    sizeof(tables.lit_cost[0]));
+#endif
+#if SEQLZ_LEVELS >= 3
 	print_array(".own.decode", tables.own.decode, sizeof(tables.own.decode),
 		    sizeof(tables.own.decode[0]));
 	print_array(".own.enc", tables.own.enc, sizeof(tables.own.enc),
 		    sizeof(tables.own.enc[0]));
 	print_array(".own.quad", tables.own.quad, sizeof(tables.own.quad),
 		    sizeof(tables.own.quad[0]));
+#endif
 	print_array(".ll.decode", tables.ll.decode, sizeof(tables.ll.decode),
 		    sizeof(tables.ll.decode[0]));
 	print_array(".ll.enc", tables.ll.enc, sizeof(tables.ll.enc),
