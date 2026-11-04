@@ -167,14 +167,12 @@ static __always_inline void encode_seq(struct seqlz_encoder *e, const u8 *in,
 				       unsigned int ll, unsigned int ml,
 				       unsigned int off, bool rec)
 {
-	unsigned int k = 0, tlen, raw_bits, cls;
-#if SEQLZ_LEVELS >= 3
-	unsigned int n_rec = rec && e->rec && ll ? LIT_REC : 0;
-#else
-	/* no records below level 3, where rec is always false */
-	const unsigned int n_rec = ((void)rec, 0U);
-#endif
+	unsigned int k = 0, tlen, raw_bits, cls, n_rec = 0;
 	u32 code;
+
+#if SEQLZ_LEVELS >= 3
+	n_rec = rec && e->rec && ll ? LIT_REC : 0;
+#endif
 
 	/*
 	 * The block does not fit: no more writes. With p at lit, every later

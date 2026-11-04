@@ -134,13 +134,6 @@
 #define SEQLZ_LEN_SYMBOLS (SEQLZ_LEN_LOG_BASE + SEQLZ_BLOCK_BITS)
 /* the u16 at the start of every block */
 #define SEQLZ_HEADER 2U
-#if SEQLZ_LEVELS >= 2
-/*
- * Set in that u16 when the literals are Huffman coded. A block has at most
- * 4 KiB of literals, so the top bit is free.
- */
-#define SEQLZ_LIT_CODED 0x8000U
-#endif
 
 /*
  * The code lengths of the token table and of the two tables of length values,
@@ -216,6 +209,11 @@ static inline unsigned int seqlz_off_class(unsigned int off, unsigned int last,
 }
 
 #if SEQLZ_LEVELS >= 2
+/*
+ * Set in the u16 at the start of a block when the literals are Huffman coded.
+ * A block has at most 4 KiB of literals, so the top bit is free.
+ */
+#define SEQLZ_LIT_CODED 0x8000U
 /*
  * Coded literals: the longest code, and the number of fixed tables a block can
  * choose from. The encoder takes the table that codes the block's literals in

@@ -14,8 +14,14 @@ root=$(cd "$(dirname "$0")/.." && pwd)
 mkdir -p "$out"
 for levels in 3 2 1; do
     "$root/tools/gen-tables/gen-tables.sh" "$out/tables$levels.c" -DSEQLZ_LEVELS=$levels
-    "${CC:-gcc}" -std=gnu11 -O2 -Wall -Wextra -Wundef -Werror -DSEQLZ_LEVELS=$levels "$@" -I"$root/src" \
-        -o "$out/endian$levels" "$root/test/seqlz_endian.c" "$root"/src/seqlz_*.c "$out/tables$levels.c"
+    srcs=()
+    for f in "$root"/src/seqlz_*.c; do
+        # the files of the coded literals, which level 1 does not have
+        [[ $levels -lt 2 && $f == *_literals.c ]] || srcs+=("$f")
+    done
+    # -Wno-unused-parameter as the kernel's W=1: below level 3 some parameters are there for it alone
+    "${CC:-gcc}" -std=gnu11 -O2 -Wall -Wextra -Wno-unused-parameter -Wundef -Werror -DSEQLZ_LEVELS=$levels "$@" \
+        -I"$root/src" -o "$out/endian$levels" "$root/test/seqlz_endian.c" "${srcs[@]}" "$out/tables$levels.c"
     "$out/endian$levels" >"$out/endian$levels.txt" || { cat "$out/endian$levels.txt"; exit 1; }
     echo "SEQLZ_LEVELS=$levels: $(head -n 1 "$out/endian$levels.txt")"
     # line 1 is the hash of all levels, then one line per level

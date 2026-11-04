@@ -89,9 +89,6 @@ static unsigned int encode_raw(const struct seqlz_sequence *seq, unsigned int n,
 #if SEQLZ_LEVELS >= 3
 	/* with a block, the records for the deltas, as compress_own() */
 	e.rec = block != NULL;
-#else
-	(void)block;
-	(void)deltas;
 #endif
 	for (;;) {
 		for (i = 0; i < n; i++) {
@@ -141,7 +138,6 @@ unsigned int seqlz_encode(struct seqlz_state *st,
 			 level >= SEQLZ_LEVEL_OWN ? block : NULL,
 			 st ? st->literals : NULL, &delta, dst, dst_cap);
 #else
-	(void)block;
 	len = encode_raw(seq, n, literals, n_literals, NULL, NULL, &delta, dst,
 			 dst_cap);
 #endif
@@ -164,7 +160,6 @@ unsigned int seqlz_encode(struct seqlz_state *st,
 	return seqlz_code_own(dst, len, st, delta);
 #endif
 #else
-	(void)st;
 	return len;
 #endif
 }

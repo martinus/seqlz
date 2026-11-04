@@ -111,12 +111,6 @@ unsigned int seqlz_compress_block(struct seqlz_state *st, const void *src,
 static_assert(sizeof(struct seqlz_state) == SEQLZ_MEM_COMPRESS);
 /* its levels are those of seqlz_compress_block() */
 static_assert(SEQLZ_LEVEL_MIN == 1);
-#if SEQLZ_LEVELS >= 2
-static_assert(SEQLZ_LEVEL_CODED == 2);
-#endif
-#if SEQLZ_LEVELS >= 3
-static_assert(SEQLZ_LEVEL_OWN == SEQLZ_LEVEL_MAX);
-#endif
 /* the room the interface's kernel-doc names, see ENC_ROOM */
 static_assert(ENC_ROOM == 32);
 

@@ -115,11 +115,6 @@ static unsigned int higher_levels_rejected(unsigned char* dst, unsigned int n, u
         memmove(dst + 3, dst + 4, n - 3);
         dst[2] = b2;
     }
-#else
-    (void)dst;
-    (void)n;
-    (void)out;
-    (void)scratch;
 #endif
     return failed;
 }

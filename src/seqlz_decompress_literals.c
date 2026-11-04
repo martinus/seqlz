@@ -1,7 +1,8 @@
 // SPDX-License-Identifier: GPL-2.0-only OR MIT
 /*
  * The decompressor's literals: the 8 streams of coded literals, with one of
- * the fixed literal tables or with the block's own table, which it reads first.
+ * the fixed literal tables, and at level 3 also with the block's own table,
+ * which it reads first.
  */
 #include <linux/build_bug.h>
 #include <linux/compiler.h>
@@ -10,7 +11,6 @@
 
 #include "seqlz_internal.h"
 
-#if SEQLZ_LEVELS >= 2
 /*
  * The literals' streams are read as zstd reads its Huffman coded literals,
  * most significant bit first. A stream is a pointer ip and 64 bits: the 8
@@ -300,8 +300,6 @@ read_lit_header(const u8 *s, unsigned int src_len, u8 *block, u8 *bucket,
 		return NULL;
 #else
 	/* below level 3 a block has neither a table of its own nor deltas */
-	(void)block;
-	(void)bucket;
 	if (code >= SEQLZ_LIT_SETS || deltas)
 		return NULL;
 	*delta = 0;
@@ -329,13 +327,11 @@ read_lit_header(const u8 *s, unsigned int src_len, u8 *block, u8 *bucket,
 		if (!*q)
 			return NULL;
 		*lt = own;
-	} else {
-#endif
-		*lt = seqlz_tables.lit[code & (SEQLZ_LIT_SETS - 1U)].decode;
-		seqlz_prefetch_lines(*lt, sizeof(seqlz_tables.lit[0].decode));
-#if SEQLZ_LEVELS >= 3
+		return s + SEQLZ_LIT_HEADER(0) + deltas;
 	}
 #endif
+	*lt = seqlz_tables.lit[code & (SEQLZ_LIT_SETS - 1U)].decode;
+	seqlz_prefetch_lines(*lt, sizeof(seqlz_tables.lit[0].decode));
 	return s + SEQLZ_LIT_HEADER(0) + deltas;
 }
 
@@ -420,4 +416,3 @@ noinline const u8 *seqlz_decode_literals(const u8 *s, unsigned int src_len,
 			return NULL;
 	return q + total;
 }
-#endif /* SEQLZ_LEVELS >= 2 */

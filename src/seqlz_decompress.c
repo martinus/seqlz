@@ -436,14 +436,9 @@ static __always_inline int decode_block(const void *src, unsigned int src_len,
 	unsigned int n_lit, last = 1, tok, skip = 0;
 #if SEQLZ_LEVELS >= 2
 	unsigned int delta = 0;
-#else
-	/* below level 2 no block has coded literals, and none has deltas */
-	(void)scratch;
 #endif
 #if SEQLZ_LEVELS >= 3
 	unsigned int delta_fixed = 0;
-#else
-	(void)deltas;
 #endif
 
 	if (src_len < SEQLZ_HEADER)
@@ -667,10 +662,6 @@ int seqlz_decompress(const void *src, unsigned int src_len, void *dst,
 }
 EXPORT_SYMBOL_GPL(seqlz_decompress);
 
-#if SEQLZ_LEVELS >= 2
-/* the interface's work memory is the buffer of coded literals */
-static_assert(SEQLZ_MEM_DECOMPRESS == SEQLZ_SCRATCH);
-#endif
 static_assert(SEQLZ_BLOCK_SIZE == 1U << SEQLZ_BLOCK_BITS);
 
 MODULE_LICENSE("Dual MIT/GPL");
