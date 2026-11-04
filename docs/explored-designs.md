@@ -358,7 +358,7 @@ One line per entry, by area, newest first: date measured, verdict, link, result,
 
 **Kernel copy, zram glue, compilers**
 
-- 2026-11-04 **kept** [The levels in one block per file, level 2's coder apart](#the-levels-in-one-block-per-file-level-2s-coder-apart-from-level-3s-68-guards-to-43-the-same-speed-in-the-vm-the-a55s-cold-reads-14-µs-slower-from-where-the-code-lies-kept): level 3's code in one block of `seqlz_compress_literals.c`, the headers one block per level, `code_literals()` split into `code_sampled()` (level 2) and `seqlz_code_own()` (level 3); kernel-copy guards 68 to 43. samecode: level 1 and the decoder the same, the coders not; `seqlz_code_own()`'s frame 608 bytes (696). Kernel VM, gcc and clang, four samples: every level within the control, level 1 moves as much. Mi 9T: writes and warm reads within 0.1 µs, A55 cold reads +1.4 µs at levels 1 and 2 with the same decoder instructions (layout). gcc userspace level 3 +0.61% instructions from SSE in `lit_sums()`, +0.04% without it. Code: `code_sampled()`, `lit_finish()`, `seqlz_code_own()`; PR #340. Now: current. Untried: the A55's cold reads with the layout held; `SEQLZ_LEVELS=1`, `2` builds timed.
+- 2026-11-04 **kept** [The levels in one block per file, level 2's coder apart](#the-levels-in-one-block-per-file-level-2s-coder-apart-from-level-3s-68-guards-to-43-the-same-speed-in-the-vm-the-a55s-cold-reads-14-µs-slower-from-where-the-code-lies-kept): level 3's code in one block of `seqlz_compress_literals.c`, the headers one block per level, `code_literals()` split into `code_sampled()` (level 2) and `seqlz_code_own()` (level 3); kernel-copy guards 68 to 43. samecode: level 1 and the decoder the same, the coders not; `seqlz_code_own()`'s frame 608 bytes (696); after the review `code_sampled()` one noinline copy for levels 2 and 3, level 2 +3.8 instructions per page. Kernel VM, gcc and clang, four samples: every level within the control, level 1 moves as much. Mi 9T: writes and warm reads within 0.1 µs, A55 cold reads +1.4 µs at levels 1 and 2 with the same decoder instructions (layout). gcc userspace level 3 +0.61% instructions from SSE in `lit_sums()`, +0.04% without it. Code: `code_sampled()`, `lit_finish()`, `seqlz_code_own()`; PR #340. Now: current. Untried: the A55's cold reads with the layout held; `SEQLZ_LEVELS=1`, `2` builds timed.
 - 2026-11-01 **kept** [Level 2's coder without the pricing of every literal, the stream sizes without memcpy()](#level-2s-coder-without-the-pricing-of-every-literal-the-stream-sizes-without-memcpy-half-the-coders-text-level-2-writes-13-faster-on-the-a76-the-same-in-the-vm-kept): a constant `sampled` drops the dead pricing branch from `seqlz_code_literals()`, 14 896 to 7 350 bytes with gcc, 7 456 to 3 460 on arm64; the stream sizes with two fixed-size loads instead of a variable `__builtin_memcpy()`. Mi 9T p3, two copies each: level 2 writes 0.15 µs faster on the A76 (1.3%), copies 0.03, ~700 instructions per page fewer; A55 and reads within the copies; kernel VM gcc and clang within the control. gcc user space +155 instructions per page at level 2 (`lit_streams()` spills). Testing `raw` instead: gcc level 3 +0.58%, not kept. Code: `code_literals()`, `lit_stream_sizes()`, branch level2-coder. Now: `code_literals()` is `code_sampled()` and `seqlz_code_own()` since 4 Nov (The levels in one block per file).
 - 2026-10-30 **not kept** [The matcher's first candidate as a constant](#the-matchers-first-candidate-as-a-constant-instead-of-a-load-from-the-cleared-table-levels-1-and-2-write-2-slower-with-clang-not-kept): `cand = 0` instead of `table[h]` after the table's clear; userspace folds the load, the kernel copy does not, and the matcher gets other registers. Same bytes. Mi 9T p2, 4 rounds: levels 1 and 2 write 0.5 to 0.6 µs slower on the A55, 0.3 to 0.4 on the A76 (1.8% to 3.4%, `main` twice within 0.10). Kernel VM, four samples, 3 boots: clang +2.7% / +2.2% / +0.5% at levels 1 / 2 / 3, gcc -1.4% / -1.4% / -0.8%, control within 0.8%. Code: `seqlz_match_block()`, a comment why the load stays. Now: current.
 - 2026-10-30 **kept** [The matcher calls encode_seq() itself](#the-matcher-calls-encode_seq-itself-as-in-the-kernel-copy-level-3-writes-06-faster-in-the-vm-with-clang-levels-1-and-2-the-same-kept): `src/` as the kernel copy since #284; kernel VM, clang 22.1.8, four VM samples, 3 boots: level 3 writes 0.6% faster (0.2% to 0.8% per sample, control -0.3% to +0.2%), levels 1 and 2 and swap-ins the same. `Code:` PR #284. `Now:` current.
@@ -8300,6 +8300,25 @@ gcc vectorized its 8 sums with SSE in the new `seqlz_code_own()` (`movq`, `movhp
 builds `lib/` without SSE and NEON, so this is userspace only. `code_sampled()` inlined again into
 `seqlz_code_own()` changed nothing of it, and `own` set to NULL before the test of `code_sampled()`,
 as `main` does and as kept, 8 instructions per page on p3 and 4 on zram0.
+
+**After the review, the code as merged.** `code_sampled()` is one `noinline` copy for both levels, with
+`coded_min` an argument, where it was inlined into `seqlz_code_literals()` and into a level-3 copy;
+`SEQLZ_LIT_CODED` is in every build again, with one raw-literal path in `decode_block()`. Stack frames
+`seqlz_decode_literals()` 648, `seqlz_code_own()` 608, `code_sampled()` 504 bytes. Instructions per
+page, ten samples, against `main`: level 1 the same, level 2 compresses with 3.8 more (+0.01%), level 3
++0.60% as above, decoding the same at every level, bytes the same. Kernel VM, gcc, four samples, the
+mean of `main-N` against `seqlz-N` (negative: `main` faster):
+
+| | swap-out | warm swap-in | flushed swap-in |
+| --- | ---: | ---: | ---: |
+| level 1 | +0.5% | -0.7% | -0.4% |
+| level 2 | +0.2% | -0.5% | -0.5% |
+| level 3 | -0.4% | -0.4% | -0.4% |
+| control level 2 | 0.0% | +0.3% | +0.1% |
+| control level 3 | -0.2% | -0.1% | 0.0% |
+
+Level 1, the same code, moves by up to 0.7% again; level 3's swap-ins, the same decoder, by 0.4%. The
+Mi 9T and clang were not run again.
 
 Not measured: the A55's cold reads with the layout held, e.g. the branch's decoder at `main`'s
 address; levels 1 and 2 built alone (`SEQLZ_LEVELS=1`, `2`) in the VM or on the phone.
