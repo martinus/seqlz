@@ -31,6 +31,9 @@ window.addEventListener('load', function () { setTimeout(function () {
     Array.prototype.forEach.call(e.parentElement.children, function (c) {
       if (c !== e && !/^(STYLE|SCRIPT|LINK)$/.test(c.tagName)) c.style.display = 'none';
     });
+  // a figure in a file of src/ sits in a part or panel that is hidden until the reader opens it
+  for (var q = f.parentElement; q && q !== document.body; q = q.parentElement)
+  { q.hidden = false; if (getComputedStyle(q).display === 'none') q.style.display = 'block'; }
   for (var p = f.parentElement; p && p !== document.body; p = p.parentElement) { p.style.margin = '0'; p.style.padding = '8px'; p.style.maxWidth = 'none'; }
   f.style.margin = '0'; f.style.width = '%(width)s';
   window.dispatchEvent(new Event('resize'));
