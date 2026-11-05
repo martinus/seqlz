@@ -242,7 +242,7 @@ def render_code_list():
             group = (g, lv)
         intros, *_ = annotate.parse_notes(NOTES[f])
         intro = intros[0] if lv is None or lv == FIRST_LEVEL[f] else intros.get(lv, "")
-        first = re.split(r"(?<=\.)\s", re.sub(r"\[([^]]*)\]\([^)]*\)", r"\1", intro), maxsplit=1)[0]
+        first = re.split(r"(?<=\.)\s", re.sub(r"\[((?:`[^`]*`|[^]`])*)\]\([^)]*\)", r"\1", intro), maxsplit=1)[0]
         out.append(f'<li><a href="#{view_id(f, lv) if lv else annotate.file_id(f)}"><code>'
                    f'{html.escape(f.removeprefix("src/"))}</code></a> {md(first)[3:-4] if first else ""}</li>')
     return "".join(out) + "</ul>"

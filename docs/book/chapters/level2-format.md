@@ -1,8 +1,10 @@
 # Level 2's bytes: coded literals {#ch-format2}
 
-Level 1's page keeps its literals as they are, between the header and the bitstream
-([the layouts](#ch-format--layout)). Level 2 codes them where that saves enough, and the page then
-says so with the top bit of `h`. This chapter is the part of [the format](#ch-format) that level 2
+Level 1's page keeps its literals as they are, 8 bits each, between the header and the bitstream
+([the layouts](#ch-format--layout)). Pages of text and code have many literals.
+Level 2 Huffman codes them, with one of 8 fixed literal tables, where that saves enough, and the page
+then says so with the top bit of `h`. The tables are part of the format, as the token table is
+([the tables](#ch-format--codes)). This chapter is the part of [the format](#ch-format) that level 2
 adds; the code that reads and writes it follows.
 
 ## Coded literals: byte 2, the sizes, 8 streams {#ch-format--coded}
@@ -54,21 +56,22 @@ tables or with a table that the page brings, and more fields come first. Byte 2,
 
 - `code = t & 15` says how the literals are coded: 0 to 7 is one of the 8 fixed literal tables, 8
   (`SEQLZ_LIT_OWN`) a table of the page's own ([Part IV](#ch-format--own)), and 9 to 15 make the page
-  invalid.
+  invalid. They are free for a later format ([no version in the page](#ch-format--version)).
 - `w = 5 + ((t >> 4) & 7)` is the number of bits of each stream size, 5 to 12.
 - `e = t >> 7` says whether the literals are stored as deltas to earlier bytes of the page
-  ([Part IV](#ch-format--deltas)), which only `seqlz-3` writes. The codes 9 to 15 are free for a later format
-  ([no version in the page](#ch-format--version)).
+  ([Part IV](#ch-format--deltas)), which only `seqlz-3` writes.
 
-With `e = 1` byte 3 is `dt`, which says which earlier byte each delta is to. The next `w` bytes, from
-byte $3 + e$ on, are one little-endian number `S` of `8 * w` bits with the 8 stream sizes, `w` bits
-each, the lowest first: `s[j] = (S >> (j * w)) & ((1 << w) - 1)`. With code 8 the page's own table follows,
-`d` bytes; with the codes 0 to 7, `d` is 0. Then come the 8 streams, `s[j]`
-bytes each, and after the last one `B`. The literals are dealt out to the streams like cards: stream
-$j$ holds literals $j$, $j + 8$, $j + 16$ and so on, each as a code of the table that `code` names,
-read most significant bit first like `B`. A stream's codes must end in its last byte, and the bits
-after the last code are 0; a stream without literals has `s[j] = 0`. All 8 streams use the same table:
-that there are 8 streams and 8 fixed tables is a coincidence.
+With `e = 1` byte 3 is `dt`, which says which earlier byte each delta is to; with `e = 0`, as on
+every level 2 page, there is no `dt`. The next `w` bytes, from byte $3 + e$ on, are one little-endian
+number `S` of `8 * w` bits with the 8 stream sizes, `w` bits each, the lowest first:
+`s[j] = (S >> (j * w)) & ((1 << w) - 1)`. With code 8 the page's own table follows, `d` bytes; with the
+codes 0 to 7, `d` is 0. Then come the 8 streams, `s[j]` bytes each, and after the last one `B`.
+
+The literals are dealt out to the streams like cards: stream $j$ holds literals $j$, $j + 8$,
+$j + 16$ and so on, each as a code of the table that `code` names, read most significant bit first
+like `B`. A stream's codes must end in its last byte, and the bits after the last code are 0; a stream
+without literals has `s[j] = 0`. All 8 streams use the same table: that there are 8 streams and 8
+fixed tables is a coincidence.
 
 A page made up for this book: 4096 bytes of "words" of 2 to 9 letters, picked at random from the 12
 letters `etaoinshrdlu` by the C library's classic random number generator from seed 1, each word

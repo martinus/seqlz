@@ -381,7 +381,7 @@ header's 19 bytes, which became 51 on 5th October 2026, and {{ch15.coded_min}} a
 ### Pricing all 8 tables at once
 
 Each byte's code lengths in the 8 tables are one 64-bit word, so one add per literal prices all 8, and
-every {{ch17.lit_cost_run}} literals the sums move into wider lanes ([the pricing](#ch-literals-enc--pricing)).
+every {{ch17.lit_cost_run}} literals the sums move into wider lanes ([the pricing](#ch-literals-enc--lanes)).
 In the kernel that cost 30 to 40 ns per write in September 2026; writing the streams is what costs, and
 pricing a sample could save 400 cycles at most, as long as the exact stream sizes come from the pricing
 ([explored-designs.md](https://github.com/martinus/seqlz/blob/main/docs/explored-designs.md#seqlz-fast-lit-one-of-8-literal-tables-per-page)).

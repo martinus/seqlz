@@ -2,16 +2,17 @@
 
 The decoder of one page. A compressed page is a 2-byte header (the number of literals and a flag for
 coded literals), the literals, and a bitstream with one token per sequence: a sequence is "copy `nl`
-literals, then copy `len` bytes from `off` bytes back" ([the layout](book:#ch-format--layout)). The
+literals, then copy `len` bytes from `off` bytes back" ([the layout](book:#ch-format--layout)). At
+level 1 the literals are raw, right after the header, and the decoder copies them from there. Level 2's
 coded literals are decoded in another file,
 [`seqlz_decompress_literals.c`](seqlz_decompress_literals.c.html).
 
 C wants a helper before its caller, so the file reads bottom up. A reading order that follows the
 call:
 
-1. [`seqlz_decompress()`](#b645), the only function zram calls: it picks one of two copies of the loop.
+1. [`seqlz_decompress()`](#b645), the only function zram calls.
 2. [`decode_block()`](#b405): the header, the literals, and the three limits of the fast path.
-3. The loop: [escape](#b522), [offset](#b538), [fast path](#b550), [slow path](#b587), [end checks](#b623).
+3. The loop: [escape](#b522), [offset](#b538), [fast path](#b550), [slow path](#b587), [end checks](#b633).
 4. The helpers, as the loop reaches them: [`next_token_fast()`](#b374),
    [`copy_match_fast()`](#b318), [`copy_literals()`](#b35), [`copy_match()`](#b93), the
    [bit reader](#b152).
@@ -24,29 +25,25 @@ was not was one of the reasons a compressor for zram was not merged before
 ([plan.md](https://github.com/martinus/seqlz/blob/main/docs/plan.md#1-goal-and-success-criteria)).
 For any bytes and any `src_len`:
 
-- **The input.** The header after `src_len >= 2`, raw literals after `2 + n_lit <= src_len`, coded ones
-  in `seqlz_decode_literals()`. The bitstream's 8-byte loads run only with 8 bytes left, by the check in
+- **The input.** The header after `src_len >= 2`, raw literals after `2 + n_lit <= src_len`, level 2's
+  coded ones in `seqlz_decode_literals()`. The bitstream's 8-byte loads run only with 8 bytes left, by the check in
   `seqlz_br_refill()` or by `br.p <= in_fast`, and move `br.p` by at most 7; the byte loop checks every
   byte. `br.end[-1]` is a byte of the input, which has at least 2.
 - **The literals.** The fast path reads 16 bytes only at `lit <= lit_bound - 16` and moves `lit` by at most
   14; the slow path checks `lit` and `nl` first, and `copy_literals()` stays below `lit_bound`.
 - **The tables.** 11 bits index 2048 token entries, 8 bits 256 length entries; an escaped token's number
   is checked before `token_entry()`, which reads no table.
-- **The deltas.** `undelta_literals()` writes the literals just copied and, where `d_end - d` is at least
-  `nl + 15`, up to 15 bytes past them, `undelta_fast()` the 16 bytes of the fast path; both stay before
-  `d_end` and read only bytes of the page before the ones they write
-  ([the literals' safety](#ch-literals-dec--safety)).
 - **The page, for matches.** `1 <= off <= d - dst` before each match. `repeat_pattern()` reads up to
   `d + 6`, and its bytes at `d` and after are masked away.
 - **Writes.** The fast path writes at most {{ch14.cmf.max_write}} bytes from at least
   {{ch14.room.page}} before `d_end` ([the rooms](#ch-decode--rooms)); the slow path checks `nl` and
-  `len` against the room, and its copies check before each 8 or 16 bytes. The scratch gets up to 8
-  bytes past the literals, inside its 16 spare ones ([the literals' safety](#ch-literals-dec--safety)).
+  `len` against the room, and its copies check before each 8 or 16 bytes. At level 2 the scratch gets up
+  to 8 bytes past the literals, inside its 16 spare ones ([the literals' safety](#ch-literals-dec--safety)).
 - **Undefined behaviour.** Every shift count is 0 to 63, pointers are formed only inside their buffers,
   the limits that could fall before one are numbers, and counts that may go negative are `int`.
 - **Time.** Every round writes a match of at least 4 bytes inside the page, so after at most
   {{ch14.max_rounds}} rounds the page is full, and each round's work is bounded by the bytes it writes.
-  A page's own table takes at most 1024 + 257 steps of `read_own_table()`, whatever `src_len` is
+  At level 3 a page's own table takes at most 1024 + 257 steps of `read_own_table()`, whatever `src_len` is
   ([the bound](seqlz_decompress_literals.c.html#b165)).
 @assert ch14.max_rounds == 1024
 
@@ -78,6 +75,31 @@ per fast sequence, which was more
 Fewer length values would need a wider token, a change of the format that was not tried. And the one loop
 for all cores costs the in-order A55 up to about 0.3 µs per warm read, the price of not asking the CPU
 which core it is.
+@end
+@intro 2
+Level 2 adds coded literals to `decode_block()`, in three places. [`delta`](#b437) is a variable for
+level 3 that `seqlz_decode_literals()` fills in, 0 in a build without level 3. [The call](#b460) to `seqlz_decode_literals()` decodes
+the coded literals into the scratch, `wrkmem`, before the loop starts. And [the bit reader and the
+literals](#b480) then start where it says: the bitstream right after the coded literals, the literals
+in the scratch. The loop is level 1's: it copies literals from `lit` and does not care whether they were
+raw or coded.
+@intro 3
+Level 3 can store the literals as deltas: each one minus the byte `dist` bytes before it in the page,
+modulo 256 ([the format](book:#ch-format--deltas)). `seqlz_decode_literals()` returns them still as
+deltas. This file adds the earlier bytes back, in the page, right after a sequence's literals are copied
+and before its match, which may copy from them.
+
+The code: [`add4()` and `add8()`](#b221), which add 4 or 8 bytes at once, and the functions built on
+them, from [`delta_dist()`](#b242) to [`undelta_fast()`](#b300). In `decode_block()`:
+[`delta_fixed`](#b440), the distance picked once per page; the calls on [the fast path](#b573), [the slow
+path](#b596) and [for the last sequence](#b628). And [`seqlz_decompress()`](#b648), which runs a second
+copy of the loop for pages with deltas, so that pages without them run none of this code.
+@more Why the deltas stay inside the page
+`undelta_literals()` writes the literals just copied and, where `d_end - d` is at least `nl + 15`, up to
+15 bytes past them; `undelta_fast()` writes the 16 bytes the fast path copied. Both stay before `d_end`
+and read only bytes of the page before the ones they write
+([the literals' safety](#ch-literals-dec--safety)). The bytes they write past the literals are written
+again by the match and the sequences after it before anything reads them.
 @end
 
 ## Copies
@@ -129,13 +151,14 @@ Offsets below 8 avoid it: they store one register again and again, with no load 
 @end
 
 @@ 35-65
-A wild copy: 16 bytes at a time, also past `nl`. The bytes past `nl` are garbage for a moment, the
-match after the literals writes over them.
+Copies the `nl` literals 16 bytes at a time, also past `nl`, a wild copy
+([chapter 3](book:#ch-cpu--wild-copy)). The bytes past `nl` are wrong for a moment; the match after the
+literals writes over them.
 
-The first `copy16()` has no loop, because most sequences have fewer than 16 literals and a loop that
-runs 0 or 1 times mispredicts. `lit_bound` is the end of what may be read, not the end of the literals:
-the end of the input for raw literals, the end of the scratch for coded ones. Only within 15 bytes of
-either end does it copy byte by byte.
+The first `copy16()` has no loop: most sequences have fewer than 16 literals, and a loop that runs 0 or
+1 times mispredicts. `lit_bound` is the end of what may be read, not the end of the literals. For raw
+literals it is the end of the input, with the bitstream between; for level 2's coded ones, the end of
+the scratch. Only within 15 bytes of the page's end or of `lit_bound` does it copy byte by byte.
 @more {#ch-dec-basics--literals} Why copying 16 bytes is faster than copying 3
 A sequence with 3 literals gets 16 bytes copied. The 13 bytes too many land where the sequence's match
 goes, and the match writes over them right after. Copying exactly 3 would need a loop that runs 3
@@ -146,8 +169,8 @@ than 16 literals. This is the wild copy of [chapter 3](#ch-cpu--wild-copy).
 Two limits make it safe. The 16 bytes written must fit into the page, `d_end - d >= 16`, and the 16
 bytes read must be readable, `lit_bound - lit >= 16`. For raw literals `lit_bound` is the end of the
 compressed page, and the bytes after the literals are the bitstream; for coded ones it is the end of
-the scratch, which has 16 spare bytes for this. The caller, the slow path of `seqlz_decompress()`, has
-checked that the `nl` literals are there and fit into the page.
+the scratch, which has 16 spare bytes for this. The callers, the slow path of `decode_block()` and its
+last sequence, have checked that the `nl` literals are there and fit into the page.
 @end
 
 @@ 66-71
@@ -222,12 +245,13 @@ multiply needs the pattern's first byte in the lowest byte ([chapter 3](#ch-cpu-
 The match copy of the slow path: matches with a length value (up to a page long) and matches near the
 end of the page.
 
-Below offset 8 the bytes overlap the bytes being written. So the pattern is built once and stored every
-`step` bytes, stores only, no load waits for a store. `repeat_step[off]` needs no mask, `off` is below 8
-here. With fewer than 8 bytes left in the page everything goes to the byte loop at the bottom.
+Below offset 8 the match overlaps the bytes it writes. So the pattern is built once and stored every
+`step` bytes: stores only, and no load waits for a store. `repeat_step[off]` needs no mask, `off` is
+below 8 here. With fewer than 8 bytes left in the page, all of the match goes to the byte loop at the
+bottom.
 
-The first decoder copied a match up to the end of the page byte by byte, and its slowest 1% of pages
-took more than 10 times as long as `lz4`'s. That is the last sentence of the comment.
+The comment's "many times slower than lz4": the first decoder copied a match up to the end of the page
+byte by byte, and its slowest 1% of pages took more than 10 times as long as `lz4`'s.
 @more {#ch-dec-basics--copy-match} copy_match() on two matches, and what stores only bought
 Below offset 8 it is the pattern of [`repeat_pattern()`](#ch-dec-basics--pattern): build the register once, store it every `step`
 bytes, and no load waits for a store. With fewer than 8 bytes left in the page, the byte loop at the
@@ -246,7 +270,7 @@ changed nothing: for `off` from 1 to 7, `off & 7U` is `off`, and gcc 16.2.1 and 
 same machine code with and without it, on x86-64 and arm64. Commit `51cb119` removed it.
 
 The caller has checked that `d - off` is inside the page and `d + len` at most `d_end`. The last sentence
-of the first paragraph has a measurement behind it: the first decoder of seqlz, in September 2026,
+of the comment's first paragraph has a measurement behind it: the first decoder of seqlz, in September 2026,
 copied a match that ran up to the end of the page byte by byte, all of it. On a page that ends in a long
 run of zeros that is up to 4000 single bytes with offset 1, each load waiting for the store before it,
 and the slowest 1% of pages took 5700 ns, where `lz4` took 500
@@ -302,7 +326,7 @@ values, one after the other without regard to bytes ([the bitstream](#ch-format-
 the top bits are real.
 
 `count` is an `int` on purpose. Reading past the end gives zeros and makes `count` negative, and one
-check at [the end of the page](#b623) catches that, instead of a check on every read. Wrong bits can
+check at [the end of the page](#b633) catches that, instead of a check on every read. Wrong bits can
 make wrong lengths and offsets, never a wrong memory access: each one is checked where it is used.
 
 @@ 168-179
@@ -486,7 +510,8 @@ The low 7 bits of each byte add without a carry into the next byte (at most `0x7
 is then fixed with an XOR of both top bits. A plain word addition would carry from one byte into the
 next.
 
-`add8()` only for a distance of 8 or more: with distance 4 its two loads overlap the bytes it writes.
+`add8()` is only for a distance of 8 or more. With a distance of 4, the 8 bytes it adds would include 4
+of the bytes it is restoring, still deltas.
 @anchor ch-literals-dec--undelta
 @more {#ch-literals-dec--add8} `add8()` on `f0 01` plus `10 00`, step by step
 `add4()` and `add8()` add the word `dist` bytes before `p` to the word at `p`, byte by byte, modulo
@@ -518,30 +543,29 @@ XOR it replaced was 1.
 @end
 
 @@ 242-252
-How far back the byte is that a literal is a delta to: `delta_fixed`, 4 or 8, which
-[`decode_block()`](#b459) picks once per page from the header, else derived from the offset of the
-sequence before, at least 4 ([Part IV](book:#ch-format--deltas),
-[its values](book:#ch-internal--delta-last)). Both restoring functions below start with it. Picked
-from `delta` in every sequence, the distance took two tests per sequence instead of one
+How far back the byte is that a literal is a delta to. For `SEQLZ_DELTA_4` and `SEQLZ_DELTA_8` it is
+`delta_fixed`, which [`decode_block()` picks once per page](#b470). For `SEQLZ_DELTA_LAST` it comes
+from the offset of the sequence before, and is at least 4 ([the format](book:#ch-format--deltas),
+[its values](book:#ch-internal--delta-last)). Both restoring functions below start with it. Picked from
+`delta` in every sequence, the distance took two tests per sequence instead of one
 ([what the deltas cost](#ch-literals-dec--undelta-cost)).
 
 @@ 253-270
-16 bytes in words: two `add8()` for a distance of 8 or more, else four `add4()`. Each word reads the
-word `dist` bytes back, which ends before it starts, so the step goes forward and every byte it reads
-is final. Both restoring functions take their steps from here.
+16 bytes in words: two `add8()` for a distance of 8 or more, else four `add4()`. Each word adds the
+word `dist` bytes before it, which ends before this word starts. So going forward, every byte a word
+reads is restored already. Both restoring functions take their steps from here.
 
 @@ 271-299
-Level 3 stores some literals as the difference to an earlier byte of the page. They come out of
-`seqlz_decode_literals()` still as deltas, and can only be turned back in the page, right after the
-copy and before the match after them ([the deltas in the loop](book:#ch-decode--deltas)), because the
-byte a delta is to may be one of a match, and that match may copy from them.
+Turns the `nl` deltas just copied to `d` back into literals. The byte a delta is to may be one a match
+wrote, so this happens in the page, right after the copy, and before the match after the literals,
+which may copy from them ([the deltas in the loop](book:#ch-decode--deltas)).
 
 `k` starts at `dist - at` near the page's start: literals before byte `dist` have nothing to be a delta
-to. Then steps of 16 bytes forward. Where the page has room for 15 bytes past the literals, the last
-step covers the tail too, so a sequence of up to 16 literals is one step and no loop has a trip count
-that changes from sequence to sequence; only at the page's end the tail goes byte by byte. The index
-`k` and not a pointer, because `d + dist` could be past the page, and C does not allow forming that
-pointer.
+to, and stay as they are. Then steps of 16 bytes forward. Where the page has room for 15 bytes past the
+literals, the last step covers the tail too. So a sequence of up to 16 literals is one step, and no
+loop has a trip count that changes from sequence to sequence. Only at the page's end does the tail go
+byte by byte. The bytes read are at `d + k - dist`, which is never before `dst`, since `k` starts at
+`dist - at` or later.
 @more Why the bytes `dist` back are always final
 `undelta_literals()` restores the `nl` literals at `d`, `at` bytes into the page. `k` is the first
 literal that is a delta, by the one rule of the format ([the deltas](#ch-format--deltas)), the same
@@ -677,9 +701,8 @@ slower in the kernel VM with gcc and clang
 @@ 360-373
 The token: the top 11 bits index a table of 2048 entries. Every index is valid because the token code
 is complete ([complete](book:#ch-compression--complete)). The entry has the lengths and the offset's
-class, so the offset's bits follow without a second lookup. The table is `seqlz_tables.token`, the
-kernel's one set; until 1st November 2026 both token functions took it as an argument, which every
-call passed the same.
+class, so the offset's bits follow without a second lookup. The table is the global
+`seqlz_tables.token`.
 
 It refills only when fewer than 11 + 12 bits are left (a code and the longest offset), so most lookups
 use bits that are already in the register and do not wait for a load. Used for the first sequence and
@@ -688,7 +711,8 @@ after a slow one.
 11 + 12 bits are {{ch14.need}} bits, a token's longest code and the longest offset. The `(int)` keeps
 the compare signed, so a negative `count` reads as what it is. A refill puts a load in front of the
 lookup, whose index comes from `bits`; with the check, most lookups use bits already in the register,
-and the refill's load comes about every two or three sequences.
+and the refill's load comes about every two or three sequences. Until 1st November 2026 both token
+functions took the table as an argument, which every call passed the same.
 
 ::: measured Refill below 23 bits instead of every sequence
 September 2026, `seqlz-1` in the kernel VM, Ryzen 9 7950X at 4.5 GHz: cold reads, with another page
@@ -818,9 +842,9 @@ past its room stops the build, instead of waiting for a fuzzer to find it.
 
 @@ 418-427
 @anchor ch-decode
-`deltas` is a constant at both calls in `seqlz_decompress()`, so the compiler makes two copies of the loop,
-and a page without deltas runs none of their code. A check of `deltas` for every sequence made levels
-1 and 2 slower to read. The cost is code size.
+`decode_block()` decodes one page; the panel under this note has its loop as a flowchart. The last
+parameter, `deltas`, is for level 3's literals ([Part IV](#b648)). Pages of levels 1 and 2 run it with
+`false`, a constant, so its `if (deltas)` lines compile to nothing.
 @more {#ch-decode--paths} The loop as a flowchart, and how often each path runs
 `decode_block()` is the whole decoder: the header, the literals raw or decoded, then one loop over the
 sequences, one lookup in the token table each, the offset from the bits after the code, and the copies
@@ -843,34 +867,15 @@ flowchart TB
     X --> O["offset from the entry,<br/>drop code and offset bits"]
     O --> C{"no length value,<br/>d &lt;= d_fast,<br/>lit &lt;= lit_fast,<br/>br.p &lt;= in_fast?"}
     C -->|"yes: fast path"| F["next_token_fast():<br/>next token first,<br/>refill every second time"]
-    F --> FC["copy16() literals,<br/>undelta_fast() if deltas,<br/>check off,<br/>copy_match_fast()"]
+    F --> FC["copy16() literals,<br/>level 3: undelta_fast(),<br/>check off,<br/>copy_match_fast()"]
     FC --> E
-    C -->|"no: slow path"| L["ll value if any,<br/>check nl, copy_literals(),<br/>undelta_literals() if deltas"]
+    C -->|"no: slow path"| L["ll value if any,<br/>check nl, copy_literals(),<br/>level 3: undelta_literals()"]
     L --> M["ml value if any,<br/>check off and len,<br/>copy_match()"]
     M --> D{"literals left =<br/>bytes left?"}
     D -->|yes| END["last sequence:<br/>copy_literals() the literals left,<br/>then the end checks"]
     D -->|no| NT["tok = next_token(), skip = 0"]
     NT --> E
 </pre>
-@end
-@more {#ch-decode--deltas} What the copy with deltas does, and what a test per sequence cost
-In the copy with `true` the loop adds the bytes back right after each sequence's literals are copied,
-with `undelta_fast()` on the fast path and `undelta_literals()` on the slow path and for the last
-sequence ([the deltas](#ch-literals-dec--undelta)): the next match may copy from those literals, so they
-have to be the page's own before it. In the copy with `false` the `if (deltas)` lines are gone, and a
-page without deltas runs the loop as it was before level 3 had them. [`seqlz_decompress()`](#b645) checks
-only which copy to run; `seqlz_decode_literals()` reads and checks the byte that says which delta.
-
-::: why A second copy of the loop, not a test per sequence
-The two copies came with the XOR that the deltas replaced. A check of the XOR for every sequence in
-the one loop, and of the records in the encoder's, made levels 1 and 2 slower to read and about 6%
-slower to write on the Mi 9T's Cortex-A76, userspace, 21st October 2026. With the two copies they read
-as fast as before, within the run's spread, and level 3 read 0.37 µs slower per page on the A76 and
-1.0 µs on the A55 than without the XOR, the mean of two phone dumps
-([explored-designs.md](https://github.com/martinus/seqlz/blob/main/docs/explored-designs.md#level-3-xors-its-literals-with-an-earlier-byte-of-the-page-38-fewer-bytes-than-seqlz-3-of-15-october-kept));
-the deltas read another 0.13 to 0.24 µs slower on the A76 and 0.34 to 0.46 µs on the A55
-([what the deltas cost](#ch-literals-dec--undelta-cost)). The cost is code size: the loop is in the decoder twice.
-:::
 @end
 
 @@ 428-436
@@ -881,11 +886,13 @@ return values, 0 or `-EINVAL`, are those of
 [`seqlz_decompress()` in `seqlz.h`](book:#ch-header--encode-decode).
 
 @@ 437-439
-Level 2's `delta`, which delta the literals are: `seqlz_decode_literals()` sets it for coded
-literals, and below level 3 it stays 0.
+`delta` is for level 3, whose literals can be deltas to earlier bytes of the page
+([Part IV](#b648)). [`seqlz_decode_literals()`](#b460) takes a pointer to it from level 2 on, and a
+build without level 3 sets it to 0.
 
 @@ 440-443
-Level 3's `delta_fixed`, the distance of the delta, set once from `delta` below.
+`delta_fixed`, the distance of the deltas when it is the same for the whole page, 4 or 8. It is set
+[once from `delta`](#b470), the field of the header that [`seqlz_decode_literals()`](#b460) reads.
 
 @@ 444-458
 The tables are prefetched before the header is read, so that their cache misses overlap with each
@@ -910,17 +917,18 @@ kernel VM and on the phone
 Bit 15 of the header picks the layout: set, the literals are coded, which is level 2's.
 
 @@ 460-469
-Level 2: coded literals are decoded into the scratch first
-([`seqlz_decode_literals()`](book:#ch-literals-dec)), which returns where the bitstream starts. It also
-gets `d`: a page with a literal table of its own, level 3's, has that table built in the output page,
-before the loop overwrites it ([own table](book:#ch-literals-dec--own)). Only a page with coded literals
-needs the scratch: zram at level 1 writes only raw literals and may call the decoder without one
-([the backend](book:#ch-zram-glue--backend)).
+Coded literals are decoded into the scratch first, by
+[`seqlz_decode_literals()`](book:#ch-literals-dec). It returns where the bitstream starts, or `NULL`
+for an invalid page. Only these pages need the scratch: zram at level 1 writes only raw literals and
+may call the decoder without one ([the backend](book:#ch-zram-glue--backend)).
+
+The function also gets `d`, the output page, for level 3's literal table of the page's own: it builds
+that table there, before the loop writes over it ([own table](book:#ch-literals-dec--own)).
 
 @@ 470-479
-Level 3: from `delta` the block takes `delta_fixed` once, 4 for `SEQLZ_DELTA_4`, 8 for `SEQLZ_DELTA_8`,
-and 0 for `SEQLZ_DELTA_LAST`, whose distance changes with each sequence, so [`delta_dist()`](#b242) has
-one test per sequence instead of two.
+From `delta` the page takes `delta_fixed` once: 4 for `SEQLZ_DELTA_4`, 8 for `SEQLZ_DELTA_8`, and 0
+for `SEQLZ_DELTA_LAST`, whose distance changes with each sequence. Then [`delta_dist()`](#b242) has one
+test per sequence instead of two.
 
 @@ 480-483
 The sequences' bitstream follows the coded literals, and the loop reads the literals from the scratch.
@@ -962,8 +970,9 @@ left fill the bytes left. `d_end - d == lit_end - lit` is the same as `d - lit =
 whose right side never changes. So the loop compares two pointers it moves anyway against `end_gap`
 ([the end](book:#ch-format--end)).
 
-A page of only literals has no token at all and jumps to the end. With raw literals such a page is
-never stored, with coded ones it can be smaller than a page. The first `next_token()` finds
+A page of only literals has no token at all and jumps to the end. With raw literals such a page would
+be 2 bytes larger than the page itself, and zram keeps the page uncompressed instead; with level 2's
+coded literals it can be smaller. The first `next_token()` finds
 `count = 0` and refills.
 
 @@ 522-537
@@ -1115,7 +1124,8 @@ wraps to the largest `unsigned int`.
 
 `nl` is not checked against the literals left. On a damaged page `lit` can run past `lit_end`, but it
 stays inside `lit_bound`, and the slow path, where every page ends, rejects it. The page's last match
-never takes the fast path: fewer than 8 bits are left after it, and the fast path wants 8 bytes.
+never takes the fast path: fewer than 8 bits are left after it, and the fast path wants 8 bytes of
+input.
 @more {#ch-decode--fast} The fast path's condition and body, part by part
 Each part of the condition lets the body skip a check. Bit 30 of the entry, `TOK_VALUE_AT`, says that no
 length value follows, so `nl` is at most 14 and `len` at most 34; one test instead of two compares, and
@@ -1151,9 +1161,10 @@ it, AddressSanitizer reported a heap overflow in that test
 @end
 
 @@ 573-577
-Level 3, in the copy of the loop for pages with deltas: with `deltas`, `undelta_fast()` adds the bytes back on the 16 bytes `copy16()` wrote, before `last`
-becomes this sequence's offset: the distance of `SEQLZ_DELTA_LAST` is the offset of the sequence before.
-[The animation of the deltas](#anim-undelta) steps through its four `add4()` on a page of counters.
+On a page with deltas, [`undelta_fast()`](#b300) adds the earlier bytes back to the 16 bytes
+`copy16()` just wrote. It runs before `last` becomes this sequence's offset, because the distance of
+`SEQLZ_DELTA_LAST` comes from the offset of the sequence before. [The animation of the
+deltas](#anim-undelta) steps through its four `add4()` on a page of counters.
 
 @@ 578-586
 The match, then the next sequence: the token was looked up before the copies.
@@ -1162,8 +1173,8 @@ The match, then the next sequence: the token was looked up before the copies.
 The slow path, with every check. `nl == 15` means a length value follows.
 
 The order of the checks matters: `lit > lit_end` first, else `lit_end - lit` wraps and any `nl`
-passes. The first fast path in September 2026 missed exactly this, and a test builds such a page since
-then.
+passes. The fast path can leave `lit` past `lit_end` on a damaged page
+([the check that moved](#ch-decode--nl-unchecked)).
 @more {#ch-decode--slow} The literal length value, and the token the last sequence lost
 An `ll` of 15 means a literal length value follows the offset bits
 ([length values](#ch-format--length-values)); the refill makes sure of the 20 bits
@@ -1176,8 +1187,9 @@ checked for it here; it said what the decoder knew already and cost about 1.2 by
 @end
 
 @@ 596-599
-Level 3: with `deltas`, `undelta_literals()` restores the `nl` literals, in steps of 16
-bytes that may run up to 15 bytes past them, again before `last` changes.
+On a page with deltas, [`undelta_literals()`](#b271) restores the `nl` literals, in steps of 16 bytes
+that may run up to 15 bytes past them. As on [the fast path](#b573), this comes before `last`
+changes.
 
 @@ 600-600
 The literals are in the page now.
@@ -1197,9 +1209,37 @@ more than a page; `len > d_end - d` rejects it before [`copy_match()`](#ch-dec-b
 @end
 
 @@ 623-627
-The last sequence: the literals left, exactly the room left. Then the page has to end where its bits
-end: fewer than 8 bits left (a negative `count` wraps to large as `unsigned int`, one compare for
-both), every byte read, and the padding bits zero.
+The last sequence: the literals left, exactly the room left in the page. The count needs no check
+here: on both ways to `last_literals` it is the room left, and `lit` is at most `lit_end`
+([why](#ch-decode--last-copy)).
+@more {#ch-decode--last-copy} Why the last copy needs no check
+The copy fills the page and uses every literal. On both ways to `last_literals` the count
+`lit_end - lit` is `d_end - d`, and `lit` is at most `lit_end`:
+
+- A page of literals only jumps there with `d` at `dst` and `lit_end - lit` equal to
+  `SEQLZ_BLOCK_SIZE`.
+- The `break` comes where `d - lit` is `end_gap`, which is `d_end - d` equal to `lit_end - lit`, right
+  after the slow path checked `lit <= lit_end` and `nl <= lit_end - lit` before it moved `lit` on by
+  `nl`.
+
+A `memcpy()` here, a call instead of a second inlined copy loop, made the swap-in 0.02 µs slower in the
+kernel VM, at the edge of what the boots differ by
+([explored-designs.md](https://github.com/martinus/seqlz/blob/main/docs/explored-designs.md#the-last-sequence-without-a-token-12-bytes-per-page-less-kept)).
+@end
+
+@@ 628-632
+On a page with deltas, [`undelta_literals()`](#b271) restores the last sequence's literals as any
+sequence's. It needs no guard: its count is the room left in the page, as for
+[the copy before it](#ch-decode--last-copy).
+@more Why the call has no guard
+With no room past the literals, the steps of 16 of `undelta_literals()` stop before the page's end and
+the last bytes go one at a time. Until 22nd October 2026 the call had a guard `lit <= lit_end` and the
+`min()` of the two counts, which changed nothing on either way to `last_literals` (commit `753a707`).
+@end
+
+@@ 633-644
+The page has to end where its bits end: fewer than 8 bits left, every byte read, and the padding bits
+zero. A negative `count` wraps to a large `unsigned int`, so one compare checks both ends of its range.
 
 This strictness is the only damage check there is: zram stores no checksum
 ([why so strict](book:#ch-format--end)). Why no input can make the decoder read or write out of bounds
@@ -1220,30 +1260,6 @@ from `br.end[-1]` and not from the register, which would be a shift by `64 - cou
 `count = 0`. The checks came on 8th October 2026; the compressor always wrote pages that pass.
 @end
 
-@@ 628-632
-Level 3: the last sequence's literals get their bytes added back as any sequence's.
-@more {#ch-decode--last-copy} Why the last copy needs no guard
-The copy fills the page and uses every literal. A page with deltas restores them as any sequence's
-literals, the last sequence being no different in the format. `undelta_literals()` gets
-`lit_end - lit` with no guard, as on both ways to `last_literals` that count is the room left in the
-page, `d_end - d`, and `lit` is at most `lit_end`. With no room past them, its steps of 16 stop before
-the page's end and the last bytes go one at a time:
-
-- A page of literals only jumps there with `d` at `dst` and `lit_end - lit` equal to
-  `SEQLZ_BLOCK_SIZE`.
-- The `break` comes where `d - lit` is `end_gap`, which is `d_end - d` equal to `lit_end - lit`, right
-  after the slow path checked `lit <= lit_end` and `nl <= lit_end - lit` before it moved `lit` on by
-  `nl`.
-
-Until 22nd October 2026 the call had a guard `lit <= lit_end` and the `min()` of the two counts, which
-changed nothing on either way (commit `753a707`). A `memcpy()` here, a call instead of a second inlined
-copy loop, made the swap-in 0.02 µs slower in the kernel VM, at the edge of what the boots differ by
-([explored-designs.md](https://github.com/martinus/seqlz/blob/main/docs/explored-designs.md#the-last-sequence-without-a-token-12-bytes-per-page-less-kept)).
-@end
-
-@@ 633-644
-The end checks: every bit read, the rest zero ([why](#b623)).
-
 ## seqlz_decompress()
 
 @@ 645-647
@@ -1252,8 +1268,28 @@ The entry point.
 @@ 648-656
 Level 3: deltas exist only with coded literals, flagged in bit 7 of byte 2; with raw literals
 byte 2 is a literal. Byte 2 is read only if the page has one, `src_len > 2`. Each call passes a
-constant to `decode_block()`, which gives the two copies of the loop
-([what each copy does](#ch-decode--deltas)).
+constant to `decode_block()`, so the compiler makes two copies of the loop, and a page without deltas
+runs none of their code. A test of `deltas` for every sequence instead made levels 1 and 2 slower to
+read; the cost is code size.
+@more {#ch-decode--deltas} What the copy with deltas does, and what a test per sequence cost
+In the copy with `true` the loop adds the bytes back right after each sequence's literals are copied,
+with `undelta_fast()` on the fast path and `undelta_literals()` on the slow path and for the last
+sequence ([the deltas](#ch-literals-dec--undelta)): the next match may copy from those literals, so they
+have to be the page's own before it. In the copy with `false` the `if (deltas)` lines are gone, and a
+page without deltas runs the loop as it was before level 3 had them. The lines above check only which
+copy to run; `seqlz_decode_literals()` reads and checks the byte that says which delta.
+
+::: why A second copy of the loop, not a test per sequence
+The two copies came with the XOR that the deltas replaced. A check of the XOR for every sequence in
+the one loop, and of the records in the encoder's, made levels 1 and 2 slower to read and about 6%
+slower to write on the Mi 9T's Cortex-A76, userspace, 21st October 2026. With the two copies they read
+as fast as before, within the run's spread, and level 3 read 0.37 µs slower per page on the A76 and
+1.0 µs on the A55 than without the XOR, the mean over the phone dumps
+([explored-designs.md](https://github.com/martinus/seqlz/blob/main/docs/explored-designs.md#level-3-xors-its-literals-with-an-earlier-byte-of-the-page-38-fewer-bytes-than-seqlz-3-of-15-october-kept));
+the deltas read another 0.13 to 0.24 µs slower on the A76 and 0.34 to 0.46 µs on the A55
+([what the deltas cost](#ch-literals-dec--undelta-cost)). The cost is code size: the loop is in the decoder twice.
+:::
+@end
 
 @@ 657-664
 It is the kernel's `seqlz_decompress()` itself, declared in [`linux/seqlz.h`](linux-seqlz.h.html#b81):

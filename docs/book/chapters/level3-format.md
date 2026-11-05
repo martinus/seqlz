@@ -2,7 +2,8 @@
 
 Level 3 adds two things to [level 2's coded literals](#ch-format2): code 8 in byte 2, a literal
 table that the page brings, and bit 7, literals stored as deltas to earlier bytes of the page. Both
-sit in the header of the coded literals; the sequences are level 1's. This chapter is the part of
+sit in the header of the coded literals; the sequences are level 1's. Level 3's lazy matcher changes
+which sequences the compressor finds, not how they are written. This chapter is the part of
 [the format](#ch-format) that level 3 adds; the code follows.
 
 ## A page's own literal table, in byte order {#ch-format--own}
@@ -140,9 +141,9 @@ bits are the lengths.
 
 A page is invalid if the sum goes above 1, if a byte value above 255 would get a code, if a bit after
 the last symbol in its byte is not 0, or if $3 + w + e + d$ is beyond `len`. `seqlz_decompress()` reads zeros
-past the end of the page, and a code of zeros, `{{own.code.8}}`, is a length, so a table that never
-fills the code space still ends there, and the last of those checks rejects it. How the encoder chooses the lengths and which pages get a
-table is in [`seqlz_code_own()`](#ch-literals-enc--own); how the decoder builds a decode table from them
+past the end of the page, and a code of zeros, `{{own.code.8}}`, is a length. So a table that runs past
+the end of the page still fills the code space after a while, and the last of those checks rejects it.
+How the encoder chooses the lengths and which pages get a table is in [`seqlz_code_own()`](#ch-literals-enc--own); how the decoder builds a decode table from them
 without any memory of its own, in [`read_own_table()`](#ch-literals-dec--own).
 
 ## Literals as deltas {#ch-format--deltas}
@@ -163,11 +164,14 @@ literal is stored as it is. `x` is
 | 3 | the smallest multiple of `last` that is 4 or more |
 
 `last` is the offset of the sequence before, 1 for the first, so for `dt = 3` the byte is 4 back for
-`last` 1 or 2, 6 back for `last` 3, and `last` back from 4 on. Only the first `x` bytes of the page have no byte `x` before them; every other literal is a delta,
+`last` 1 or 2, 6 back for `last` 3, and `last` back from 4 on. Any other `dt` makes the page invalid.
+
+Only the first `x` bytes of the page have no byte `x` before them; every other literal is a delta,
 the first literals of a sequence too. `out[p - x]` is a byte the decoder has already written, as it is
 in the page: a byte of the match before, of an earlier sequence, or an earlier literal of the same
-sequence; the last sequence is no different. Any other `dt` makes the page invalid. Memory pages are
-full of 4- and 8-byte fields, whose bytes are often those of the field before or differ from them by a
+sequence; the last sequence is no different.
+
+Why deltas: memory pages are full of 4- and 8-byte fields, whose bytes are often those of the field before or differ from them by a
 little, as counters, sizes and addresses of objects in a row do, and the byte after a match often
 differs only a little from the byte the match would have copied next. As deltas, such literals become a
 few small values, which a literal table codes in fewer bits

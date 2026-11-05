@@ -12,9 +12,12 @@ once per CPU `create_ctx()`, which allocates the work memory; then per page `com
 `decompress()`. A series of October 2026, not merged yet, splits the context in two, `create_cctx()`
 for writing and `create_dctx()` for reading; the harness has that form. A reading order:
 
-1. [`compress()`](#b40), the one compress function, and [`decompress()`](#b114).
-2. The work memory: [the hash table](#b29) for writing, [the scratch](#b89) for reading.
-3. The three [codec objects](#b79) that tie the functions together.
+1. [`compress()`](#b40), the one compress function, and [`decompress_1()`](#b62), the decompress of
+   level 1.
+2. The work memory: [the hash table](#b29) for writing, for every level.
+3. The [codec object](#b79) of `seqlz-1`, which ties the functions together.
+4. What `seqlz-2` and `seqlz-3` add, [from line 89](#b89): a buffer for reading, which their coded
+   literals need ([Part III](book:#part-level-2)), and their codec objects.
 
 The panels under this intro are about other files: the harness's interface, then the kernel's side,
 from `port.py` through the interface and the tables to the backend, and last the checks and tests
@@ -156,7 +159,7 @@ template for zram trees with and without the October 2026 series.
 
 The figure shows where it sits when zram writes or reads a page: zram takes this CPU's stream, zcomp
 passes its buffers and the backend's context to the backend, and the backend hands the context to the
-library as its work memory. The contexts are the form with the split; without it, one union serves
+library as its work memory. The contexts are the form with the split; without it, one allocation serves
 both directions. The names of zram and zcomp are those of a tree without the series, which may name
 the streams of the split differently.
 
@@ -232,7 +235,7 @@ the streams of the split differently.
   </g>
   <g font-size="12">
     <text x="118" y="390" class="acc">seqlz-1: {{ch01.cctx_kib}} KiB per CPU, seqlz-2 and seqlz-3: {{ch01.split_kib}} KiB per CPU</text>
-    <text x="118" y="410" class="mut" font-size="11">without the split: one union of the two, {{ch01.union_kib}} KiB per CPU at every level</text>
+    <text x="118" y="410" class="mut" font-size="11">without the split: one allocation for both, {{ch01.union_kib}} KiB per CPU at every level</text>
   </g>
 </svg>
 </div>
@@ -246,19 +249,19 @@ The contexts without the split, and `seqlz_destroy()`, which both forms share:
 What counts per CPU is what the allocator hands out ([chapter 1](#ch-zram--work-memory)). A struct of the
 hash table and the scratch side by side was {{size.state}} + {{const.SCRATCH}} =
 {{ch15.state_plus_scratch|grp}} bytes, above `KMALLOC_MAX_CACHE_SIZE`, and `kvzalloc()` took 16 KiB for it.
-As a union it is {{size.state}} bytes from `kmalloc-8k`. `lz4` asks `vmalloc()` for 16 416 bytes, which is
+Shared, it is the larger of the two, {{size.state}} bytes from `kmalloc-8k`. `lz4` asks `vmalloc()` for 16 416 bytes, which is
 5 pages, 20 480
 ([plan.md](https://github.com/martinus/seqlz/blob/main/docs/plan.md#33-per-cpu-workspace-is-real-memory-on-a-phone)):
 12 KiB less per CPU, on the Mi 9T's 8 cores 96 KiB, resident whether the phone swaps or not.
-`kzalloc_obj(*c)` is a newer typed spelling of `kzalloc(sizeof(*c), GFP_KERNEL)`, as zram's other
-backends allocate their contexts; `GFP_KERNEL` may sleep, which is fine when a CPU comes up. Two
+`kzalloc()` allocates and zeroes, as zram's other backends allocate their contexts; `GFP_KERNEL` may
+sleep, which is fine when a CPU comes up. Two
 `static_assert`s at the top of the file ([the setup](#ch-zram-glue--backend-params)) keep
 `SEQLZ_MEM_COMPRESS` and `SEQLZ_MEM_DECOMPRESS` at most `KMALLOC_MAX_CACHE_SIZE`: larger, `kzalloc()`
 would take pages of a higher order straight from the page allocator, which can fail under
 fragmentation when a CPU comes up.
 @assert const.SCRATCH <= size.state <= 8192 < ch15.state_plus_scratch <= 16384
 
-::: why The union is safe because of zram's mutex
+::: why One allocation for both is safe because of zram's mutex
 Commit `6063362` ([#154](https://github.com/martinus/seqlz/issues/154)) gives two reasons. zram holds
 the stream's mutex for either operation, so they never run at the same time on one context. And neither
 keeps anything from one page to the next: the matcher clears its table for every page, the decoder
@@ -267,7 +270,7 @@ two levels of then, 0 of 20 000 pages different; 10 minutes of swap with 4 worke
 million pages out at level 2 and 16.9 million at level 1, 0 different.
 :::
 
-With the split, two functions and no union:
+With the split, two functions, one allocation each:
 
 @listing tools/kernel-port/backend_seqlz.c {{ch15.backend.split.a}}-{{ch15.backend.split.b}}
 
@@ -282,7 +285,7 @@ per CPU.
 The `static_assert` says what zram's `Kconfig` makes sure of, `depends on PAGE_SIZE_4KB`: zram hands the
 backend whole pages, and seqlz takes blocks of 4 KiB.
 `ZCOMP_RW_SPLIT` is no kernel macro but a marker: `port.py` keeps the `#ifdef` parts if the tree's
-`zcomp.h` has `struct zcomp_cstrm`, else the `#ifndef` parts, and removes the marker's lines.
+`zcomp.h` has `struct zcomp_cstrm`, else the `#else` parts, and removes the marker's lines.
 `seqlz_release_params()` is empty but must exist, since zram calls it without a check for `NULL`. A
 dictionary is refused with `-EOPNOTSUPP`, zram's "not set" level becomes level 2, and any other level
 than 1 to 3 is `-EINVAL`, as `lz4` refuses invalid levels. The level is set per device:
@@ -295,8 +298,8 @@ echo "algo=seqlz level=1" > /sys/block/zram0/algorithm_params
 @listing tools/kernel-port/backend_seqlz.c {{ch15.backend.pages.a}}-{{ch15.backend.pages.b}}
 
 The harness's functions in the kernel's types: zram passes `2 * PAGE_SIZE` as `dst_len` to compress and
-`PAGE_SIZE` to decompress, and the level comes from the params. In the union form `->cmem` and `->dmem`
-are the same address; the member says which use is meant. Neither function prefetches: the VM's
+`PAGE_SIZE` to decompress, and the level comes from the params. Both pass `ctx->context` as it is.
+Neither function prefetches: the VM's
 measurements of [the prefetch](#ch-zram-glue--prefetch) used experimental code,
 `tools/zram-vm/zram-prefetch.patch` and the VM's own backend. `port.py` adds `&backend_seqlz` to
 `zcomp.c`'s list, the entries to zram's `Kconfig` and `Makefile`, and a paragraph to zram's
@@ -472,12 +475,12 @@ zram can give a device a dictionary, e.g. for `zstd`. seqlz's tables are fixed a
 format, so there is nothing a dictionary could change, and this file ignores it; the kernel's backend
 refuses one ([its setup](book:#ch-zram-glue--backend-params)).
 @more {#ch-zram-glue--head} The three levels, and why the tables are no dictionary
-`seqlz-2` lets `seqlz_code_literals()` ([the literal coder](#ch-literals-enc)) code the literals where
-that saves $\frac{1}{16}$ of them and {{ch15.coded_min}} bytes, `seqlz-3` adds the lazy matcher, a
-literal table of the page's own and the literals as deltas to earlier bytes of the page, and codes
-them from {{ch11.coded_min_own}} bytes on
-([the levels](#ch-header--compressor)). In the kernel they are levels 1 to 3 of one backend, `seqlz`,
-with 2 the default; the harness names them as three codecs to compare them side by side.
+`seqlz-1` keeps the literals raw. `seqlz-2` codes them with one of 8 fixed literal tables where that
+saves enough ([Part III](#part-level-2)). `seqlz-3` adds a lazy matcher, a literal table of the
+page's own and the literals as deltas to earlier bytes of the page ([Part IV](#part-level-3),
+[the levels side by side](#ch-header--compressor)). In the kernel they are levels 1 to 3 of one
+backend, `seqlz`, with 2 the default; the harness names them as three codecs to compare them side by
+side.
 
 A dictionary could have carried other tables, e.g. tables trained on one phone's pages, and measured,
 those saved too little ([fixed tables](#ch-codes--fixed)). So since commit `87a0ba4` the tables are
@@ -489,7 +492,7 @@ interface, and `zram_codec.h`, the harness's copy of zram's interface.
 @@ 10-17
 `setup_params()`, once per device. seqlz compresses blocks of 4 KiB, so a corpus of 16 KiB pages, which
 the harness also runs for the other codecs, fails here instead of reading past every page. No tables are
-built: they are `const` data, generated when seqlz is built, shared by every device and CPU.
+built: they are `const` data, generated when seqlz is built and shared by every device and CPU.
 @more {#ch-zram-glue--setup} Tables per device until October 2026, and why not
 Lengths from a bad training stop the build that generates the tables
 ([at build time](#ch-codes--kernel)), not a benchmark. The kernel generates them the same way
@@ -509,18 +512,18 @@ context.
 ## Work memory and compress
 
 @@ 29-39
-The compression context, one per CPU: `struct seqlz_state`, the matcher's hash table of 8192 bytes,
-for all three levels. `bench_zalloc()` stands for the kernel's `kzalloc()` and counts what the
-allocator would hand out, so the harness can report memory per CPU
-([work memory](book:#ch-zram--work-memory)). The zeroing is not needed, the matcher clears its table
+The compression context, one per CPU: `struct seqlz_state`, the matcher's hash table of
+{{size.state}} bytes, for all three levels. `bench_zalloc()` stands for the kernel's `kzalloc()` and
+counts what the allocator would hand out, so the harness can report memory per CPU
+([work memory](book:#ch-zram--work-memory)). The zeroing is not needed: the matcher clears its table
 for every page.
 @more {#ch-zram-glue--cctx} What the hash table's memory holds
-`struct seqlz_state` is a union of the matcher's hash table and a page of bytes
-([what lies where](#ch-header--state)): {{ch17.hash_slots}} entries of 2 bytes, {{size.state}} bytes, and
-`seqlz_code_literals()` writes the coded streams into the same memory once the matcher is done, and
-level 3 mostly a copy of the raw literals
-([in place](#ch-literals-enc--in-place)). `kzalloc()` zeroes in the kernel, and the harness does the same. The kernel builds without the warning about unused
-parameters below `W=3`, so its backend needs no `(void)p`.
+The hash table has {{ch17.hash_slots}} entries of 2 bytes, {{size.state}} bytes
+([what lies where](#ch-header--state)). Levels 2 and 3 use the same memory once the matcher is done:
+level 2 writes its coded literals there, level 3 mostly a copy of the raw literals
+([in place](#ch-literals-enc--in-place)). `kzalloc()` zeroes in the kernel, and the harness does the
+same. The kernel builds without the warning about unused parameters below `W=3`, so its backend needs
+no `(void)p`.
 @assert ch17.hash_slots * 2 == size.state and size.state >= 4096
 @end
 
@@ -538,15 +541,16 @@ line.
 The wrapper of `seqlz-1`: raw literals, no literal table.
 
 @@ 62-78
-`seqlz-1` has no decompression context, so `s` here is the compression context, and the decoder does
-not use it: pages with raw literals need no work memory. `NULL` as the scratch makes a page with coded
-literals invalid, which `seqlz-1` never writes. In zram with the split, a codec without `create_dctx`
-gets no context at all here, which [a doctest](book:#ch-zram-glue--tests) checks on every test page.
+The decompress of `seqlz-1`. A page with raw literals needs no work memory, so the decoder gets
+`NULL`. With `NULL` it takes a page with coded literals for invalid, and `seqlz-1` never writes one.
+`seqlz-1` has no decompression context of its own, so the harness passes the compression context as
+`s`, and the function ignores it. In zram with the split, such a codec gets no context at all here,
+which [a doctest](book:#ch-zram-glue--tests) checks on every test page.
 
 `bench_prefetch_page()` asks the CPU to start loading the compressed bytes and every line of the
 output page before the decoder needs them ([prefetch](book:#ch-cpu--prefetch)). The kernel's backend
-prefetches neither, so the harness's decode times include prefetches the kernel does not do; the
-kernel VM's prefetch measurements used an experimental zram patch. The `*dst_len` check comes first, so a too small `dst` is never written.
+does not prefetch, so the harness's decode times include prefetches the kernel does not do. The
+`*dst_len` check comes before the decoder, so a too small `dst` is never written.
 @more {#ch-zram-glue--prefetch} What `bench_prefetch_page()` prefetches, and what it was measured at
 The prefetch is in the harness's header:
 
@@ -555,8 +559,9 @@ The prefetch is in the harness's header:
 It asks for the compressed page from its second cache line on, and for every line of the destination
 with the second argument `1`, "for writing". The CPU's own prefetcher follows a pointer walking forward,
 but the decoder reads a page in several places at once: the literals, the bitstream behind them, and up
-to 8 streams. The code does not say why it starts at `src + 64`; the first line is likely loaded by the
-decoder's read of the header at about the same moment.
+to 8 streams of coded literals. The code does not say why it starts at `src + 64`; the first line is
+likely loaded by the decoder's read of the header at about the same moment. The kernel VM's prefetch
+measurements below used an experimental zram patch, not the backend.
 
 ::: measured Prefetch the compressed data, not the destination
 In the kernel VM, with the compressed data flushed from the cache, the prefetch of it took `lz4`'s p99
@@ -580,10 +585,11 @@ names it.
 ## Levels 2 and 3
 
 @@ 89-99
-The scratch that coded literals are decoded into before the sequences are copied
-([`seqlz_decode_literals()`](book:#ch-literals-dec)): a page plus 16 bytes, 4112, because the
-decoder's 16-byte copies read up to 15 bytes past the last literal. With the hash table that is
-12 304 bytes per CPU, which `kmalloc()` hands out as 16 384, below `lz4`'s 20 480.
+The decompression context of `seqlz-2` and `seqlz-3`: the scratch, a buffer into which the decoder
+decodes their coded literals before it copies the sequences ([Part III](book:#part-level-2)). It is
+a page and 16 bytes, {{const.SCRATCH|grp}}. With the hash table that is
+{{ch15.state_plus_scratch|grp}} bytes per CPU, which `kmalloc()` hands out as
+{{ch15.mem.split_gets|grp}}, below `lz4`'s 20 480.
 @more {#ch-zram-glue--fast-lit} The 16 spare bytes, and what the split cost in memory
 The 16 spare bytes cover two things: the reads of the decoder's 16-byte copies, and the last step
 of `seqlz_decode_literals()`, which writes up to 8 bytes past the last literal. So `seqlz-2` has
@@ -595,8 +601,8 @@ allocation between the two ([the backend](#ch-zram-glue--backend)).
 @end
 
 @@ 100-113
-Level 3 needs no more work memory than level 2: its own literal table is worked out in the hash
-table's memory, and decoded into the output page and the scratch.
+The compress wrappers of `seqlz-2` and `seqlz-3`. Level 3 needs no more work memory than level 2: it
+works in the same two buffers.
 @more {#ch-zram-glue--level-3} Where level 3 puts its table, its records and its deltas
 `seqlz_compress_block()` writes the raw literals first and codes them over the raw ones in the same buffer
 where that pays, so the same 2 pages of output suffice. Level 3's table of the page's own is worked
@@ -607,9 +613,10 @@ and the deltas into the compression context ([the records](#ch-encoder--records)
 @end
 
 @@ 114-125
-The decompress of `seqlz-2` and `seqlz-3`, with the scratch as `s->context`. One function for both:
-the page itself says, in byte 2, which table it uses and whether its literals are deltas. Pages with
-raw literals leave the scratch alone, so a page of any level decodes here.
+The decompress of `seqlz-2` and `seqlz-3`: [`seqlz-1`'s](#b62), with the scratch, `s->context`, as
+the decoder's work memory. One function serves both levels, because a page says in its header how its
+literals are stored ([Part III](book:#part-level-2)). Pages with raw literals leave the scratch alone,
+so a page of any level decodes here.
 
 @@ 126-148
 The same codec twice with a different level. Both have `create_dctx`, so zram gives them a second

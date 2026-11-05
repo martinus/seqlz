@@ -12,6 +12,15 @@ A reading order:
 2. For tests and tools: [`seqlz_find()`](#b49) and [`seqlz_encode()`](#b64), the compressor cut in
    two halves, in [`seqlz_harness.c`](seqlz_harness.c.html), and [`seqlz_tables_build()`](#b19).
 
+The kernel-doc of the functions describes all levels, as the functions take every level. What it says
+about `SEQLZ_LEVEL_OWN` is level 3's ([Part IV](book:#part-level-3)).
+@intro 2
+Level 2's one line here: the declaration of its 8 fixed literal tables.
+@intro 3
+Level 3's one line here: the declaration of the fixed code in which a page's own literal table is
+written. The level 3 parts of the functions' comments are in level 1's blocks, at
+[`seqlz_encode()`](#b64) and [`seqlz_compress_block()`](#b95).
+
 ## Types
 
 @@ 1-11
@@ -59,10 +68,13 @@ two length values'. These arrays are the format; everything else is computed fro
 ([tables as code lengths](book:#ch-header--lengths)).
 
 @@ 39-41
-Level 2's: the 8 fixed literal tables, 256 bytes each.
+The 8 fixed literal tables of level 2 as code lengths, one byte for each of the 256 byte values. They
+are defined in [`seqlz_lengths.h`](seqlz_lengths.h.html), and [`build_lit_sets()`](seqlz_codes.c.html#b129)
+makes the codes from them.
 
 @@ 42-45
-Level 3's: the fixed code in which a page's own literal table is written.
+The fixed code in which a level 3 page writes its own literal table, as code lengths, one byte for each
+of its {{own.symbols}} symbols ([the code](seqlz_codes.c.html#b148)).
 
 ## Compressing
 
@@ -73,33 +85,42 @@ the last one, which only has literals: 1025.
 page is bounded by the same count.
 
 @@ 49-63
-The matcher alone, without the encoder, in [`seqlz_harness.c`](seqlz_harness.c.html#b39). The table trainer counts the symbols of exactly these
-sequences, and the tests and a fuzzer check that `seqlz_encode()` of them gives the same bytes as
-`seqlz_compress_block()`. At level 3 the matcher is another one, so the sequences differ. It does not copy
-the literals; a tool takes them from the block.
+The matcher alone, without the encoder, in [`seqlz_harness.c`](seqlz_harness.c.html#b39). The table
+trainer counts the symbols of exactly these sequences. The tests and a fuzzer check that
+`seqlz_encode()` of them gives the same bytes as `seqlz_compress_block()`. It does not copy the
+literals; a tool takes them from the block. Level 3 has a matcher of its own, so there the sequences
+differ ([Part IV](book:#part-level-3)).
 
 @@ 64-94
-The encoder alone, also in [`seqlz_harness.c`](seqlz_harness.c.html#b108), for sequences from outside: the tests, a fuzzer, and `tools/seqlz-worst/`, which
-writes valid pages the matcher would never produce, to find the slowest ones to decode.
+The encoder alone, also in [`seqlz_harness.c`](seqlz_harness.c.html#b108), for sequences from
+outside: the tests, a fuzzer, and `tools/seqlz-worst/`, which writes valid pages the matcher would
+never produce, to find the slowest ones to decode. At level 1, `st` and `block` may be `NULL`; they
+are for level 3's deltas and its own table ([Part IV](book:#part-level-3)).
 
-It checks the rules of lines 81 to 84 before it writes anything. It did not always: a match shorter
-than 4 bytes made `ml - 4` wrap to a huge number, and 1025 such sequences wrote past the two pages of
-`dst` (fixed in commit `256768e`, with `fuzz/seqlz_encode_fuzz.c`, a fuzzer that feeds the encoder
-raw sequences). Nothing checks that `block` matches the sequences: a wrong one gives
-a page that decodes to something else. 0 can mean failure because every page has at least its 2-byte
-header.
+It checks the rules of lines 81 to 84 before it writes anything. 0 can mean failure because every page
+has at least its 2-byte header.
+@more Why it checks the sequences, and what it does not check
+It did not always check them: a match shorter than 4 bytes made `ml - 4` wrap to a huge number, and
+1025 such sequences wrote past the two pages of `dst`. Commit `256768e` fixed it, with
+`fuzz/seqlz_encode_fuzz.c`, a fuzzer that feeds the encoder raw sequences. Nothing checks that `block`
+matches the sequences: a wrong one gives a page that decodes to something else.
+@end
 
 @@ 95-122
-What the harness's zram glue calls, and the kernel's `seqlz_compress()`. A `dst` smaller than two blocks also works, e.g. the single page of
-zswap, the kernel's other compressed swap, a cache in RAM in front of a swap device. But a page that
-does not fit fails up to 32 bytes early: before each sequence the encoder checks for its literals plus
-`ENC_ROOM`, 32 bytes, not for the exact bytes.
+The compressor itself: what the harness's [zram glue](zram_seqlz.c.html#b40) calls, and the
+kernel's [`seqlz_compress()`](seqlz_compress.c.html#b109). In the kernel's copy it is `static`;
+`seqlz_compress()` returns `-EINVAL` for a level that is not built, and `-E2BIG` where this returns 0.
 
-The literals are written raw first, so the page must fit raw even if coding would shrink it; the coded
-ones then go over them, and meanwhile `st` holds the coded streams, or at level 3 mostly a copy of
-the raw literals or their deltas ([the coder](book:#ch-literals-enc--overview)). Level 3
-also needs a 6-byte record per sequence with literals, for its deltas
-([records](book:#ch-encoder--records)); if they do not fit, it matches the page again without them.
-In the kernel copy it is `static`: the kernel's [`seqlz_compress()`](seqlz_compress.c.html#b109)
-calls it, returns `-EINVAL` for a level outside 1 to 3, and `-E2BIG` instead of 0.
+A `dst` smaller than two blocks also works, e.g. the single page of zswap, the kernel's other
+compressed swap, a cache in RAM in front of a swap device. But a page that does not fit fails up to 32
+bytes early: before each sequence the encoder checks for its literals plus `ENC_ROOM`, 32 bytes, not
+for the exact bytes. The rest of the comment is about levels 2 and 3, which write the literals raw
+first and code them afterwards ([Part III](book:#part-level-2), [Part IV](book:#part-level-3)).
+@more What levels 2 and 3 keep in `dst` and `st`
+The literals are written raw first, so the page must fit raw even if coding would shrink it. The coded
+ones then go over them. Meanwhile `st` holds the coded streams, or at level 3 mostly a copy of the raw
+literals or their deltas ([the coder](#ch-literals-enc--overview)). Level 3 also needs a 6-byte record
+per sequence with literals, for its deltas ([records](#ch-encoder--records)); if they do not fit, it
+matches the page again without them.
+@end
 @anim ends The buffer dst during a real page, from both ends, then turned around

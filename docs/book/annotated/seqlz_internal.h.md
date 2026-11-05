@@ -1,18 +1,20 @@
 # src/seqlz_internal.h
 
-What the codec's own files share and nobody else needs: the compressor (`seqlz_compress.c`,
-`seqlz_compress_literals.c`) and the decompressor (`seqlz_decompress.c`,
-`seqlz_decompress_literals.c`). The format's constants are in [`seqlz_format.h`](seqlz_format.h.html),
-the tables' layout in [`seqlz_tables.h`](seqlz_tables.h.html), and the API for the harness, tests and
-tools in [`seqlz.h`](seqlz.h.html). Most of the file is constants with the reason for their value next to
-them, level 1's first, then a block for level 2 and one for level 3.
+What the codec's own files share and nobody else needs: the compressor, `seqlz_compress.c`, and the
+decompressor, `seqlz_decompress.c`, and from level 2 on the literal coder and decoder in
+`seqlz_compress_literals.c` and `seqlz_decompress_literals.c`. The format's constants are in
+[`seqlz_format.h`](seqlz_format.h.html), the tables' layout in [`seqlz_tables.h`](seqlz_tables.h.html),
+and the API for the harness, tests and tools in [`seqlz.h`](seqlz.h.html). Most of the file is
+constants with the reason for their value next to them. Level 1's part is the compressor's hash
+table and per-CPU state, the token's number, and the prefetch of the decoder's tables; levels 2 and 3
+have a block each at the end.
 
 A reading order:
 
 1. The compressor: [its hash table](#b32), [a token's number](#b39), [its per-CPU state](#b50).
 2. The decoder: [`seqlz_prefetch_lines()`](#b70), which asks for the tables before a page is decoded.
 3. Level 2's block, [from line 103](#b103), and level 3's, [from line 154](#b154).
-@more {#ch-header--compressor} The three levels side by side, measured The three levels side by side, measured
+@more {#ch-header--compressor} The three levels side by side, measured
 A **level** is what zram calls the knob a user sets per device, `level=` in
 `/sys/block/zram0/algorithm_params` ([the backend](#ch-zram-glue--backend)). seqlz's three levels
 write the same format, and one decoder reads them all:
@@ -32,33 +34,37 @@ That was before the deltas, which made level 3's writes about 4 µs slower on th
 ([chapter 6](#ch-decisions--deltas)).
 @end
 @intro 2
-Level 2's block of the file, from line 103: the level's number, the constants of the coded literals,
-the decoder's scratch, and the two functions of the literal files that the main files call. And one
-member of the compressor's state, the raw literals' copy.
+Level 2's block of the file, [from line 103](#b103): the level's number, the constants of the coded
+literals, the decoder's scratch, and the two functions of the literal files that the main files call.
+And [one member](#b61) of the compressor's state, the bytes where the literal coder writes its
+streams.
 @intro 3
-Level 3's block, from line 154: its number, its minimum for coded literals, the records the encoder
-writes for the deltas, and the two functions of level 3's literals. And the member of the
-compressor's state for a table of the page's own.
+Level 3's block, [from line 154](#b154): its number, its minimum for coded literals, the records the
+encoder writes for the deltas, and the two functions of level 3's literals. And [the member](#b64) of
+the compressor's state that makes room for the work of a table of the page's own.
 
 ## The head of the file
 
 @@ 1-19
-The kernel's headers this file uses itself, `linux/seqlz.h`, the interface, among them: its sizes of
-work memory are what the struct below has to fit. `seqlz_tables.h` brings `seqlz_format.h` with it, so
-this file gives the codec's files the format, the tables and the shared helpers at once.
+The kernel's headers that this file uses itself. One of them is the interface, `linux/seqlz.h`: its
+sizes of work memory are what the struct below has to fit. `seqlz_tables.h` brings `seqlz_format.h`
+with it, so this one include gives the codec's files the format, the tables and the shared helpers.
 
 @@ 20-31
-A comment without code: why the codec calls `__builtin_ctzll()`, `__builtin_clz()` and
-`__builtin_memcpy()` and not the kernel's helpers. The compiler can neither fold a constant through
-inline assembly nor merge it with the code around it: with the kernel's `__ffs()` and `fls()`, gcc
-wrote `seqlz_decode_literals()` and `seqlz_code_literals()` in another shape (commit `e814b1c`).
+A comment without code: why the codec calls the compiler's builtins `__builtin_ctzll()`,
+`__builtin_clz()` and `__builtin_memcpy()`, and not the kernel's helpers. On x86-64 the kernel's
+`__ffs()` and `fls()` are inline assembly, which the compiler can neither fold a constant through nor
+merge with the code around it. `CONFIG_FORTIFY_SOURCE` replaces `memcpy()` with a version that checks
+sizes, and with some configurations each copy becomes a call.
 
-`CONFIG_FORTIFY_SOURCE` replaces `memcpy()` with a version that checks sizes. On the Mi 9T's 4.14
-kernel, built with clang, that turned every 8- and 16-byte copy into a call: 63 calls to `memcpy()`
+The `static_assert()` after it: class 5's offsets are multiples of 8 sent in `SEQLZ_CLASS5_BITS`
+bits, so they stay below `8 << 8 = 2048`, which has to be inside the block.
+@more What the kernel's helpers did to the code
+With the kernel's `__ffs()` and `fls()`, gcc wrote `seqlz_decode_literals()` and
+`seqlz_code_literals()` in another shape (commit `e814b1c`). On the Mi 9T's 4.14 kernel, built with
+clang, `CONFIG_FORTIFY_SOURCE` turned every 8- and 16-byte copy into a call: 63 calls to `memcpy()`
 in one module of the codec (commit `48a7043`).
-
-class 5's offsets are multiples of 8 sent in `SEQLZ_CLASS5_BITS` bits, so they stay
-below `8 << 8 = 2048`, which has to be inside the block.
+@end
 
 ## The compressor's state
 
@@ -87,33 +93,34 @@ Until 11th October 2026 the last sequence had a token, and the line was
 @end
 
 @@ 50-60
-The compressor's work memory, one per CPU, since zram compresses on every CPU at once. The union reuses
-the hash table, 8 KiB for 4 KiB pages: once the matcher is through the page, the table is garbage, and the
-literal coder writes the coded streams there before it copies them over the raw literals, or at level 3
-keeps a copy of the raw literals there while it writes the coded ones over their old place in `dst`
-([in place](book:#ch-literals-enc--in-place)).
-
-The union's other members come with levels 2 and 3: the copy of the literals and the room for a
-page's own table.
+The compressor's work memory, one per CPU, since zram compresses on every CPU at once. At level 1 it
+is the matcher's hash table and nothing else, 8 KiB for 4 KiB pages. It is a union because levels 2
+and 3 reuse those bytes once the matcher is through the page and the table is garbage
+([level 2's member](#b61), [level 3's](#b64)).
 @more {#ch-header--state} What lies where in `struct seqlz_state`
-A `static_assert` in `seqlz_compress_literals.c` checks that the hash table alone has room for a page,
-so the union is {{size.state}} bytes, no more than the table. At level 3 with deltas the copy of the
-literals is the deltas, which `seqlz_delta_literals()` writes there. `struct own_work`, what the encoder
-needs for a page's own table, lies at byte {{own.enc.work_at}}, behind that copy, which on a page that
-gets such a table is never longer ([own table](#ch-literals-enc--own)).
+At level 1 the struct is the hash table, {{size.state}} bytes. A `static_assert` in
+`seqlz_compress_literals.c` checks that the hash table alone has room for a page, so the union stays
+{{size.state}} bytes at every level. Level 2's literal coder writes the coded streams there, in slots,
+before it copies them over the raw literals in `dst`. Level 3 keeps a copy of the literals there while
+it writes the coded ones over their old place in `dst` ([in place](#ch-literals-enc--in-place)); with
+deltas the copy is the deltas, which `seqlz_delta_literals()` writes there. `struct own_work`, what
+the encoder needs for a page's own table, lies at byte {{own.enc.work_at}}, behind that copy, which on
+a page that gets such a table is never longer ([own table](#ch-literals-enc--own)).
 
 In a kernel without zram's split contexts the hash table and the decoder's scratch share one allocation
 of 8 KiB per CPU; with the split they are two allocations of 8 KiB ([the backend](#ch-zram-glue--backend)).
 @end
 
 @@ 61-63
-Level 2's member: the literals' bytes, a page of them, the slots of the coded streams and the copy of
-the raw literals, see `code_sampled()` ([the slots](book:#ch-literals-enc--overview)).
+Level 2's member, the same bytes as a page of `u8`. Once the matcher is done, the literal coder writes
+the coded streams there, in slots, and then copies them over the raw literals in `dst`, see
+`code_sampled()` ([the slots](book:#ch-literals-enc--overview)).
 
 @@ 64-66
-Level 3's member. `work` adds no byte, `(sizeof(u16) << SEQLZ_HASH_BITS) / sizeof(u64)` is the
-table's size in `u64`s. What it adds is the alignment of 8: level 3 puts `struct own_work`, with `u32`
-members, behind the copy of the literals.
+Level 3's member. `work` adds no byte: `(sizeof(u16) << SEQLZ_HASH_BITS) / sizeof(u64)` is the
+table's size in `u64`s. What it adds is alignment. The `u16`s of the table align the union to 2
+bytes, a `u64` to 8, and level 3 puts `struct own_work`, with `u32` members, behind its copy of the
+literals in `literals` ([what lies where](#ch-header--state)).
 
 @@ 67-69
 The end of the union and of the struct: one allocation per CPU, whatever the level.
@@ -130,7 +137,8 @@ about the last line of a table, see the next block.
 @anim misses A model of 8 cache misses, one after another or overlapped
 @more {#ch-dec-basics--prefetch} Why the tables are prefetched, 8 lines at a time
 The decoder looks things up in tables: one lookup in the token table, 8 KiB, per sequence, and for
-coded literals one lookup per literal in a literal table of 2 KiB. Left alone, it would pay the misses
+coded literals, from level 2 on, one lookup per literal in a literal table of 2 KiB. Left alone, it
+would pay the misses
 one after the other, each time a lookup reaches a line that is not there yet. `prefetch(p)` says "the
 line of `p` will be needed soon" and does not wait for it. Issued for every line of the tables at the
 start, before the header is read, the trips to memory run at the same time, and by the time the loop
@@ -194,10 +202,11 @@ bench; it was not measured on the phone (commit `bafef14`).
 @end
 
 @@ 97-102
-The loop forms `q + k` up to `q + size - 64` only when `size` is a multiple of 512; otherwise its last
-round would prefetch lines behind the table. These asserts stop the build if a table stops being one, the literal tables' in level 2's block,
-e.g. length codes of at most 6 bits would give a table of 64 entries of 4 bytes, 256 bytes.
-`sizeof_field(type, member)` is the kernel's `sizeof(((type *)0)->member)`.
+The loop's last round prefetches up to `q + size - 64` only when `size` is a multiple of 512;
+otherwise it would prefetch lines behind the table. These asserts stop the build if the token table
+or a length table stops being one, e.g. with length codes of at most 6 bits: 64 entries of 4 bytes,
+256 bytes. Level 2 adds [the same assert](#b135) for the literal tables. `sizeof_field(type, member)`
+is the kernel's `sizeof(((type *)0)->member)`.
 
 ## Coded literals
 
@@ -213,27 +222,23 @@ the next refill. 64 bits minus up to 7 bits already used in the first byte, minu
 `56 / 10 = 5` literals per stream and round, 40 for all 8 streams.
 
 @@ 117-125
-The encoder's rule is `coded + coded_min < n - n / 16`: `n` literals, `coded` the bytes of the 8
-streams, and `coded_min` {{ch11.coded_min}} at level 2; level 3's is
-[`SEQLZ_LIT_CODED_MIN_OWN`](#b164), {{ch11.coded_min_own}}, and counts a page's own table too. E.g. 1000 literals with a fixed
-table may take at most {{ch11.ex.1000.l2}} bytes coded at level 2 and {{ch11.ex.1000.l3}} at level 3,
-100 literals at most {{ch11.ex.100.l2}} and {{ch11.ex.100.l3}}.
+The encoder codes the literals only if `coded + coded_min < n - n / 16`: `n` literals, `coded` the
+bytes of the 8 streams, and `coded_min` {{ch11.coded_min}}. E.g. 1000 literals may take at most
+{{ch11.ex.1000.l2}} bytes coded, 100 literals at most {{ch11.ex.100.l2}}.
 
 The minimum pays for a cost that does not shrink with the literals: a cold literal table and a second
-pass over a buffer. Level 3 trades more time for bytes, so its minimum is smaller.
-[Why these bytes](book:#ch-literals-enc--51) has the measurements behind the numbers. Both also cover
-the larger header, at most 14 bytes more than the 2 of a page with raw literals, 3 + 12 and the
-delta's byte, which a
-`static_assert` in `seqlz_compress_literals.c` checks, because the coded literals are written over the
-raw ones in place ([in place](book:#ch-literals-enc--in-place)).
+pass over a buffer. [Why these bytes](book:#ch-literals-enc--51) has the measurements behind the
+number. It also covers the larger header, at most 13 bytes more than the 2 of a page with raw
+literals, `3 + 12`. A `static_assert` in `seqlz_compress_literals.c` checks that, because the coded
+literals are written over the raw ones in place ([in place](book:#ch-literals-enc--in-place)).
 
 @@ 126-134
-The scratch is part of the decoder's work memory, one per CPU: 4112 bytes. The loop over the sequences
-then reads the decoded literals from it as if they were raw, with the same 16-byte copies. For raw
+The scratch is the decoder's work memory, one per CPU: 4112 bytes. The loop over the sequences then
+reads the decoded literals from it as if they were raw, with the same 16-byte copies. For raw
 literals the bytes after them in the compressed page are the 16 bytes of slack.
 
-The assert ties it to the interface: zram allocates `SEQLZ_MEM_DECOMPRESS` bytes per CPU for
-decoding, from level 2 on.
+The assert ties it to the interface: a caller allocates `SEQLZ_MEM_DECOMPRESS` bytes per CPU for
+decoding, and only pages with coded literals need them.
 
 @@ 135-143
 `LIT_STREAM_MAX` is the worst case of one stream: 512 literals of a 4 KiB page with 10-bit codes,
@@ -246,10 +251,10 @@ values'](#b97).
 @@ 144-153
 The two functions of the literal files that the main files call at level 2.
 `seqlz_code_literals()` codes the literals with one of the fixed tables. `seqlz_decode_literals()`
-decodes all coded literals into the scratch and returns where the bitstream starts. It gets `block`,
-the output page, because at level 3 a page's own literal table is built there, before the loop over
-the sequences writes the page ([own table](book:#ch-literals-dec--own)), and `delta`, which level 3
-fills.
+decodes all coded literals into the scratch and returns where the bitstream starts. Two of its
+parameters are for level 3: `block`, the output page, where level 3 builds a page's own literal table
+before the loop over the sequences writes the page ([own table](book:#ch-literals-dec--own)), and
+`delta`, which says which delta the literals are.
 
 ## Deltas and a table of the page's own
 
@@ -258,8 +263,12 @@ Level 3's number. The assert ties it to `SEQLZ_LEVEL_MAX`: level 3 is the top le
 all three.
 
 @@ 164-165
-Level 3's minimum for coding the literals, smaller than level 2's {{ch11.coded_min}}: level 3 trades
-more time for bytes. [Why these bytes](book:#ch-literals-enc--51) has the measurements.
+Level 3's minimum for coding the literals, {{ch11.coded_min_own}} instead of level 2's
+{{ch11.coded_min}}, [`SEQLZ_LIT_CODED_MIN`](#b117): level 3 trades more time for bytes.
+With a page's own table, the bytes of its description count as coded too. E.g. 1000 literals may
+take at most {{ch11.ex.1000.l3}} bytes coded at level 3, against {{ch11.ex.1000.l2}} at level 2, and
+100 literals {{ch11.ex.100.l3}} against {{ch11.ex.100.l2}}. The minimum also covers the header with the delta's byte, at most 14 bytes more
+than the 2 of raw literals. [Why these bytes](book:#ch-literals-enc--51) has the measurements.
 
 @@ 166-176
 Level 3 decides on deltas once for the whole page, and only after the last sequence does it know which

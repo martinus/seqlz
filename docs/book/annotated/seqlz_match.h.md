@@ -17,9 +17,17 @@ A reading order that follows the call:
 1. [`seqlz_match_block()`](#b121), the matcher, and [its state](#b150).
 2. [One position](#b184): two candidates, one branch. The step-through there runs the real function
    on two pages.
-3. [A hit](#b210): [`seqlz_match_len()`](#b30) counts the match, at level 3
-   [`seqlz_lazy()`](#b82) may take a longer one, then [`encode_seq()` and insert](#b230).
+3. [A hit](#b210): [`seqlz_match_len()`](#b30) counts the match, then
+   [`encode_seq()` and insert](#b230).
 4. [`seqlz_hash5()`](#b19), the hash of the table.
+
+@intro 3
+Level 3 adds two steps to the matcher, both only where `lazy` is true. [`seqlz_lazy()`](#b82) looks one
+position further for a longer match, for matches below `SEQLZ_LAZY_LEN` bytes, and
+[the step back](#b218) extends each match backwards into its literals. Both make pages smaller and
+writes slower. The call of levels 1 and 2 passes `lazy` as the constant `false`, so their copy of the
+matcher has none of this code. `lazy` is also `encode_seq()`'s last argument, `rec`: the lazy copy is
+the one that writes the records for the deltas ([the records](#ch-encoder--records)).
 
 ## The hash
 
@@ -38,9 +46,10 @@ include and fails if the header includes a kernel header that `seqlz_compress.c`
 top, the multiply mixes them, and the top 12 bits are the slot: the top bits of a product depend on
 all input bits, the low ones only on the low input bits.
 
-5 bytes, not 4 as in `lz4`: fewer and longer matches, 5% fewer cycles per page when it came, and with today's tables
-also smaller pages. A match of 4 bytes at a new offset takes about as many bits as its 4 coded
-literals. Same constant and formula as `zstd`'s 5-byte hash.
+5 bytes, not 4 as in `lz4`: fewer and longer matches, 5% fewer cycles per page when it came, and
+smaller pages at level 2, most likely because a match of 4 bytes at a new offset takes about as many
+bits there as its 4 coded literals ([measured](#ch-matcher--five-bytes)). Same constant and formula as `zstd`'s 5-byte
+hash.
 @anim hash The three steps of a hash-table matcher, as a model
 @more {#ch-matcher--hash} A pointer's 5 bytes into a slot, step by step
 The table holds the last position where 5 bytes were seen, at the slot of their hash. Two different
@@ -178,15 +187,17 @@ its source, e.g. at offset 2 in a page of `ab` repeated: the matcher only reads,
 ## Level 3's lazy step
 
 @@ 76-81
-Matches of 20 bytes or more are taken as they are. A lazy step up to that length kept most of what a
-step at every match saves.
+Level 3's matcher is lazy for short matches: before it takes one, it looks whether the next position
+has a longer one. A match of `SEQLZ_LAZY_LEN`, {{ch09.lazy_len}} bytes, or more is taken as it is, since a longer one
+there is rare. A lazy step up to that length kept most of what a step at every match saves
+([measured](#ch-matcher--lazy-measured)).
 
 @@ 82-120
-Is there a longer match one position later? It tries the same two candidates as the loop, the repeat
-offset and the table's entry, with the 8 bytes and hash the loop already loaded one position ahead.
-Both are in the page before `pos + 1`, for the reasons the loop's are ([the state](#b150)). Only a
-strictly longer match wins, at the same length the match at `pos` has one literal fewer. The winner
-moves `pos` on by one and stores it in the table, as the loop would have.
+Is there a longer match one position later? It tries the same two candidates as
+[the loop](#b184), the repeat offset and the table's entry, with the 8 bytes and the hash the loop
+already loaded for `pos + 1`. Both are in the page before `pos + 1`, for the reasons the loop's are
+([the state](#b150)). Only a strictly longer match wins: at the same length, the match at `pos` has one
+literal fewer. The winner moves `pos` on by one and stores it in the table, as the loop would have.
 
 The repeat offset is skipped where the match at `pos` has it already: one position later, that is
 the same match one byte shorter. A branch per candidate is fine here, it runs once per short match.
@@ -196,16 +207,18 @@ the same match one byte shorter. A branch per candidate is fine here, it runs on
 
 @@ 121-149
 @anchor ch-matcher
-The plan: greedy like `lz4`'s fast mode, two candidates (the repeat offset, which costs 0 offset bits,
-and the last position with the same hash), and every position, with no skipping after a stretch
-without a match. Skipping needed state the loop has no register for; without it writes got faster,
-pages that do not compress slower.
+The plan of the matcher. It is greedy, like `lz4`'s fast mode: it takes the first match it finds and
+jumps over it. It tries two candidates, the repeat offset, which costs 0 offset bits, and the last
+position whose 5 bytes had the same hash. And it tries every position, also after a long stretch
+without a match, where `lz4` starts to skip: skipping needed state the loop has no register for, and
+without it writes got faster, pages that do not compress slower.
 
-`lazy` is a constant at both calls in `seqlz_compress.c`, so levels 1 and 2 have no trace of level 3's
-code. Each
-sequence goes to `encode_seq()` the moment it is found: in `seqlz_compress.c` the encoder of
-`seqlz_encoder.h`, `__always_inline`, so matching and encoding are one loop. Two passes were 6% slower,
-the encoder's branches lost the history of the matcher's that predicted them.
+Each sequence goes to `encode_seq()` the moment it is found. In `seqlz_compress.c` that is the encoder
+of `seqlz_encoder.h`, `__always_inline`, so matching and encoding are one loop. Two passes were 6%
+slower: the encoder's branches lost the history of the matcher's, which predicted them.
+
+`lazy` is level 3's, the paragraph of the comment that begins "With lazy" ([Part IV](#b218)). Levels 1
+and 2 pass the constant `false`, so their copy of the loop has none of that code.
 @more {#ch-matcher--emit} Who calls the matcher, and what it calls
 The matcher calls `encode_seq()` on a `struct seqlz_encoder` by name, as the kernel's copy has it. In
 `seqlz_compress.c` that is the encoder of `seqlz_encoder.h`, and the compiler inlines it into the loop.
@@ -216,12 +229,9 @@ matcher took a callback, `emit_fn`, and a `void *`, constant at every call, so t
 compiler saw which function it was and inlined it too; `port.py` replaced it with the direct call for
 the kernel's copy, and `src/` has the kernel's form since.
 
-The `bool lazy` of level 3 is a constant at both calls of `seqlz_compress.c`: `compress_block()` passes
-`false` and `compress_own()`, level 3's, `true`; `seqlz_find()` passes it as a variable, where speed
-does not matter. So each inlined copy of the loop sees a constant, and the one for
-levels 1 and 2 has no code of level 3 at all ([`compress_block()`](seqlz_compress.c.html#b16)). `lazy`
-is also `encode_seq()`'s last argument, `rec`: the lazy copy is the one that writes the records for
-the deltas ([the records](#ch-encoder--records)).
+`lazy` is a constant at both calls of `seqlz_compress.c`, so each inlined copy of the loop sees a
+constant, and the one for levels 1 and 2 ([`compress_block()`](seqlz_compress.c.html#b16)) has no code
+of level 3 at all. `seqlz_find()` passes it as a variable, where speed does not matter.
 
 Two passes, the matcher into an array and the encoder over it, took 24 257 instead of 22 848 cycles
 per page, and the mispredictions went from 293 to 319 per page: the encoder's branches lost the
@@ -244,9 +254,7 @@ of the page
 by the tables' code lengths with one or two lazy steps, stored pages 3.3% smaller than level 2 for 1.8
 times the time to write, and were not kept
 ([explored-designs.md](https://github.com/martinus/seqlz/blob/main/docs/explored-designs.md#levels-3-and-4-a-hash-chain-priced-by-the-tables-as-small-as-zstd-3-on-two-of-four-dumps-and-faster-to-write-and-read-not-kept)).
-The level 3 of 15th October 2026 is cheaper: no chain, the lazy step only for matches below 20 bytes,
-and it came together with a literal table of the page's own
-([explored-designs.md](https://github.com/martinus/seqlz/blob/main/docs/explored-designs.md#level-3-a-lazy-matcher-and-a-literal-table-of-the-pages-own-zstd-3s-memory-in-less-than-half-its-time-on-the-phone-kept)).
+Today's level 3 is cheaper ([Part IV](#ch-matcher--lazy-measured)).
 
 **Two candidates.** One is the **repeat offset**, which needs no lookup and costs 0 offset bits, e.g.
 the same field of an array of structs every 16 or 24 bytes. With today's matcher about 22% of the
@@ -452,8 +460,9 @@ Fill `page` with your own bytes to see what the matcher makes of them.
 When both hit, the repeat offset wins, as its offset costs no bits. The match is counted from `pos`,
 4 bytes are known to agree.
 
-Levels 1 and 2 do not extend matches backwards: it stood between choosing the candidate and counting,
-and taking it out made writes 1% to 7% faster for pages up to 0.4% larger.
+Levels 1 and 2 do not extend matches backwards. That step stood between choosing the candidate and
+counting, and taking it out made writes 1% to 7% faster, for pages at most 0.4% larger at level 2 and
+1.3% at level 1.
 @more {#ch-matcher--hit} The repeat offset first, and no step back, measured
 Which of the two candidates gives the longer match is not checked. Measured offline on 40 000 zram
 pages of a desktop, always taking the longer of the two made pages about 1 byte larger, and taking the
@@ -475,17 +484,21 @@ for two more loads and a compare. On the Mi 9T, zram in its own kernel, 19 775 p
 of 34.10 µs on the A55, reads the same
 ([explored-designs.md](https://github.com/martinus/seqlz/blob/main/docs/explored-designs.md#the-matcher-without-its-step-back-writes-66-faster-on-the-a76-and-1-to-2-in-the-vm-kept),
 15th October 2026). In the kernel VM it wrote 1.0% to 2.3% faster on four dumps, at 1.6 bytes less to
-3.7 bytes more per page. `seqlz-1` loses more, up to 15 bytes per page: a byte outside a match costs
-it a whole byte.
+3.7 bytes more per page. `seqlz-1` loses more, up to 15 bytes per page, 1.3%: a byte outside a match
+costs it a whole byte.
 @end
 
 @@ 218-229
-Level 3 only: the lazy step for short matches, then the step back, as long as the byte before the
-match equals the byte before its source. `pos` and `m` move together, so the offset stays. The step
-back is for every match, also for one of {{ch09.lazy_len}} bytes or more that skips the lazy step: a
-long copy can be found late as well as a short one, so it is not in `seqlz_lazy()`, which also does not
-know `anchor`. Here it comes after the count, where it costs less. `pos > anchor` keeps it out of the sequence before, whose
-match ended at `anchor`, and `m > 0` keeps `src[m - 1]` in the page.
+Level 3 only. First the lazy step, for matches below {{ch09.lazy_len}} bytes
+([`seqlz_lazy()`](#b82)). Then the step back: while the byte before the match equals the byte before
+its source, the match starts one byte earlier. `pos` and `m` move together, so the offset stays.
+`pos > anchor` keeps it out of the sequence before, whose match ended at `anchor`, and `m > 0` keeps
+`src[m - 1]` in the page.
+
+The step back is for every match, also for one of {{ch09.lazy_len}} bytes or more that skips the lazy
+step: a long copy can be found late as well as a short one. So it is not in `seqlz_lazy()`, which also
+does not know `anchor`. It comes after the count, where it costs less than before it, where levels 1
+and 2 once had it ([measured](#ch-matcher--hit)).
 @more {#ch-matcher--lazy} Two sequences become one, on an example
 A page of random bytes, as the page of [a copy found 2 bytes late](#ch-matcher--late) without its
 copies, where bytes 100 to 104 are `0x5a` and the 4 bytes at 21, and byte 199 is `0x5a` again,
@@ -522,19 +535,20 @@ what a step at every match saves. Without the step back level 3 was 0.69% larger
 userspace on the Mi 9T's Cortex-A76 it wrote 2.1% faster and read 3.5% slower. In the kernel VM the
 lazy step alone was on no hull; with the literal table of the page's own it was. Level 3 as a whole
 wrote a page in about 16 µs against 12 µs at level 2 on the A76, in the phone's own kernel, on 15th
-October 2026
+October 2026. It is cheaper than the levels 3 and 4 with a hash chain before it
+([why greedy](#ch-matcher--plan)): no chain, the lazy step only for matches below 20 bytes, and it came
+together with a literal table of the page's own
 ([explored-designs.md](https://github.com/martinus/seqlz/blob/main/docs/explored-designs.md#level-3-a-lazy-matcher-and-a-literal-table-of-the-pages-own-zstd-3s-memory-in-less-than-half-its-time-on-the-phone-kept)).
 @end
 
 @@ 230-252
-The new repeat offset, then the sequence goes to the encoder. Of the skipped positions inside the
-match, one goes into the table, 2 bytes before its end, as `lz4`'s fast mode does: data that repeats
-once tends to repeat near the end of the last match. Every position would be a hash, a load and a
-store per byte.
+The new repeat offset, then the sequence goes to the encoder; `lazy` goes with it as `rec`, for level
+3's records. Of the skipped positions inside the match, one goes into the table, 2 bytes before its
+end, as `lz4`'s fast mode does: data that repeats once tends to repeat near the end of the last match.
+Every position would be a hash, a load and a store per byte.
 
 After the loop the bytes from `anchor` on are the last sequence, literals only, none when a match ran
-to the end. The last 8 bytes never
-start a match, every try reads 8 bytes. The format has no count of sequences
+to the end. The format has no count of sequences
 ([the end](book:#ch-format--end)). Every other sequence covers at least 4 bytes, so a page has at most
 {{const.MAX_SEQUENCES}}, `SEQLZ_MAX_SEQUENCES`, which `seqlz_find()`'s array and
 [the encoder's bound](book:#ch-encoder--two-pages) rely on.
