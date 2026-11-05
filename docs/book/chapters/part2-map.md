@@ -1,7 +1,10 @@
 # The code on one page {#map}
 
-Parts II to IV are the code itself: every file of `src/` as it is, with a short note next to each block,
-level 1 here, levels 2 and 3 in the parts after it.
+Parts II to IV are the code itself: every file of `src/` as it is, with a short note next to each block.
+This part has level 1, which keeps the literals raw. [Part III](#part-level-2) has what level 2 adds,
+[Part IV](#part-level-3) what level 3 adds. Where a file has lines of another level, one line says
+which and links there.
+
 Under a note, buttons open what goes deeper, below the block: why it is written this way, a worked
 example with real numbers, what it was measured at, an animation. Open them where a note leaves you
 with a question, skip them where it does not. Read the files in this order, each one links to the
@@ -90,13 +93,13 @@ link to the code of each step.
 <g class="acc"><text x="637.5" y="434" font-size="11" text-anchor="middle">seqlz_codes.c</text></g></a>
 </svg>
 </div>
-<figcaption>The code by the path of a page: writing left to right, reading right to left, and what both use below. Each box links to its chapter.</figcaption>
+<figcaption>The code by the path of a page: writing left to right, reading right to left, and what both use below. Each box links to its chapter. Level 1 takes the dashed arrows; the literal coder and the literal decoder are levels 2 and 3, in Parts III and IV.</figcaption>
 </figure>
 
 ## Writing a page {#map--write}
 
 zram calls `seqlz_compress()` with the page, a buffer for the result and the level, through the
-[backend](#ch-zram-glue--backend). At levels 1 and 2 three steps follow:
+[backend](#ch-zram-glue--backend). At level 1 two steps follow:
 
 1. **The matcher** ([`seqlz_match.h`](#ch-matcher)), `seqlz_match_block()`, walks the page once and cuts it
    into sequences: `ll` literals, bytes it found no match for, then a match of `ml` bytes copied from
@@ -108,71 +111,74 @@ zram calls `seqlz_compress()` with the page, a buffer for the result and the lev
    output and puts the sequence's token code, offset bits and length values into a 64-bit accumulator,
    which goes to the back of the output in whole bytes ([both ends](#ch-encoder--layout)).
    `encoder_finish()` moves the bits to right after the literals, and that is a level 1 page.
-3. **The literal coder** ([`seqlz_compress_literals.c`](#ch-literals-enc)), at levels 2 and 3 only, prices the 8 fixed
-   literal tables with one add per literal, on every {{ch11.sample.step}}th literal at level 2 and on
-   every literal where level 3 may give a page deltas or a table of its own, takes the one with the
-   fewest bits, and writes the literals as 8 streams of Huffman codes over the raw ones, where that
-   saves enough
-   ([the rule](#ch-literals-enc--rule)).
 
-Level 3 does more in each step: the matcher looks one position further and extends a match backwards
-([level 3](#ch-matcher--lazy)), the encoder puts a record in front of each sequence's literals
-([records](#ch-encoder--records)), and the literal coder may build a literal table of the page's own
-and store the literals as deltas to an earlier byte ([own table](#ch-literals-enc--own),
-[deltas](#ch-literals-enc--deltas)). What comes out of all levels is the one format of
-[chapter 4](#ch-format): a header, the literals raw or as 8 streams, then the bitstream of the
-sequences.
+Level 2 adds a third step ([Part III](#part-level-2)). **The literal coder**
+([`seqlz_compress_literals.c`](#ch-literals-enc)) prices the 8 fixed literal tables on every
+{{ch11.sample.step}}th literal, takes the one with the fewest bits, and writes the literals as 8
+streams of Huffman codes over the raw ones, where that saves enough ([the rule](#ch-literals-enc--rule)).
+
+Level 3 does more in each step ([Part IV](#part-level-3)): the matcher looks one position further and
+extends a match backwards ([level 3](#ch-matcher--lazy)), the encoder puts a record in front of each
+sequence's literals ([records](#ch-encoder--records)), and the literal coder prices every literal of a
+page that may get a literal table of its own or deltas. It may build that table and may store the
+literals as deltas to an earlier byte
+([own table](#ch-literals-enc--own), [deltas](#ch-literals-enc--deltas)). All levels write the one
+format of [chapter 4](#ch-format): a header, the literals raw or as 8 streams, then the bitstream of
+the sequences.
 
 ## Reading a page {#map--read}
 
-zram calls `seqlz_decompress()` with the compressed page, the 4096 bytes to fill, and `wrkmem`, the
-scratch, or `NULL` for level 1.
+zram calls `seqlz_decompress()` with the compressed page, the 4096 bytes to fill, and `wrkmem`, which
+is `NULL` at level 1: a page with raw literals needs no work memory.
 
-1. **The literal decoder** ([`seqlz_decompress_literals.c`](#ch-literals-dec)), only for a page with coded literals:
-   `seqlz_decode_literals()` reads the header, takes one of the 8 fixed tables or builds the page's own,
-   and decodes the 8 streams side by side into the scratch ([from the header to the
-   bitstream](#ch-literals-dec)).
-2. **The sequence loop** ([`seqlz_decompress.c`](#ch-decode)), `decode_block()`: one lookup in the token table
-   gives a sequence's `ll`, `ml` and how to read its offset, then the literals are copied from the
-   scratch or the input and the match from the page itself. Most sequences take the fast path, with
-   copies of a fixed size and no checks of room ([fast path](#ch-decode--fast)), the others the slow
-   path with every check ([slow path](#ch-decode--slow)). Level 3's deltas are added back right after
-   each copy of literals ([in page order](#ch-literals-dec--undelta)). The copies and the bit reader
-   are at [the top of `seqlz_decompress.c`](#ch-dec-basics).
-3. A page is valid only if its bits end where the input ends ([the end](#ch-decode--end)). Any other
+1. **The sequence loop** ([`seqlz_decompress.c`](#ch-decode)), `decode_block()`: one lookup in the token
+   table gives a sequence's `ll`, `ml` and how to read its offset, then the literals are copied from
+   the input and the match from the page itself. Most sequences take the fast path, with copies of a
+   fixed size and no checks of room ([fast path](#ch-decode--fast)), the others the slow path with
+   every check ([slow path](#ch-decode--slow)). The copies and the bit reader are at
+   [the top of `seqlz_decompress.c`](#ch-dec-basics).
+2. A page is valid only if its bits end where the input ends ([the end](#ch-decode--end)). Any other
    input gets an error, and no input makes the decoder read or write outside its buffers
    ([why](#ch-decode--safety)).
+
+Level 2 adds a step before the loop ([Part III](#part-level-2)). For a page with coded literals,
+**the literal decoder** ([`seqlz_decompress_literals.c`](#ch-literals-dec)),
+`seqlz_decode_literals()`, reads their header, takes one of the 8 fixed tables, and decodes the 8
+streams side by side into `wrkmem`, the scratch. The loop then copies the literals from there. Level 3
+([Part IV](#part-level-3)) may give the page a table of its own, which the literal decoder builds
+first, and adds the deltas back right after each copy of literals
+([in page order](#ch-literals-dec--undelta)).
 
 ## Under both {#map--shared}
 
 - [`src/linux/`](#ch-linux): the kernel's headers outside the kernel, so that the same code
   builds there.
-- [`seqlz_format.h`](#ch-header) and [`seqlz.h`](#f-seqlz-h): the format as constants, the token, the
-  offset classes and the caps, and the functions for userspace.
+- [`seqlz_format.h`](#ch-header): the format as constants, the token, the offset classes and the
+  caps. [`seqlz.h`](#f-seqlz-h): the functions for userspace.
 - [`seqlz_tables.h`](#ch-internal): the layout of the tables, shaped so that the decoder
   needs one lookup per token.
 - [`seqlz_codes.c`](#ch-codes): the tables built from the trained code lengths, once, when seqlz is
   built ([at build time](#ch-codes--kernel)).
 
-The encoders take their codes from these tables and the decoders their decode tables; neither path
-changes them.
+The encoder takes its codes from these tables and the decoder its decode tables; neither changes
+them.
 
 ## Questions, and where the answers are {#map--questions}
 
-| question | where |
-| --- | --- |
-| What does zram need from a codec, and how is a codec scored? | [chapter 1](#ch-zram), [the score](#ch-zram--score) |
-| How many bits does one sequence take? | [the token](#ch-format--token), [`encode_seq()`](#ch-encoder--emit) |
-| How does the matcher find a match, and why so few candidates? | [two candidates](#ch-matcher--plan) |
-| How can the encoder write one buffer from both ends? | [both ends](#ch-encoder--layout) |
-| How does a page pick its literal table? | [pricing](#ch-literals-enc--pricing), [the choice](#ch-literals-enc--choice) |
-| When does a page get a literal table of its own? | [own table](#ch-literals-enc--own) |
-| What are the deltas, and where are they undone? | [format](#ch-format--deltas), [encoder](#ch-literals-enc--deltas), [decoder](#ch-literals-dec--undelta) |
-| Why 8 streams of literals? | [chains](#ch-cpu--chains), [8 side by side](#ch-literals-dec--cost) |
-| What makes the decoder fast? | [fast path](#ch-decode--fast), [next token](#ch-decode--next-token), [prefetch](#ch-dec-basics--prefetch) |
-| Why can no input make the decoder write out of bounds? | [the loop](#ch-decode--safety), [the literals](#ch-literals-dec--safety) |
-| Where do the tables come from? | [training](#ch-codes--lengths), [fixed tables](#ch-codes--fixed) |
-| How much memory does a CPU need? | [work memory](#ch-zram--work-memory), [the backend](#ch-zram-glue--backend) |
-| How does `src/` become kernel code? | [port.py](#ch-zram-glue--port) |
-| What does one real page look like at each step? | [chapter 5](#ch-trace) |
-| Why is it built this way and not another? | [chapter 6](#ch-decisions) |
+| question | where | part |
+| --- | --- | --- |
+| What does zram need from a codec, and how is a codec scored? | [chapter 1](#ch-zram), [the score](#ch-zram--score) | I |
+| How many bits does one sequence take? | [the token](#ch-format--token), [`encode_seq()`](#ch-encoder--emit) | I, II |
+| How does the matcher find a match, and why so few candidates? | [two candidates](#ch-matcher--plan) | II |
+| How can the encoder write one buffer from both ends? | [both ends](#ch-encoder--layout) | II |
+| What makes the decoder fast? | [fast path](#ch-decode--fast), [next token](#ch-decode--next-token), [prefetch](#ch-dec-basics--prefetch) | II |
+| Why can no input make the decoder write out of bounds? | [the loop](#ch-decode--safety), [the literals](#ch-literals-dec--safety) | II, III |
+| Where do the tables come from? | [training](#ch-codes--lengths), [fixed tables](#ch-codes--fixed) | II |
+| How much memory does a CPU need? | [work memory](#ch-zram--work-memory), [the backend](#ch-zram-glue--backend) | I, II |
+| How does `src/` become kernel code? | [port.py](#ch-zram-glue--port) | II |
+| How does a page pick one of the 8 fixed literal tables? | [the sample](#ch-literals-enc--sample), [the rule](#ch-literals-enc--rule) | III |
+| Why 8 streams of literals? | [chains](#ch-cpu--chains), [8 side by side](#ch-literals-dec--cost) | I, III |
+| How does level 3 price the tables, and when does a page get a literal table of its own? | [pricing](#ch-literals-enc--pricing), [the choice](#ch-literals-enc--choice), [own table](#ch-literals-enc--own) | IV |
+| What are the deltas, and where are they undone? | [format](#ch-format--deltas), [encoder](#ch-literals-enc--deltas), [decoder](#ch-literals-dec--undelta) | IV |
+| What does one real page look like at each step? | [chapter 5](#ch-trace) | V |
+| Why is it built this way and not another? | [chapter 6](#ch-decisions) | V |

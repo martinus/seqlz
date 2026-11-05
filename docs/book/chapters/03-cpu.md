@@ -454,7 +454,7 @@ CPU; CI checks that on s390x. Both orders are used on purpose:
 A 64-bit register can hold 8 numbers of 8 bits side by side, and one add adds all 8 pairs, as long as
 no lane overflows into the next: **SWAR**, SIMD within a register. The kernel may not use the vector
 registers in most places, so SWAR is how seqlz does 8 things at once. The encoder uses it to price a
-page's literals in all 8 literal tables ([the pricing](#ch-literals-enc--pricing)): `lit_cost` in
+page's literals in all 8 literal tables ([the pricing](#ch-literals-enc--lanes)): `lit_cost` in
 `struct seqlz_tables` holds, for each byte value, one `u64` with the byte's code length in all 8
 tables, table `k` in bits `8k` to `8k + 7`, so one add per literal sums all 8 tables. A lane holds at
 most 255, so after {{ch03.lit_cost_run}} literals of at most {{ch03.lit_bits}} bits the sums move into

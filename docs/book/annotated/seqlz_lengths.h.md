@@ -1,9 +1,12 @@
 # src/seqlz_lengths.h
 
-The code lengths of every table of the format for 4 KiB pages: one byte per symbol, 0 for a symbol
-without a code. [`seqlz_codes.c`](seqlz_codes.c.html) turns them into codes and decode tables. A generator
-writes this file from symbol counts; nobody edits it. It is the kernel's `seqlz_lengths.h` but without
-`static`, as [`seqlz_lengths.c`](seqlz_lengths.c.html) defines the tables for the tests and tools.
+The code lengths of level 1's tables for 4 KiB pages, the tokens and the two tables of length values:
+one byte per symbol, 0 for a symbol without a code. [`seqlz_codes.c`](seqlz_codes.c.html) turns them
+into codes and decode tables. A generator writes this file from symbol counts; nobody edits it. It is
+the kernel's `seqlz_lengths.h` but without `static`, as [`seqlz_lengths.c`](seqlz_lengths.c.html)
+defines the tables for the tests and tools. The end of the file has the tables of levels 2 and 3,
+which [Part III](book:#f-seqlz_lengths-h-l2) and [Part IV](book:#f-seqlz_lengths-h-l3) explain.
+
 How to read the token rows: a token is `ll + 16 * (ml - 4) + 512 * class`, so one row of 16 numbers
 is one match length and one offset class, with `ll` 0 to 15 from left to right
 ([the token](book:#ch-format--token)). Each offset class takes 32 rows, `ml` 4 to 35 from top to
@@ -33,19 +36,31 @@ differ from a value 8 or more bytes before, or none do. Among the codes of {{tok
 token 576, no literals and 8 bytes from offset 2, class 1: a run of one 16-bit value.
 @end
 
+
+@intro 2
+The 8 literal tables of level 2, from [line 228](#b226): 256 code lengths each, one per byte value,
+16 per line. A page with coded literals names one of them, and the compressor picks the one that codes
+the page's literals in the fewest bits. Each table was trained on a group of pages whose literals look
+alike: text, binary data with many `0x00` bytes, machine code, and so on.
+@intro 3
+Level 3's one table here, from [line 377](#b377): the 19 code lengths of `OWN`, the fixed code in
+which a page writes a literal table of its own ([the format](book:#ch-format--own)).
 ## Where the numbers come from
 
 @@ 1-22
-`gen-seqlz-lengths.py` reads `bench/seqlz_counts.txt`: how often each symbol occurred on about 1.1
-million training pages from a phone and a desktop. It turns the counts into an optimal prefix code
-whose longest code has 11 bits, by package-merge, which is Huffman's idea with a length limit. A
-frequent symbol gets a short code.
+`gen-seqlz-lengths.py` writes this file from `bench/seqlz_counts.txt`: how often each symbol occurred
+on about 1.1 million training pages from a phone and a desktop. It turns the counts into the best
+prefix code whose longest code has 11 bits, by package-merge, which is Huffman's idea with a length
+limit. A frequent symbol gets a short code. Only the {{ch08.tok.coded}} most frequent of the 3072
+tokens get a code; all others go through the escape.
 
-Only the 640 most frequent of the 3072 tokens get a code; all others go through the escape. The SPDX
-line is in the kernel's order. The head comment names the command that wrote the file: in the kernel's
-copy it is `scripts/gen-seqlz-lengths.py lib/seqlz/seqlz_counts.txt`, without `--extern`. The include
-guard is the kernel's, for `lib/seqlz/seqlz_lengths.h`. `seqlz_format.h` gives `struct seqlz_lengths`.
-The `gen_seqlz_tables` of the comment is the kernel's program; in `src/` it is `tools/gen-tables/`.
+The rest of the head is the kernel's. The SPDX line is in the kernel's order, and the include guard is
+for `lib/seqlz/seqlz_lengths.h`. In the kernel's copy, the comment names
+`scripts/gen-seqlz-lengths.py lib/seqlz/seqlz_counts.txt`, without `--extern`, and `gen_seqlz_tables`
+is the kernel's program that builds the tables; in `src/` that is `tools/gen-tables/`. The comment
+also names the tables of levels 2 and 3, at the end of the file, and says "block" for a page, as the
+spec does ([the format](book:#ch-format--layout)).
+`seqlz_format.h` gives `struct seqlz_lengths`.
 @anim huffman Building a Huffman code from counts, by hand
 @more {#ch-codes--training-counts-then-lengths} From counts to lengths: what the generator does
 `tools/kernel-port/gen-seqlz-lengths.py --extern` makes this file from `bench/seqlz_counts.txt`, how
@@ -101,9 +116,10 @@ Class 1, the single offset 2 in 1 bit: runs of 16-bit values. Every token here w
 literals, `ll` 0. Line 59, token 576, is 8 bytes of a repeated 16-bit value, 6 bits.
 
 @@ 87-118
-Class 2, an offset of 1 to 255 in 8 bits. Its first column has a code in every row, and the class's
-shortest, 7 bits for token 1040: a match right after a match, at a new near offset. The last column,
-`ll` 15, has codes in 14 of the 32 rows: it stands for every literal run of 15 or more.
+Class 2, an offset of 1 to 255 in 8 bits. Its first column, no literals, has a code in every row: a
+match right after a match, at a new near offset. The class's shortest codes have 7 bits, e.g. token
+1040, 5 bytes. The last column, `ll` 15, has codes in 14 of the 32 rows: it stands for every literal
+run of 15 or more.
 
 @@ 119-150
 Class 3, any offset, 12 bits. The same picture as class 2, codes from 7 bits on, so a
@@ -120,17 +136,20 @@ tokens 2594, 2609 and 2624, where `ll + ml` is 8, have 6 bits.
 ## The escape and the length values
 
 @@ 215-216
-Symbol 3072, the escape, has 4 bits, as short as the most frequent token: the 2432 tokens without a
-code are each rare but frequent together: about 15 of about 205 sequences per page on desktop pages
-and 10 of 170 on phone pages (20 000 pages of each dump, `seqlz_find()` and the tables of 14th October
-2026, same-filled pages left out, measured on 14th October). An escaped token costs 4 + 12 bits. The
-format allows at most 7 bits here; [the escape](book:#ch-header--escape) has why the
-rare tokens do not all get a code.
+Symbol 3072, the escape, has 4 bits, as short as the most frequent token. The 2432 tokens without a
+code are each rare, but together they are frequent: about 15 of about 205 sequences per page on
+desktop pages, 10 of 170 on phone pages. An escaped token costs 4 + 12 bits. The format allows at most
+7 bits for the escape's code; [the escape](book:#ch-header--escape) has why the rare tokens do not all
+get a code.
+@more How the escapes were counted
+On 14th October 2026, on 20 000 pages of each dump, with `seqlz_find()` and the tables of that day,
+same-filled pages left out.
+@end
 
 @@ 217-220
 `ll`'s length values, for literal runs of 15 or more: symbols 0 to 15 are the values themselves, 16 to
 23 the values 16 to 4095, one power of 2 each, with plain bits after the code. The shortest codes, 3
-bits, are the values 0 and 1 and the ranges 16 to 31 and 32 to 63. Every symbol has a code, also one
+bits, are the values 0 and 1 (`ll` 15 and 16) and the ranges 16 to 31 and 32 to 63. Every symbol has a code, also one
 that never occurred: the generator adds 1 to every count.
 
 @@ 221-225
@@ -141,16 +160,15 @@ decode table of 256 entries.
 ## Eight tables, one per kind of page
 
 @@ 226-228
-The 8 literal tables, and the code `OWN`, as code lengths: one byte per byte value, 16 per line, so
-line `n` of a table is the bytes `16 * n` to `16 * n + 15`. Generated from the same counts as the
-token table ([how they are trained](seqlz_lengths.c.html#b12)).
-
-A page with coded literals names one of the 8 tables in the low bits of its byte 2; the compressor picks the one that
-codes the page's literals in the fewest bits. Each table is complete, codes 2 to 10 bits, and every
+The 8 literal tables of level 2, as code lengths: one byte per byte value, 16 per line, so line `n` of
+a table is the bytes `16 * n` to `16 * n + 15`. The compressor picks, per page, the table that codes
+the page's literals in the fewest bits, and names it in the low bits of byte 2
+([the format](book:#ch-format--coded)). Every table is complete, with codes of 2 to 10 bits, and every
 byte value has a code in every table.
 
-Each table is a group of training pages that k-means found, and the length-limited Huffman code of
-their literals. The generator adds 1 to every count, so a byte that never occurred in a group still
+Each table belongs to a group of training pages that k-means found
+([how](seqlz_lengths.c.html#b12)), and is the length-limited Huffman code of their literals, from the
+same counts as the token table. The generator adds 1 to every count, so a byte that never occurred in a group still
 gets a code, of 10 bits: the encoder needs a code for any byte zram hands it.
 
 @@ 229-246
@@ -194,7 +212,8 @@ not 16.
 ## The code OWN
 
 @@ 377-383
-The 19 code lengths of `OWN`, the code that a level 3 page writes its own literal table in. Symbols 0
-to 9 are the lengths 1 to 10, so the first line's 2, 2 at positions 8 and 9 say that lengths 9 and 10
-are the most frequent in such tables: most bytes are rare. Symbols 10 to 18 are runs of bytes without
-a code ([format](book:#ch-format--own)).
+The 19 code lengths of `OWN`, the fixed code in which a level 3 page writes a literal table of its
+own. Symbols 0 to 9 are the lengths 1 to 10. The first line's 2, 2 at positions 8 and 9 say that
+lengths 9 and 10 are the most frequent in such tables: most byte values are rare on such a page.
+Symbols 10 to 18 are runs of byte values without a code, by how many bits the run's length has
+([the format](book:#ch-format--own)).

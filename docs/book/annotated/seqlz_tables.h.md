@@ -3,20 +3,30 @@
 The layout of the tables, shared by the compressor, the decompressor and `seqlz_codes.c`, which builds
 them. The format stores each table as code lengths ([chapter 4](book:#ch-format--codes)). The encoder
 needs each symbol's code as a number to shift into its bits, the decoder a table it indexes with the
-next bits. So every table here has both forms, `enc` and `decode`, computed once when seqlz is built
-and stored in one global `const` struct: {{ch17.tables}} tables, {{size.tables|grp}} bytes, read by
-every CPU.
+next bits. So every table here has both forms, `enc` and `decode`. They are computed when seqlz is
+built and stored in one global `const` struct, which every CPU reads. Level 1 has three tables: the
+tokens, and the length values of `ll` and of `ml`. Level 2 adds 8 literal tables, level 3 the code of
+a page's own literal table: {{ch17.tables}} tables and {{size.tables|grp}} bytes in a build of all
+three levels.
 
 Almost every line is a bit layout: which bits of an entry hold what, and `static_assert()`s that the
 fields are wide enough. A reading order:
 
 1. [How a decode table works](#b14), and the [length values' table](#b38).
-2. The [token table](#b44) and the [literal tables](#b61), sized for the L1 cache.
-3. [`lit_cost`](#b69): all 8 literal tables priced with one add per literal.
-4. [`quad[]`](#b102): two code lengths of a page's own table per lookup.
-5. [`struct seqlz_tables`](#b129), the one global.
-6. The end of the file, the part to read closely: the [token entry's fields](#b152) and
+2. The [token table](#b44), sized for the L1 cache.
+3. [`struct seqlz_tables`](#b129), the one global.
+4. The end of the file, the part to read closely: the [token entry's fields](#b152) and
    [`token_entry()`](#b184), which builds them.
+@intro 2
+Level 2's part of the file: the 8 [literal tables](#b61), 2 KiB each to decode;
+[`lit_cost`](#b69), which prices a literal in all 8 tables with one add; the asserts that tie
+[byte 2](#b77) of the header to the constants; and where the literal tables sit in
+[`struct seqlz_tables`](#b131).
+@intro 3
+Level 3's part: [code 8](#b89), a table of the page's own, right after the fixed tables;
+[`seqlz_delta_last()`](#b92), the distance of the delta `SEQLZ_DELTA_LAST`; and
+[`struct own_table`](#b102), the fixed code `OWN` in which a page describes its own table, with
+`quad[]`, which reads two of its code lengths per lookup.
 
 ## Decode tables
 
@@ -64,9 +74,9 @@ The length tables have fewer than 32 symbols, but the encoder indexes `enc[]` wi
 `symbol & (ENC_LEN_SYMBOLS - 1U)`, and that mask is a proof only if the array has a power of 2
 entries. The first assert keeps the mask from folding a real symbol onto another one.
 
-`CODE_LENGTHS` sizes the arrays that [`first_codes()`](book:#ch-codes--first-codes) and
-[`own_code()`](book:#ch-literals-enc--own) index with a code's length, so no table may have codes of 16
-bits; the literals' assert follows [from level 2 on](#b61). One assert per table and not one for all,
+`CODE_LENGTHS` sizes the arrays that [`first_codes()`](book:#ch-codes--first-codes) indexes with a
+code's length, and level 3's [`own_code()`](book:#ch-literals-enc--own) too, so no table may have codes
+of 16 bits; level 2 adds [the literals' assert](#b61). One assert per table and not one for all,
 because the kernel's `checkpatch` warns about a condition that compares two constants inside a longer
 one ([checks](book:#ch-zram-glue--check)).
 @more {#ch-internal--masks} Which masks, and what they saved
@@ -126,8 +136,8 @@ goes out as the escape's code and 1797 in 12 bits.
 @end
 
 @@ 61-68
-From level 2 on, the literal tables. The assert keeps a literal's code length below `CODE_LENGTHS`, as
-[the asserts above](#b30) do for the tokens and the length values.
+The literal tables. The assert keeps a literal's code length below `CODE_LENGTHS`, as level 1's
+[asserts](#b30) do for the tokens and the length values.
 
 `decode[]` has the code's length in the low byte and the literal in the high byte. A byte and a length
 of at most 10 fit 2 bytes, and a literal table is 2 KiB, half the cache lines it would be with 4-byte
@@ -155,9 +165,11 @@ length of byte value `b` in table `j`. E.g. the zero byte has a 2-bit code in ta
 where the plain way takes 8 lookups and 8 adds.
 
 A lane must not pass 255, or it carries into the next table's lane. 25 codes of at most 10 bits sum to
-at most 250, so `lit_sums()` adds at most 25 literals into one word, then spreads its lanes into
-16-bit ones and starts again.
-@anim pricing One add per literal, then the move into 16-bit lanes
+at most 250, so the encoder adds at most 25 literals into one word, then spreads its lanes into
+16-bit ones and starts again. At level 2,
+[`code_sampled()`](seqlz_compress_literals.c.html#b252) prices every 7th literal this way to pick the
+table. Level 3 prices every literal, and [its animation](seqlz_compress_literals.c.html#b545) shows the
+adds and the move into the 16-bit lanes on a real page.
 @more {#ch-internal--lit-cost} `0x00` and `e` priced in all 8 tables with one add
 <figure class="diagram">
 <div class="scroll">
@@ -219,14 +231,15 @@ at most 250, so `lit_sums()` adds at most 25 literals into one word, then spread
 
 Tables 1 and 4, where the zero byte has a 2-bit code, are for pages with many zeros; table 0, where `e`
 has a {{lit.0.len.101}}-bit code, fits text. For these two literals table {{ch07.lit_best}} wins with
-{{ch07.lit_best_bits}} bits, against 16 as raw bytes; [`lit_sums()`](#ch-literals-enc--pricing) prices
-four literals the same way.
+{{ch07.lit_best_bits}} bits, against 16 as raw bytes. The literal coder prices
+[four literals](#ch-literals-enc--lanes) the same way, step by step.
 @assert lit[1].len[0] == lit[4].len[0] == 2 and min(lit[0].len[0], lit[2].len[0], lit[3].len[0], lit[5].len[0], lit[6].len[0], lit[7].len[0]) > 2 and ch07.lit_best == 4
 
-A word has 8 lanes because byte 2 of the format holds the number of fixed tables at 8
-([the asserts](#b77)). `lit_sums()` adds 25 literals per stream into 8-bit lanes, then spreads them
-into two words of 16-bit lanes with the mask `0x00ff00ff00ff00ff`: every 200 literals of the page, 25
-for each of the 8 streams. The animation under the note shows it on a real page.
+A word has 8 lanes of 8 bits, one per fixed table, so `lit_cost` works for exactly 8 tables, which
+[the asserts](#b77) hold fixed. Level 3's `lit_sums()` keeps one word per stream: it adds 25 literals
+per stream into 8-bit lanes, then spreads them into two words of 16-bit lanes with the mask
+`0x00ff00ff00ff00ff`, every 200 literals of the page, 25 for each of the 8 streams. The animation
+under the note shows `lit_sums()` on a real page.
 @end
 
 @@ 77-88
@@ -234,20 +247,21 @@ for each of the 8 streams. The animation under the note shows it on a real page.
 Byte 2 of a page with coded literals: bits 0 to 3 pick the table, 0 to 7 the fixed ones, bits 4 to 6
 the width of the stream sizes minus 5, bit 7 the deltas ([coded literals](book:#ch-format--coded)).
 These asserts tie the constants to that layout. The second one: 3 bits hold the 8 widths, 5 to 12,
-and they end where the delta bit starts. Bit 7 and the codes 8 to 15 are level 3's; a level 2 decoder
-rejects a page with them. The last assert guards code, not the format: the encoder's `lit_streams()` and
+and they end where the delta bit starts. Code 8 and bit 7 are level 3's, a page's own table and
+deltas; a decoder built for level 2 rejects a page with either, and every decoder rejects the codes 9
+to 15. The last assert guards code, not the format: the encoder's `lit_streams()` and
 the decoder's `seqlz_decode_literals()` are written out by hand for 8 streams.
 
 @@ 89-91
-Level 3's code 8, the page's own table, comes right after the fixed ones. A 9th fixed table would
-collide with `SEQLZ_LIT_OWN`, and the decoder's `s[2] & (SEQLZ_LIT_SETS - 1U)` would no longer pick the
-table.
+Level 3's code 8, the page's own table, comes right after the 8 fixed ones, and the decoder rejects
+every code above it. A 9th fixed table would need code 8 itself, and this assert would stop the
+build.
 
 @@ 92-101
-The delta `SEQLZ_DELTA_LAST` subtracts the byte as far back as the offset of the sequence before. Here
-because the encoder and the decoder both need it. Below 4 it is the smallest multiple of `last` that is
-at least 4: `last` 1 or 2 gives 4, 3 gives 6. With offset 3 the pattern repeats every 3 bytes, so the
-byte 6 back equals the byte 3 back.
+The delta `SEQLZ_DELTA_LAST` subtracts the byte as far back as the offset of the sequence before. It
+is in this header because the encoder and the decoder both need it. Below 4 it is the smallest
+multiple of `last` that is at least 4: `last` 1 or 2 gives 4, 3 gives 6. After a match at offset 3 the
+bytes repeat every 3, so the byte 6 back equals the byte 3 back.
 
 At least 4, because the decoder undoes the deltas 4 bytes at a time: none of the 4 bytes it adds may lie
 in the word it is writing.
@@ -327,11 +341,12 @@ Level 3's tables for a page's own literal table: `own.quad` and `own.decode` to 
 `own.enc` to write it ([a page's own table](#b102)).
 
 @@ 138-143
-A page reads much less than all of it. The decoder reads `token.decode` (8 KiB), the `decode` of `ll`
-and `ml` (1 KiB each), and with coded literals one literal table's `decode` (2 KiB): 12 KiB, which fits
-the L1 cache.
+A page reads much less than all of it. The decoder reads `token.decode` (8 KiB) and the `decode` of
+`ll` and `ml` (1 KiB each): 10 KiB, which fits the L1 cache. Level 2's coded literals add one literal
+table's `decode`, 2 KiB ([the literal tables](#b61)).
 @more {#ch-internal--tables} What lies where, and which parts a page reads
-The layout on x86-64, from `sizeof` and `offsetof`; arm64 aligns a `u64` the same way:
+The layout on x86-64 in a build of all three levels, from `sizeof` and `offsetof`; arm64 aligns a
+`u64` the same way. A build of level 1 has only `token`, `ll` and `ml`.
 
 | field | offset | bytes | read by |
 | --- | --- | --- | --- |
@@ -344,7 +359,8 @@ The layout on x86-64, from `sizeof` and `offsetof`; arm64 aligns a `u64` the sam
 | `ll` | {{ch07.off.ll|grp}} | {{ch07.size.value_table}} | both, for long literal runs |
 | `ml` | {{ch07.off.ml|grp}} | {{ch07.size.value_table}} | both, for long matches |
 
-The decoder's 12 KiB fit the L1 cache ([cache](#ch-cpu--cache)). With a table of the page's own it
+The decoder's 10 KiB, 12 KiB with a literal table, fit the L1 cache ([cache](#ch-cpu--cache)). With a
+table of the page's own it
 reads `own.quad` and `own.decode`, 1.5 KiB, instead of a 2 KiB literal table, and builds the 2 KiB
 table in the page. The encoder reads `token.enc`, 6 KiB, the `enc` of `ll` and `ml`, `lit_cost`, 2 KiB,
 and one literal table's `enc`, 1 KiB, at level 3 also `own.enc`.

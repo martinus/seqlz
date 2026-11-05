@@ -1,10 +1,13 @@
 # src/seqlz_format.h
 
-The format as constants, plus two small functions that turn a sequence's numbers into what the format
-stores: `seqlz_len_symbol()` and `seqlz_off_class()`. Every file of the codec includes it. The long
-comment at the top is the format short enough to keep in your head; [chapter 4](book:#ch-format) has
-it in words and `docs/format.md` is the specification. The notes here say why each number has its
-value.
+The format as constants, and two small functions that turn a sequence's numbers into what the format
+stores: `seqlz_len_symbol()` for a length value, `seqlz_off_class()` for an offset. Every file of the
+codec includes it. The long comment at the top is the whole format in brief;
+[chapter 4](book:#ch-format) has it in words, and `docs/format.md` is the specification. The notes say
+why each number has its value.
+
+Level 1 keeps the literals as they are, and everything up to line 216 is level 1's. The constants of
+coded literals at the end of the file come with [level 2](#b218) and [level 3](#b257).
 
 A reading order:
 
@@ -14,16 +17,24 @@ A reading order:
 3. [The escape](#b98), for the tokens without a code.
 4. [`seqlz_off_class()`](#b194), the class of an offset without a branch, and
    [the nibble constants](#b174) it reads.
-5. Coded literals: [tables and streams](#b218), [the header](#b234), [deltas](#b257),
-   [a page's own table](#b274).
+@intro 2
+Level 2 codes the literals with one of 8 fixed literal tables. This file has the numbers of that: the
+longest literal code, the 8 tables and the 8 streams the literals are dealt out to
+([tables and streams](#b218)), and [the header](#b234) of a block with coded literals, with its
+byte 2.
+@intro 3
+Level 3 adds two things to level 2's header. [Deltas](#b257): each literal stored as its difference
+to an earlier byte of the block, with a byte 3 that says which one. And [a table of the block's
+own](#b274), code 8 of byte 2, whose code lengths the block carries after the stream sizes.
 
 ## The format in one comment
 
 @@ 1-7
 @anchor ch-header
-`linux/types.h`, and the interface [`linux/seqlz.h`](linux-seqlz.h.html) for `SEQLZ_LEVELS`, which
-includes nothing: a program that runs on the build machine and writes the tables includes this file
-too, and may only use the few headers the kernel has for such programs
+Two includes: `linux/types.h` for `u8` and `u16`, and the interface
+[`linux/seqlz.h`](linux-seqlz.h.html) for `SEQLZ_LEVELS`, which includes nothing itself. No more,
+because a program that runs on the build machine and writes the tables includes this file too, and
+such a program may use only the few headers the kernel has for it
 ([at build time](book:#ch-codes--kernel)). The guard is named after the file's place in the kernel,
 `lib/seqlz/`.
 @more {#ch-header--summary} The kernel's copy: four headers, and no `static_assert()` here
@@ -31,7 +42,9 @@ The kernel's copy has four headers written from `src/`, and `seqlz_lengths.h`, g
 `include/linux/seqlz.h`, the interface zram calls, which
 `port.py` writes from [`src/linux/seqlz.h`](linux-seqlz.h.html), and in `lib/seqlz/` this file, `seqlz_tables.h`
 and `seqlz_internal.h`, with the guards they have in `src/`. `seqlz_encoder.h` and `seqlz_match.h` are
-not among them: in the kernel they are part of `seqlz_compress.c`.
+not among them: in the kernel they are part of `seqlz_compress.c`. The kernel's copy of this file
+also drops `#include <linux/seqlz.h>`: `port.py` resolves the `#if SEQLZ_LEVELS` in the copy, and the
+headers for programs on the build machine do not have that file.
 
 This file has no `static_assert()`. Until 24th October 2026 it still brought `linux/build_bug.h` to
 the files that have one (commit `32a6c7a`); now it includes only what the program for the build
@@ -71,12 +84,14 @@ the bytes left to fill: a match has at least 4 bytes, so no match can follow
 ([how a page ends](book:#ch-format--end)).
 
 @@ 54-63
-The `u16` is what lets the decoder read two places at once: the literals start at byte 2, the
-bitstream at byte `2 + n` for `n` raw literals ([the layout](book:#ch-format--layout)). A 16-byte copy
-of the last literals may read into the bitstream, which is harmless: it is still inside the input.
+The `u16` lets the decoder read from two places at once: the literals start at byte 2, the bitstream
+at byte `2 + n` for `n` literals ([the layout](book:#ch-format--layout)). The decoder copies literals
+16 bytes at a time, so the copy of the last ones may read into the bitstream. That is harmless: it is
+still inside the input. The comment's last sentences, coded literals and deltas, are what
+[levels 2 and 3](#b218) add.
 
 In the kernel's copy the last line points at `Documentation/staging/seqlz.rst`, which `port.py` writes
-from `docs/format.md`: the kernel's copy may not name the repository.
+from `docs/format.md`: the kernel has no `docs/`, and `port.py` refuses a copy that names it.
 @anim abbits The 9-byte example page, one field per step
 
 ## The block size and the token
@@ -123,9 +138,10 @@ each other, and a page touches fewer lines of the table anyway ([chapter 3](#ch-
 @end
 
 @@ 82-97
-The token holds `ll` in bits 0 to 3, `ml - 4` in bits 4 to 8, the class in bits 9 to 11, as
-[the token's drawing](book:#ch-format--token) shows for token 2098: `SEQLZ_TOKEN_SYMBOLS` is `6 << 9`,
-3072. Larger values need a length value after the token, which is a second lookup in another table.
+The token holds `ll` in bits 0 to 3, `ml - 4` in bits 4 to 8 and the class in bits 9 to 11
+([the token's drawing](book:#ch-format--token) shows token 2098). 6 classes make
+`SEQLZ_TOKEN_SYMBOLS` `6 << 9`, 3072. Larger `ll` and `ml` need a length value after the token, which
+is a second lookup in another table.
 
 The two widths cannot grow: the decoder's token entry stores `ml` as it is, the cap plus 4, in 6 bits.
 `31 + 4 = 35` fits 6 bits; with 6 bits for `ml - 4` it would be `63 + 4 = 67`, which does not
@@ -191,7 +207,7 @@ symbols.
 
 The literal count can borrow the top bit of the `u16` because it never reaches it: at most 4096
 literals, 13 bits. The decoder reads the count as the `u16` masked with `SEQLZ_LIT_CODED - 1U`
-([`seqlz_decompress()`](book:#ch-decode)).
+([`seqlz_decompress()`](book:#ch-decode)). A build of level 1 rejects a block with the bit set.
 @more {#ch-header--length-values} The largest length value, and a symbol that went
 The length values have {{ch06.LEN_SYMBOLS}} symbols, the last one {{ch06.last_sym}}.
 @assert ch06.last_sym == 23 and ch06.LEN_SYMBOLS == 24
@@ -215,7 +231,8 @@ table: {{size.lengths}} bytes for the sequences.
 The decoder and encoder tables are computed from these at build time. Because the compiled-in
 lengths, `seqlz_default_lengths` from [`seqlz_lengths.h`](seqlz_lengths.h.html), are part of the format,
 `docs/format.md` lists their SHA-256, so that a decoder written from the spec can check it has the
-right ones. The 8 literal tables are `seqlz_lit_sets[][]`, declared in [`seqlz.h`](seqlz.h.html#b35).
+right ones. Level 2 adds 8 literal tables, `seqlz_lit_sets[][]`
+([declared in `seqlz.h`](seqlz.h.html#b39)), part of the format too.
 @anim table From code lengths to a decode table and back
 
 @@ 156-173
@@ -242,8 +259,7 @@ Each class's number of offset bits is one nibble of one constant, read with a sh
 of a `switch` or an array. For class 3, `0x85C810 >> 12` is `0x85C`, and `& 15` leaves `0xC`, 12.
 When class 3's bits were computed from the block's bits in code, gcc branched on the class; a shift
 and a mask cannot become a branch. `SEQLZ_SHIFT_NIBBLES` is the same trick for the shift, `0x330010`.
-
-Class 5 has 8 bits, offsets below 2048.
+Class 5's 8 bits hold the multiples of 8 below `8 << 8`, 2048.
 @more {#ch-header--offsets} The six nibbles, and what the compiler makes of them
 Class 5 holds the multiples of 8 below `8 << 8`, {{ch06.class5_end}}
 ([`docs/explored-designs.md`](https://github.com/martinus/seqlz/blob/main/docs/explored-designs.md#offset-2-in-1-bit-multiples-of-8-below-2048-in-8-03-to-08-smaller-at-the-same-speed-kept)).
@@ -488,22 +504,23 @@ The comment's other two choices are measured where their code is:
 8 sizes of `w` bits each are exactly `w` bytes, hence `3 + w`. E.g. a block whose largest stream has
 100 bytes needs `w = 7` and a header of 10 bytes.
 
-The code field has 4 bits for 9 values: 0 to 7 the fixed tables, 8 the block's own table. 9 to 15 are
-invalid on purpose, so that a future format can tell itself apart
-([no version](book:#ch-format--version)). The `static_assert`s that these fields fit together are in
-`seqlz_tables.h` ([byte 2](book:#ch-internal--byte2)).
+The code field has 4 bits. At level 2 it is 0 to 7, the fixed tables; level 3 adds 8, a table of the
+block's own ([line 274](#b274)). 9 to 15 are invalid on purpose, so that a future format can tell
+itself apart ([no version](book:#ch-format--version)). Bit 7 and byte 3 are level 3's
+[deltas](#b257): a decoder built for level 2 rejects a block with code 8 or bit 7 set. The
+`static_assert`s that these fields fit together are in `seqlz_tables.h`
+([byte 2](book:#ch-internal--byte2)).
 @more {#ch-header--header} Byte 2 and the header, bit by bit
 ```text
 byte 2:      bit 7 | bit 6  bit 5  bit 4 | bit 3  bit 2  bit 1  bit 0
              deltas|       w - 5         |      the literals' code
-byte 3:      with bit 7 set, which delta, 1 to 3, see below
-bytes 3 + e: the 8 stream sizes in bytes, w bits each, lowest bit first, w bytes together,
-             from byte 3 without deltas, e = 0, from byte 4 with them, e = 1
+byte 3:      only at level 3 with bit 7 set: which delta, 1 to 3
+then:        the 8 stream sizes in bytes, w bits each, lowest bit first, w bytes together
 ```
 
-The header is $3 + w$ bytes, 8 to 15, one more with deltas, and `SEQLZ_LIT_HEADER(0)` is 3, the
-offset of the delta's byte with deltas and of the first size byte without. The header reads in order:
-byte 2 says whether the delta's byte is there, and it comes next, before the sizes.
+The header is $3 + w$ bytes, 8 to 15, and `SEQLZ_LIT_HEADER(0)` is 3, the offset of the first size
+byte. With level 3's deltas the delta's byte sits at byte 3, before the sizes, and the header is one
+byte longer. The header reads in order: byte 2 says whether the delta's byte is there.
 
 A stream holds every 8th literal of at most 10 bits, at most 640 bytes, which need 10 bits; the 3 bits
 of the width allow up to 12, which blocks of 16 KiB needed until 1st November 2026. Widths of 3 and 4
@@ -511,12 +528,12 @@ bits would need a fourth bit for the width, and only 1.8% of the pages with code
 them
 ([`docs/explored-designs.md`](https://github.com/martinus/seqlz/blob/main/docs/explored-designs.md#stream-sizes-in-as-many-bits-as-the-largest-needs-kept)).
 
-Bit 7 was a free bit too, which had to be 0, until level 3 began to store its literals as deltas on
-21st October 2026. E.g. the text page of [a page's own table](#ch-format--own) at level 3 has byte 2
-`{{own.text.t}}`: code {{own.text.lcode}} in bits 0 to 3, $w - 5 = {{own.text.w5}}$ in bits 4 to 6,
-and bit 7 0, its literals are as they are. `SEQLZ_LIT_CODE_MASK`, `SEQLZ_LIT_WIDTH_AT` and
-`SEQLZ_LIT_DELTA_AT` are the masks and shifts that pick the fields.
-@assert own.text.lcode == own.lit_own and own.text.w5 + 5 == own.text.w and int(own.text.t, 16) < 128
+Bit 7 had to be 0 until level 3 began to store its literals as deltas, on 21st October 2026. E.g. the
+made-up text page of [level 2's bytes](#ch-format--coded) has byte 2 `{{ch04.text.t}}`: table
+{{ch04.text.set}} in bits 0 to 3, $w - 5 = {{ch04.text.w5}}$ in bits 4 to 6, bit 7 clear.
+`SEQLZ_LIT_CODE_MASK`, `SEQLZ_LIT_WIDTH_AT` and `SEQLZ_LIT_DELTA_AT` are the mask and the shifts that
+pick the fields.
+@assert ch04.text.set < 8 and ch04.text.w5 + 5 == ch04.text.w and int(ch04.text.t, 16) < 128
 @end
 
 @@ 257-273
@@ -574,15 +591,23 @@ pages, level 3 stores 869.7 bytes per page with deltas, 915.6 without, 5.0% less
 @end
 
 @@ 274-301
-A run's symbol says how many bits its number has. E.g. a run of 32 is `0b100000`, 6 bits: symbol
+A block's own table is its code lengths, one per byte value that has a code, and between them runs
+of byte values without one. These go out as symbols of a small fixed prefix code: 10 symbols for the
+lengths 1 to 10, then one per number of bits of a run. E.g. a run of 32 is `0b100000`, 6 bits: symbol
 `SEQLZ_OWN_RUN + 6 = 15`, then the 5 bits below the top one, `00000`. Runs of 1 to 9 bits make 9
-symbols; with the 10 lengths, 19 in all, `SEQLZ_OWN_SYMBOLS`. A code of at most `SEQLZ_OWN_CODE_BITS`, 8
-bits, makes the decoder's table for these symbols 256 entries, which one byte of the description
-indexes. `seqlz_own_lengths` is generated into `seqlz_lengths.h`, after the 8 literal tables ([the
-file](seqlz_lengths.h.html#b377)).
+symbols, 19 in all, `SEQLZ_OWN_SYMBOLS`. Codes of at most `SEQLZ_OWN_CODE_BITS`, 8 bits, make the
+decoder's table for these symbols 256 entries, indexed by the next 8 bits. `seqlz_own_lengths` is
+generated into `seqlz_lengths.h`, after the 8 literal tables
+([the file](seqlz_lengths.h.html#b377)).
 
-The last paragraph is why a block's own table costs the decoder no memory. Its decode table needs
-2 KiB, and work memory per CPU is what the project counts. The output page is still free while the
-literals are decoded into the scratch, so the table is built there
+The comment's last paragraph is why a block's own table costs the decoder no memory. Its decode table
+needs 2 KiB, and work memory per CPU is what the project counts. The output block is still free while
+the literals are decoded into the scratch, so the table is built there
 ([own table](book:#ch-literals-dec--own)).
 @anim owndesc How a page's own table is described, one symbol per step
+@more Byte 2 of a block with its own table
+E.g. the text page of [level 3's bytes](#ch-format--own) has byte 2 `{{own.text.t}}`: code
+{{own.text.lcode}}, the block's own table, in bits 0 to 3, $w - 5 = {{own.text.w5}}$ in bits 4 to 6,
+and bit 7 clear: its literals are stored as they are, without deltas.
+@assert own.text.lcode == own.lit_own and own.text.w5 + 5 == own.text.w and int(own.text.t, 16) < 128
+@end

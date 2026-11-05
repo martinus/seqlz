@@ -1,22 +1,21 @@
 # src/seqlz_codes.c
 
-Turns code lengths into codes and lookup tables. The format fixes each of its {{ch17.tables}} tables by
-one length per symbol, nothing else: {{ch08.length_bytes}} bytes compiled into the codec,
-{{tok.symbols}} for the token table, {{ll.symbols}} each for the two tables of length values, 256 for
-each of the 8 literal tables and {{own.symbols}} for `OWN` ([the lengths](seqlz_lengths.c.html)).
-This file computes from them the encoder's code for each symbol and the decoder's tables, which look a
-code up with its next bits in one step: `struct seqlz_tables`, {{size.tables|grp}} bytes
-([its layout](seqlz_tables.h.html)). Nothing calls it while seqlz compresses: a program on the build
-machine runs it once and prints the result as C ([at build time](book:#ch-codes--kernel)). The tests
-run it on other lengths.
+Turns code lengths into codes and lookup tables. The format fixes each of its tables by one code
+length per symbol, nothing else. Level 1 has three tables: the token table with {{tok.symbols}}
+symbols, and the two tables of length values, `ll` and `ml`, with {{ll.symbols}} each
+([the lengths](seqlz_lengths.c.html)). This file computes from the lengths the encoder's code for each
+symbol, and the decoder's tables, which look a code up with its next bits in one step: `struct
+seqlz_tables` ([its layout](seqlz_tables.h.html)). Nothing calls it while seqlz compresses: a program
+on the build machine runs it once and prints the result as C ([at build time](book:#ch-codes--kernel)).
+The tests run it on other lengths. Levels 2 and 3 add builders for their literal tables
+([Part III](book:#part-level-2), [Part IV](book:#part-level-3)).
 
 A reading order that follows the call:
 
 1. [`seqlz_tables_build()`](#b243), the one function: a `memset()`, then one builder per table.
 2. [`first_codes()`](#b24): the canonical codes, and the check that the lengths are a complete code.
 3. [`build_token()`](#b58), the pattern of every builder: hand out codes, fill one range of the
-   decode table per code. Then [length values](#b83), [literals](#b105),
-   [their costs](#b129) and [`OWN`](#b148) with its [`quad[]`](#b174).
+   decode table per code. Then the same for the [length values](#b83).
 4. [`has_all_symbols()`](#b221): what the encoder needs on top of a valid code.
 
 @more {#ch-codes--kernel} How the build and the kernel get the tables: `gen_seqlz_tables.c`
@@ -43,7 +42,20 @@ compiles `seqlz_tables.c`, and `tools/kernel-port/check.sh` compares that file w
 has tables that the encoder cannot use. The kernel's tables used to be built at boot, into
 `__ro_after_init` memory: the kernel image then carried {{size.tables|grp}} bytes of zeros, and every
 boot ran this file's loops once.
+
+With all three levels, the format's code lengths are {{ch08.length_bytes}} bytes for
+{{ch17.tables}} tables, and the tables built from them {{size.tables|grp}} bytes.
 @end
+@intro 2
+Level 2 adds the builder of its 8 fixed literal tables: [`build_lit()`](#b105), the pattern of
+[`build_token()`](#b58) once more, for codes of up to 10 bits, and [`build_lit_sets()`](#b129), which
+also packs each byte's code length in all 8 tables into one `u64`, `lit_cost`. Then the check that
+every byte has a code ([line 236](#b236)), and the call of the builder ([line 260](#b260)).
+@intro 3
+Level 3 adds [`build_own()`](#b148): the codes and the decode table of `OWN`, the fixed code in which a
+page writes its own literal table. Then [a second table](#b174), `quad[]`, with which the decoder
+takes up to two code lengths from 8 bits in one lookup, and the call of the builder
+([line 264](#b264)).
 
 ## Lengths to codes
 
@@ -164,11 +176,12 @@ The same for `ll` and `ml`, in tables of 256 entries. `ll` symbol 18 has the 5-b
 the encoder's masked index; those behind the last symbol stay 0 from the `memset()`.
 
 @@ 105-128
-The same for a literal table, codes of up to 10 bits. `enc[]` has the length low and the code above it,
-the other way round from the token's, because that is what `lit_put()` wants
-([layout](book:#ch-internal--lit-table)). The comment is for readers who know deflate: deflate reads its bits
-least significant first, so its decoders bit-reverse each code before they fill a table. seqlz reads
-most significant first and uses the codes as they are.
+A literal table is built as [the token table](#b58) is, with 256 symbols, one per byte value, and
+codes of up to 10 bits. `enc[]` has the length in the low bits and the code above it, the other way
+round from the token's, because that is what `lit_put()` wants ([layout](book:#ch-internal--lit-table)).
+The comment is for readers who know deflate: deflate reads its bits least significant first, so its
+decoders bit-reverse each code before they fill a table. seqlz reads most significant first and uses
+the codes as they are.
 @more {#ch-codes--build-lit} The first two codes of table 0
 In table 0 the space, `0x20`, and `e`, `0x65`, have the first two 4-bit codes, `{{lit.0.code.32}}`
 and `{{lit.0.code.101}}`: no code in table 0 is shorter, and `0x20` comes first in symbol order. The
@@ -199,12 +212,13 @@ undefined.
 
 @@ 148-173
 @anchor ch-codes--own
-`OWN` is the fixed code that a level 3 page writes its own literal table in
-([format](book:#ch-format--own)). Its 19 symbols: 0 to 9 are the lengths 1 to 10, 10 to 18 a run of
-bytes without a code. Its lengths are not in `struct seqlz_lengths`: `seqlz_own_lengths` is generated
-into `seqlz_lengths.h`, after the literal tables ([there](seqlz_lengths.h.html#b377)). Same pattern as
-`build_lit()`, symbol in the low byte. A length of 0 is rejected here: the encoder may need any of the
-19 symbols, and the loop would read `next[0]`, which `first_codes()` never sets.
+`OWN` is the fixed code in which a level 3 page writes its own literal table
+([format](book:#ch-format--own)). Its 19 symbols: 0 to 9 are the code lengths 1 to 10, 10 to 18 a run
+of bytes without a code. Its lengths are not in `struct seqlz_lengths`: `seqlz_own_lengths` is
+generated into `seqlz_lengths.h`, after the literal tables ([there](seqlz_lengths.h.html#b377)). The
+codes are built as in [`build_lit()`](#b105), with the symbol in the low byte of a decode entry. A
+length of 0 is rejected here: the encoder may need any of the 19 symbols, and the loop would read
+`next[0]`, which `first_codes()` never sets.
 
 @@ 174-205
 `quad[k]` lets the decoder take up to two lengths from 8 bits with one lookup instead of one symbol at
@@ -355,17 +369,18 @@ two pages: the escape code, the token's 12 bits and a class 3 offset of 12 bits 
 bits ([the escape](book:#ch-header--escape)).
 
 @@ 236-239
-Level 2's literal tables need a code for every byte too. A byte without one would count 0 bits in
-`lit_cost`, and its table would look cheapest for exactly the pages it cannot code.
+[The check above](#b221), for level 2's literal tables: they need a code for every byte. A byte
+without one would count 0 bits in `lit_cost`, and its table would look cheapest for exactly the pages
+it cannot code.
 
 @@ 240-242
 One answer for all of them.
 
 @@ 243-259
-The `memset()` does more than the comment says: tokens without a code need `enc[]` 0, level 2's
-`lit_cost` is built with `|=`, and a test that builds twice on the same memory keeps nothing of the first set. A
-failure leaves the struct half built, which nobody uses: the generator stops the build, and a test
-only checks the `-EINVAL`.
+The `memset()` does more than the comment says: tokens without a code need `enc[]` 0, and a test
+that builds twice on the same memory keeps nothing of the first set. Level 2's `lit_cost` needs it
+too, as it is built with `|=`. A failure leaves the struct half built, which nobody uses: the generator
+stops the build, and a test only checks the `-EINVAL`.
 @more {#ch-codes--init} Before 22nd October 2026: tables built when a program started
 Until 22nd October 2026 userspace built the global at run time, with a `seqlz_tables_init()` every
 program had to call first. It kept tables the encoder could not use and marked them with an
@@ -374,10 +389,11 @@ program had to call first. It kept tables the encoder could not use and marked t
 @end
 
 @@ 260-263
-Level 2's 8 literal tables, built from `seqlz_lit_sets`, with `lit_cost` from them.
+Level 2's 8 literal tables, built from `seqlz_lit_sets` by [`build_lit_sets()`](#b129), with
+`lit_cost`.
 
 @@ 264-267
-Level 3's fixed code of a page's own table, from `seqlz_own_lengths`, with its `quad[]`.
+Level 3's `OWN`, from `seqlz_own_lengths` by [`build_own()`](#b148), with its `quad[]`.
 
 @@ 268-269
 All built: 0.

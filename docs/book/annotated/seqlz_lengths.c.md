@@ -1,9 +1,10 @@
 # src/seqlz_lengths.c
 
-The code lengths of every table of the format, compiled in: the token table, the two tables of length
-values, the 8 literal tables and the code `OWN`. The numbers themselves are in a generated header,
-[`seqlz_lengths.h`](seqlz_lengths.h.html); this file only includes it.
-[`seqlz_codes.c`](seqlz_codes.c.html) turns them into codes and decode tables when seqlz is built.
+The code lengths of the format's tables, compiled in: for level 1 the token table and the two tables
+of length values, and for levels 2 and 3 also the 8 literal tables and the code `OWN`. The numbers
+themselves are in a generated header, [`seqlz_lengths.h`](seqlz_lengths.h.html); this file only
+includes it. [`seqlz_codes.c`](seqlz_codes.c.html) turns them into codes and decode tables when seqlz
+is built.
 
 ## The lengths of the format
 
@@ -12,7 +13,7 @@ values, the 8 literal tables and the code `OWN`. The numbers themselves are in a
 These lengths are the format: a page decodes only with the tables it was compressed with, and the page
 carries no version ([no version](book:#ch-format--version)). So they are generated, never edited:
 `gen-seqlz-lengths.py` turns counts that are checked into the repository into lengths, and CI makes the
-headers again and fails if one differs by a byte
+header again and fails if it differs by a byte
 ([how](seqlz_lengths.h.html#b1)).
 
 The training pages are not pages the benchmarks measure, so no benchmark measures the tables on the
@@ -30,15 +31,17 @@ counts are sums over all pages, each literal table's over at least
 @end
 
 @@ 12-23
-k-means, in plain words: give each training page to the table that codes its literals in the fewest
-bits, make each table the Huffman code of the literals of its pages, and repeat until the groups stop
-changing. Where it ends depends on the starting tables, so the trainer runs it from 32 starts and keeps
-the best. The result is 8 tables for 8 kinds of pages: in the tables e.g. one for text, two that give
-the byte `0x00` a 2-bit code, one that gives `0xff` a 2-bit code.
+The comment's second paragraph is about the literal tables of level 2: a page may Huffman code its
+literals with one of 8 fixed tables ([Part III](book:#ch-format2)). They come from k-means, in plain
+words: give each training page to the table that codes its literals in the fewest bits, make each
+table the Huffman code of the literals of its pages, and repeat until the groups stop changing. Where
+it ends depends on the starting tables, so the trainer runs it from 32 starts and keeps the best. The
+result is 8 tables for 8 kinds of pages, e.g. one for text, two that give the byte `0x00` a 2-bit code,
+one that gives `0xff` a 2-bit code.
 
-"The most used table comes first" is out of date for the tables. `bench/seqlz_counts.txt`
-says they are in the order that matches the tables trained before them, so that table 0 is still the
-one for text, and table 1 has more pages than table 0. The order means nothing to the format.
+"The most used table comes first" is out of date. `bench/seqlz_counts.txt` says the tables are in the
+order that matches the tables trained before them best, and table 1 has more pages than table 0. The
+order means nothing to the format.
 
 In the kernel, `seqlz_lengths.h` has `static` tables, and only `gen_seqlz_tables` and the KUnit test
 include it. In `src/` the tests and tools reach the tables through the `extern` declarations of

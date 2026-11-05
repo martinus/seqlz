@@ -194,9 +194,10 @@ everything after them, up to the end of the compressed page, is `B`, the bitstre
 only layout `seqlz-1` writes, and levels 2 and 3 write it for every page whose literals do not
 code well enough.
 
-The rest of the chapter goes from what every page has to what only some have: the codes, and `B` with
-its sequences, then two pages read bit by bit, then the coded literals, a page's own literal table and
-the deltas, and last the rules of a valid page and the decoder as the spec writes it.
+The rest of the chapter is what every page has: the codes, and `B` with its sequences, then two pages
+read bit by bit, and last the rules of a valid page and the decoder as the spec writes it. The coded
+literals open [Part III](#ch-format2), a page's own literal table and the deltas
+[Part IV](#ch-format3).
 
 ## Prefix codes from code lengths {#ch-format--codes}
 

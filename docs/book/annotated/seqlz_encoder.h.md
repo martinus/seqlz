@@ -1,15 +1,16 @@
 # src/seqlz_encoder.h
 
-The encoder: it writes each sequence the moment the matcher of `seqlz_match.h` finds it, as one loop.
-The literals go out as they are, and per sequence the token's code, the offset bits and the length
-values go into a bitstream ([the format](book:#ch-format)). Levels 2 and 3 then code the literals, in
-`seqlz_compress_literals.c`. It is a header of `static` functions so that `seqlz_compress.c` inlines it
-into its loops and `seqlz_harness.c` can use it too; the kernel's copy has this code in place, in its
-`seqlz_compress.c`.
+The encoder: it writes each sequence the moment the matcher of `seqlz_match.h` finds it, so matcher
+and encoder are one loop. The literals go out as they are, raw. Per sequence the token's code, the
+offset bits and the length values go into a bitstream ([the format](book:#ch-format)). Levels 2 and 3
+code the literals afterwards, in `seqlz_compress_literals.c`. The file is a header of `static`
+functions, so that `seqlz_compress.c` inlines it into its loops and `seqlz_harness.c` can use it too;
+the kernel's copy has this code in its `seqlz_compress.c`.
 
-The problem the file solves: the bitstream comes after all literals, but how many literals there are
-is known only after the last sequence. So the encoder writes from both ends of `dst`, the literals from
-the front and the bitstream backwards from the back, and turns the bitstream around at the end.
+The problem the file solves: in the page the bitstream comes after all literals, but how many
+literals there are is known only after the last sequence. So the encoder writes from both ends of
+`dst`, the literals from the front and the bitstream backwards from the back, and turns the bitstream
+around at the end.
 
 A reading order that follows the call:
 
@@ -84,6 +85,13 @@ With level 2 or 3 instead of 1 the result is the same: {{ab.lits}} literals are 
 :::
 @end
 
+@intro 3
+At level 3 the encoder also writes a record of {{delta.rec}} bytes before each sequence's literals:
+where the sequence starts in the page, how many literals it has, and the offset before it.
+`seqlz_delta_literals()` reads the records once the page is matched, to pick the literals' delta
+([the records](book:#ch-encoder--records)). The code for it is in three blocks:
+[the fields](#b83), [the record's size](#b173) and [the write](#b185).
+
 ## The file
 
 @@ 1-15
@@ -96,14 +104,14 @@ what follows the includes into the kernel's `seqlz_compress.c`, right before the
 
 @@ 16-53
 @anchor ch-encoder
-The layout, and the proof that it fits. The literals grow up from the front of `dst`, the bitstream
-grows down from its end, and before each sequence the encoder checks that its literals and `ENC_ROOM`
-bytes more are free between them.
+The layout, and the proof that it fits. The literals grow up from the front of `dst`, behind the
+u16, and the bitstream grows down from its end. Before each sequence the encoder checks that its
+literals and `ENC_ROOM` bytes more are free between the two.
 
-Why `ENC_ROOM` is 32: a sequence's copies write up to 16 bytes past its literals, and its at most two
+`ENC_ROOM` is 32: a sequence's copies write up to 16 bytes past its literals, and its at most two
 flushes write at most 15 bytes below where the bitstream was. The third paragraph is why zram's two
 pages always fit: a sequence with a match covers at least 4 bytes and takes at most 31 bits for its
-token and offset.
+token and offset. The records it names are level 3's ([Part IV](#b185)).
 
 One pass and any `dst` size: two passes, matcher into an array then encoder, were 6% slower
 ([one pass](book:#ch-encoder--layout)).
@@ -219,9 +227,8 @@ them is matched again without them ([`compress_own()`](seqlz_compress.c.html#b35
 @end
 
 @@ 54-75
-The comment above, checked by the compiler. A change of a table or a constant that breaks the
-argument now stops the build; until 23rd October 2026 it was only in the comment, which had been wrong
-once (it counted 40 bytes instead of 32), commit `75756b7`.
+The comment above, checked by the compiler: a change of a table or a constant that breaks its
+argument stops the build.
 
 `ENC_BITSTREAM_MAX` is 31 bits for every 4 bytes of the block, and the u16, a block of literals, that
 bitstream and `ENC_ROOM` fit `SEQLZ_COMPRESS_BOUND`, two pages.
@@ -243,6 +250,9 @@ $16 + \lfloor 58 / 8 \rfloor + 8 = 31 \le 32$ bytes, and the u16, a page of lite
 bitstream and `ENC_ROOM` take $2 + 4096 + {{ch10.bound.bytes.tex}} + 32 = 8098$ bytes, which fit
 `SEQLZ_COMPRESS_BOUND`.
 @assert F("ch10.bound.total") + ch10.enc_room == 8098 and F("ch10.bound.two") == 8192 and ch10.enc_room == 32
+
+Until 23rd October 2026 the argument was only in the comment, which had been wrong once: it counted
+40 bytes instead of 32 (commit `75756b7`).
 @end
 
 @@ 76-82
@@ -257,8 +267,9 @@ The matcher leaves the encoder no registers, so this struct lives on the stack
 ([explored-designs.md](https://github.com/martinus/seqlz/blob/main/docs/explored-designs.md#the-compressor-second-round-fewer-instructions)).
 
 @@ 83-89
-`rec` and `pos` are level 3's, for the records before the literals
-([records](book:#ch-encoder--records)); `pos` is where the next sequence starts in the page.
+`rec` and `pos` are level 3's. With `rec` the encoder writes a record before each sequence's
+literals ([the records](book:#ch-encoder--records)); `pos` is where the next sequence starts in the
+page, which the record holds.
 
 @@ 90-91
 The struct's end.
@@ -348,8 +359,10 @@ offset, has none:
 ## encode_seq(), one sequence
 
 @@ 159-172
-`rec` is a constant at every call, so the copy of the loop for levels 1 and 2 has none of level 3's
-record code, and there `n_rec` stays 0.
+`encode_seq()` writes one sequence: its `ll` literals from `in`, then its token, offset bits and
+length values. The matcher calls it for every sequence it finds; the last one has `ml` 0. `rec` and
+`n_rec` are for level 3's records ([level 3](#b173)). `rec` is a constant at every call, `false` in
+the loop of levels 1 and 2, so that copy has none of the record code, and `n_rec` stays 0.
 
 @@ 173-175
 `n_rec` is the size of the record before the literals, {{delta.rec}} bytes, or 0.
@@ -357,12 +370,13 @@ record code, and there `n_rec` stays 0.
 A record needs three things: `rec`, `true` from the callers that write records, level 3's lazy matcher
 in `compress_own()` and `encode_raw()` in `seqlz_harness.c`, and `false` from the matcher of levels 1
 and 2; `e->rec`, which is false in the second pass without records; and `ll` not 0, because a sequence
-without literals has no deltas. The room check below counts the record too.
+without literals has no deltas. [The room check](#b176) counts the record too.
 @end
 
 @@ 176-184
-The room check before anything is written. A failed check sets `p` to `lit`, and that sticks: every
-later sequence fails it too, and `encoder_finish()` sees `p == lit` and returns 0. The matcher runs on
+The room check before anything is written; `n_rec` is 0 below level 3. A failed check sets `p` to
+`lit`, and that sticks: every later sequence fails it too, and `encoder_finish()` sees `p == lit` and
+returns 0. The matcher runs on
 to the end of the page anyway, which costs nothing with zram's two pages, where it never happens.
 @more {#ch-encoder--emit} Why the room cannot go negative
 The cast to `size_t` makes the compare unsigned, so a negative room would look huge. `p` never goes
@@ -375,7 +389,8 @@ at `p == lit`.
 Level 3 only: a record of 6 bytes before the literals, with where the sequence starts in the page, how
 many literals it has, and the offset before it. Level 3's deltas need those, and they are not in the
 literals; `seqlz_delta_literals()` reads the records once the page is matched
-([records](book:#ch-encoder--records)).
+([records](book:#ch-encoder--records)). Then `pos` moves on by the whole sequence, for the next
+record.
 @more {#ch-encoder--record-bytes} The first two records of the page of pointers
 The record is the position of the sequence's first literal, `e->pos`, the number of literals, and
 `e->last`, the offset of the sequence before, which the end of `encode_seq()` sets to `off` only after
@@ -398,7 +413,7 @@ bytes from 8 back, so the second starts at {{delta.ptr.rec.1.pos}} with `last` 8
 The literals: one 16-byte copy without a loop, since most sequences have few literals (1 in the page
 of pointers) and a loop's exit branch could mispredict, then more 16-byte copies, and bytes only near
 the end of the input. The bytes past `ll` land in `ENC_ROOM`, and the next sequence's literals
-overwrite them, the wild copy again. `__builtin_memcpy()` with a constant 16 is always inlined, also
+overwrite them, a [wild copy](book:#ch-cpu--wild-copy). `__builtin_memcpy()` with a constant 16 is always inlined, also
 with `CONFIG_FORTIFY_SOURCE` ([why the builtin](seqlz_internal.h.html#b20)).
 
 The last sequence (`ml == 0`) has only its literals and no bits. Until 11th October 2026 it had a
@@ -407,13 +422,11 @@ token and maybe an `ll` value, about 9 bits per page ([how a page ends](book:#ch
 @@ 216-237
 Token and offset in one put: the offset bits right after the token's code. `ENC_SHIFT()` shifts the
 offset of class 0, the repeat offset, which sends no bits, down to 0, and for classes 1 to 5 it is the
-class's shift. Until 31st October 2026 a mask did that, `& (0U - (cls != 0))`; the shift alone took
-0.7% to 1.3% fewer instructions per page at level 1
-([explored-designs.md](https://github.com/martinus/seqlz/blob/main/docs/explored-designs.md#fewer-instructions-per-sequence-in-encode_seq-class-0s-offset-shifted-by-15-07-to-13-fewer-instructions-at-level-1-kept-the-literal-copy-the-escape-and-a-class-table-not-kept)).
+class's shift.
 
 An `ll` value gets a flush of its own, and every sequence ends with one, so the accumulator never
-overflows: at most 7 + 31 + 20 = 58 bits before a flush. `last` changes only after the record above
-used the old one.
+overflows: at most 7 + 31 + 20 = 58 bits before a flush. `e->last` becomes `off` at the end, after
+`seqlz_off_class()` used the old one, and at level 3 [the record](#b185).
 @more {#ch-encoder--seq176} Sequence 176 of the page of task records, line by line
 The figure takes sequence 176 of [chapter 5](#ch-trace)'s page through these lines: a new offset of
 class {{ch10.slab.s176.cls}}, a token with a code of its own, and an `ll` value. The animation of
@@ -474,12 +487,14 @@ match at offset {{ch10.ab.s1.off}}, with `last` 1: class {{ch10.ab.s1.cls}}, {{c
 token $2 + 16 \times 31 + 512 \times 1 = {{ch10.ab.s1.tok}}$.
 @assert ch10.ab.s1.ll == 2 and ch10.ab.s1.cls == 1 and ch10.ab.s1.raw == 1 and ch10.ab.s1.tok == 2 + 16 * 31 + 512
 
-The offset is shifted right by `ENC_SHIFT(cls)`, which is 15 for class 0 and shifts its offset to 0.
-Without that, class 0 would OR the offset into the low bits of the token's code. The other classes
-need nothing more: `seqlz_off_class()` picks a class whose bits hold the offset. Clearing only class 0's
+The offset is shifted right by `ENC_SHIFT(cls)`: for classes 1 to 5 by the class's shift, and
+`seqlz_off_class()` picks a class whose bits hold the shifted offset; for class 0 by 15, to 0. Without
+that, class 0 would OR the offset into the low bits of the token's code. Clearing only class 0's
 offset, instead of masking every offset to `raw_bits` bits, came with commit `996248b`, with no number
-of its own, as a mask `0U - (cls != 0)` that the shift replaced on 31st October 2026. One put instead
-of two took 21 786 to 21 233 cycles per page on x86-64
+of its own, as a mask `& (0U - (cls != 0))`. The shift replaced it on 31st October 2026, with 0.7% to
+1.3% fewer instructions per page at level 1
+([explored-designs.md](https://github.com/martinus/seqlz/blob/main/docs/explored-designs.md#fewer-instructions-per-sequence-in-encode_seq-class-0s-offset-shifted-by-15-07-to-13-fewer-instructions-at-level-1-kept-the-literal-copy-the-escape-and-a-class-table-not-kept)).
+One put instead of two took 21 786 to 21 233 cycles per page on x86-64
 ([explored-designs.md](https://github.com/martinus/seqlz/blob/main/docs/explored-designs.md#the-compressor-second-round-fewer-instructions)).
 For the page of `ab`: `{{ch10.ab.s1.codehex}} << {{ch10.ab.s1.raw}} | ({{ch10.ab.s1.off}} >> 1) = {{ch10.ab.s1.put}}`,
 {{ch10.ab.s1.putn}} bits.
@@ -503,10 +518,10 @@ $7 + 31 + 20 + 20 = 78$ bits.
 
 @@ 238-247
 @anchor ch-encoder--init
-The compound literal zeroes every field it does not name: `acc`, `cnt`, `rec` and `pos` start at 0.
-`p` starts at the end of `dst`, `lit` behind the 2 bytes of the u16, which is written last. Level 3
-sets `rec` after the call; a second `encoder_init()`, for a page that did not fit with its records,
-clears it again.
+The compound literal zeroes every field it does not name: `acc` and `cnt` start at 0. `p` starts at
+the end of `dst`, `lit` behind the 2 bytes of the u16, which is written last, and `last` at 1. At level
+3 it also clears `rec` and `pos`: [`compress_own()`](seqlz_compress.c.html#b35) sets `rec` after the
+call, and calls it once more for a page that did not fit with its records.
 
 @@ 248-273
 `p == lit` only after a failed room check. The bits left over are in memory already: the last flush
