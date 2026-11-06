@@ -253,7 +253,7 @@ lit_finish(u8 *d, unsigned int n_literals, unsigned int bitstream,
  * Turns the block of len bytes in d, with raw literals as the encoder wrote it,
  * into one with Huffman coded literals, where that saves more than 1/16 of them
  * plus coded_min bytes, SEQLZ_LIT_CODED_MIN at level 2, not counting the header
- * of the coded literals, 8 to 16 bytes. Decoding coded literals costs time for
+ * of the coded literals, 8 to 15 bytes. Decoding coded literals costs time for
  * every byte, and coding them wherever they save anything at all saved almost
  * no more memory. Returns the new length, or len if the literals stay raw.
  *
