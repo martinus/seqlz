@@ -48,11 +48,13 @@ static noinline unsigned int compress_own(struct seqlz_state *st, const u8 *src,
 	if (dst_cap < SEQLZ_HEADER + ENC_ROOM)
 		return 0;
 	encoder_init(&e, dst, dst_cap, src + SEQLZ_BLOCK_SIZE);
-	e.rec = true;
+	e.rec = dst_cap >= ENC_REC_AT + ENC_ROOM;
+	e.recs = (u8 *)dst + ENC_REC_AT;
 	/*
-	 * Once with the records; a block that does not fit with them once more
-	 * without, as encoder_init() clears e.rec. A loop and not two calls,
-	 * so that the inlined matcher is there once.
+	 * Once with the records, if dst reaches behind where they start; a
+	 * block that does not fit with them once more without, as
+	 * encoder_init() clears e.rec. A loop and not two calls, so that the
+	 * inlined matcher is there once.
 	 */
 	for (;;) {
 		seqlz_match_block(st->table, src, true, &e);
@@ -60,16 +62,9 @@ static noinline unsigned int compress_own(struct seqlz_state *st, const u8 *src,
 			break;
 		encoder_init(&e, dst, dst_cap, src + SEQLZ_BLOCK_SIZE);
 	}
-	if (e.rec) {
-		/*
-		 * a copy of e.lit: with its address taken, e could not be kept
-		 * in registers
-		 */
-		u8 *lit = e.lit;
-
-		*delta = seqlz_delta_literals(dst, &lit, src, st->literals);
-		e.lit = lit;
-	}
+	if (e.rec)
+		*delta = seqlz_delta_literals((u8 *)dst + ENC_REC_AT, e.recs,
+					      src, st->literals);
 	return encoder_finish(&e, dst, dst_cap);
 }
 #endif /* SEQLZ_LEVELS >= 3 */

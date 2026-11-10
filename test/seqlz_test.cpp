@@ -1855,6 +1855,52 @@ TEST_CASE("seqlz: level 3 without room for the delta's records writes the page w
     }
 }
 
+TEST_CASE("seqlz: level 3 with more records than fit below the bitstream writes the page without deltas") {
+    // The records are in the upper half of dst, where the bitstream comes down toward them. A page of many
+    // short sequences, each with a literal, has more of both than fit there, also in two pages: it is matched
+    // again without records, gets no deltas and comes back; from seqlz_encode() with the page, the same bytes.
+    auto st = std::make_unique<seqlz_state>();
+    auto rng = std::mt19937_64(344);
+    auto scratch = std::vector<unsigned char>(SEQLZ_SCRATCH);
+    auto page = std::vector<unsigned char>(page_size);
+    // 128 random bytes, then 5 of them from a random place and a byte of its own, again and again
+    for (unsigned k = 0; k < 128; ++k) {
+        page[k] = static_cast<unsigned char>(rng());
+    }
+    for (unsigned k = 128; k + 6 <= page_size; k += 6) {
+        std::copy_n(page.begin() + rng() % 123, 5, page.begin() + k);
+        page[k + 5] = static_cast<unsigned char>(rng());
+    }
+    auto seq = std::vector<seqlz_sequence>(SEQLZ_MAX_SEQUENCES);
+    auto const n = seqlz_find(st.get(), page.data(), seq.data(), 3);
+    auto with_literals = 0U;
+    for (unsigned k = 0; k < n; ++k) {
+        with_literals += seq[k].literals != 0;
+    }
+    // 6 bytes of record and more than 2 of bitstream each, for the 4046 bytes above the records' start
+    // that two pages leave
+    REQUIRE(with_literals * 8 > 4046);
+    auto d = std::vector<unsigned char>(2 * page_size);
+    auto const len = seqlz_compress_block(st.get(), page.data(), d.data(), 2 * page_size, 3);
+    REQUIRE(len > 0);
+    CHECK(lit_delta(d) == 0);
+    auto out = std::vector<unsigned char>(page_size);
+    REQUIRE(seqlz_decompress(d.data(), len, out.data(), scratch.data()) == 0);
+    CHECK(out == page);
+    auto const lits = literals_of(page, seq.data(), n);
+    auto e = std::vector<unsigned char>(2 * page_size);
+    CHECK(seqlz_encode(st.get(),
+                       seq.data(),
+                       n,
+                       lits.data(),
+                       static_cast<unsigned>(lits.size()),
+                       page.data(),
+                       e.data(),
+                       2 * page_size,
+                       3) == len);
+    CHECK(std::equal(d.begin(), d.begin() + len, e.begin()));
+}
+
 TEST_CASE("seqlz: level 3 keeps the plain literals raw where the deltas it picked stay raw") {
     // A delta is picked by pricing every 5th literal. Where its deltas then do not code, level 3 does not
     // try the plain literals again: that coded 0.4% of the pages and saved 0.71 bytes per page, for a

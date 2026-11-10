@@ -25,8 +25,8 @@
  *
  * So dst can have any size, and a block that does not fit is an error, as for
  * the other compressors. Before each sequence the encoder checks that its
- * literals, its record (see LIT_REC) and ENC_ROOM bytes more are free between
- * the two: a sequence's copies write up to 16 bytes past its literals, and its
+ * literals and ENC_ROOM bytes more are free between the two: a sequence's
+ * copies write up to 16 bytes past its literals, and its
  * flushes write at most 15 bytes below where the bitstream was before it. A
  * sequence has at most two flushes: the first moves the bitstream down by at
  * most 7 bytes, as it has at most 58 bits (see below), and the second writes 8
@@ -41,8 +41,15 @@
  * bits are more than its token, offset and two length values take. The last
  * sequence has no bits. So the bitstream has at most ENC_BITSTREAM_MAX bytes,
  * 3968 for blocks of 4 KiB, and with a block of literals that leaves more than
- * ENC_ROOM bytes free. The records take 6 bytes more per sequence, and
- * compress_own() writes a block without them where they do not fit.
+ * ENC_ROOM bytes free.
+ *
+ * At SEQLZ_LEVEL_OWN each sequence with literals also has a record, see
+ * LIT_REC. The records start at ENC_REC_AT in dst, behind where the literals
+ * of any block end, and go up toward the bitstream, so the literals stay in
+ * one piece. There the encoder checks that the record and ENC_ROOM bytes more
+ * are free below the bitstream, which covers the literals too. Where the
+ * records and the bitstream do not both fit behind ENC_REC_AT, or dst ends
+ * before it, compress_own() writes the block without records.
  *
  * Bits are collected in a 64-bit accumulator and written 8 bytes at a time;
  * then the write position moves down by the whole bytes, and the at most 7 bits
@@ -82,10 +89,11 @@ struct seqlz_encoder {
 	unsigned int last; /* the offset of the sequence before, class 0 */
 #if SEQLZ_LEVELS >= 3
 	/*
-	 * at SEQLZ_LEVEL_OWN: write a record before the literals, see LIT_REC
+	 * at SEQLZ_LEVEL_OWN: write a record for the literals, see LIT_REC
 	 */
 	bool rec;
 	unsigned int pos; /* with rec: where the next sequence starts */
+	u8 *recs; /* with rec: where the next record goes */
 #endif
 };
 
@@ -159,7 +167,7 @@ static __always_inline u32 token_code(unsigned int tok, unsigned int *len)
 /*
  * Writes one sequence: its literals from in, then its token, offset and length
  * values. ml is 0 for the last sequence, which has only its literals. With rec,
- * a constant, and e->rec, the record before the literals, see LIT_REC: the
+ * a constant, and e->rec, the record of the literals, see LIT_REC: the
  * callers that write records pass rec true, the matcher of the levels below
  * SEQLZ_LEVEL_OWN false, so its code has none of it.
  */
@@ -168,26 +176,34 @@ static __always_inline void encode_seq(struct seqlz_encoder *e, const u8 *in,
 				       unsigned int off, bool rec)
 {
 	unsigned int k = 0, tlen, raw_bits, cls, n_rec = 0;
+	/* what must stay below the bitstream, and the bytes it gets */
+	const u8 *top = e->lit;
+	unsigned int need = ll;
 	u32 code;
 
 #if SEQLZ_LEVELS >= 3
-	n_rec = rec && e->rec && ll ? LIT_REC : 0;
+	if (rec && e->rec) {
+		n_rec = ll ? LIT_REC : 0;
+		top = e->recs;
+		need = n_rec;
+	}
 #endif
 
 	/*
 	 * The block does not fit: no more writes. With p at lit, every later
-	 * sequence ends here too, and encoder_finish() sees it.
+	 * sequence ends here too, and encoder_finish() sees it. A signed
+	 * compare: lit is below the records.
 	 */
-	if ((size_t)(e->p - e->lit) < ll + n_rec + ENC_ROOM) {
+	if (e->p - top < (long)(need + ENC_ROOM)) {
 		e->p = e->lit;
 		return;
 	}
 #if SEQLZ_LEVELS >= 3
 	if (n_rec) {
-		put_unaligned_le16((u16)e->pos, e->lit);
-		put_unaligned_le16((u16)ll, e->lit + 2);
-		put_unaligned_le16((u16)e->last, e->lit + 4);
-		e->lit += LIT_REC;
+		put_unaligned_le16((u16)e->pos, e->recs);
+		put_unaligned_le16((u16)ll, e->recs + 2);
+		put_unaligned_le16((u16)e->last, e->recs + 4);
+		e->recs += LIT_REC;
 	}
 	if (rec)
 		e->pos += ll + ml;
@@ -234,6 +250,15 @@ static __always_inline void encode_seq(struct seqlz_encoder *e, const u8 *in,
 	enc_flush(e);
 	e->last = off;
 }
+
+#if SEQLZ_LEVELS >= 3
+/*
+ * Where the records start in dst, see LIT_REC: behind the most literals a
+ * block has and the 16 bytes a copy writes past them, so the literals never
+ * reach them, and the bitstream comes down toward them.
+ */
+#define ENC_REC_AT (SEQLZ_HEADER + SEQLZ_BLOCK_SIZE + 16U)
+#endif
 
 static __always_inline void encoder_init(struct seqlz_encoder *e, u8 *d,
 					 unsigned int dst_cap,

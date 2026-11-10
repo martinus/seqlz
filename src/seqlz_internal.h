@@ -164,19 +164,19 @@ static_assert(SEQLZ_LEVEL_OWN == SEQLZ_LEVEL_MAX);
 /* SEQLZ_LIT_CODED_MIN at SEQLZ_LEVEL_OWN, which trades more time for bytes */
 #define SEQLZ_LIT_CODED_MIN_OWN 19U
 /*
- * At SEQLZ_LEVEL_OWN the encoder writes LIT_REC bytes before each sequence's
- * literals: where they start in the block, how many there are and the offset of
- * the sequence before, a u16 each, little endian. Once the block is matched,
- * seqlz_delta_literals() picks the literals' delta from them, see
- * SEQLZ_LIT_DELTA_AT, and moves the literals down over them. They take room in
- * dst: a block that does not fit with them is matched again without them,
- * without deltas.
+ * At SEQLZ_LEVEL_OWN the encoder writes a record of LIT_REC bytes for each
+ * sequence with literals: where they start in the block, how many there are
+ * and the offset of the sequence before, a u16 each, little endian. Once the
+ * block is matched, seqlz_delta_literals() picks the literals' delta from
+ * them, see SEQLZ_LIT_DELTA_AT. They are in the part of dst that the block
+ * does not use, see ENC_REC_AT: a block that does not fit with them is matched
+ * again without them, without deltas.
  */
 #define LIT_REC 6U
 
 /* level 3's literals, see seqlz_compress_literals.c */
-unsigned int seqlz_delta_literals(u8 *d, u8 **lit_end, const u8 *block,
-				  u8 *deltas);
+unsigned int seqlz_delta_literals(const u8 *recs, const u8 *recs_end,
+				  const u8 *block, u8 *deltas);
 unsigned int seqlz_code_own(u8 *d, unsigned int len, struct seqlz_state *st,
 			    unsigned int delta);
 #endif /* SEQLZ_LEVELS >= 3 */
