@@ -43,16 +43,18 @@ static __always_inline void lanes_spill(u64 x, u64 *even, u64 *odd)
 /*
  * Appends one literal's code to a stream's accumulator. The enc[] entry has the
  * code's length in its low bits and the code from bit 8 on, see build_lit(). A
- * stream's entries are also summed: the low byte of the sum is the length of
- * their codes, at most 4 * 10 bits between two flushes, which fits.
+ * stream's entries are also summed into bits, on top of the bits left from
+ * before the last flush: the low byte of the sum is the bits in the
+ * accumulator that are not written yet, at most 7 + LIT_FLUSH_RUN * 10, which
+ * fits. What the codes add above the low byte is never read.
  */
-static __always_inline u64 lit_put(u64 acc, unsigned int *sum, const u32 *enc,
+static __always_inline u64 lit_put(u64 acc, unsigned int *bits, const u32 *enc,
 				   u8 b)
 {
 	u32 e = enc[b];
 
 	acc = acc << (e & 63U) | e >> 8;
-	*sum += e;
+	*bits += e;
 	return acc;
 }
 
@@ -72,27 +74,36 @@ static void store_tail(u8 *p, u64 w, unsigned int n)
 
 /*
  * Writes the whole bytes of a stream's accumulator and returns p moved on by
- * them, as enc_flush() does for the sequences. cnt is the bits left from before
- * the last flush, the low byte of sum the bits added since. 8 bytes at once
- * while the stream has room for them; it ends at end, where the next stream
- * starts. The bytes are swapped once, before the branch, not by
- * put_unaligned_be64() in each, which the compiler did not merge.
+ * them, as enc_flush() does for the sequences. The low byte of bits is the
+ * bits not written yet, see lit_put(); the at most 7 of them that stay are
+ * what bits is afterwards. 8 bytes at once while the stream has room for them;
+ * it ends at end, where the next stream starts. With slots, a constant, every
+ * stream has that room, see LIT_SLOT, and the test is not there. The bytes are
+ * swapped once, before the branch, not by put_unaligned_be64() in each, which
+ * the compiler did not merge.
  */
 static __always_inline u8 *lit_flush(u8 *p, const u8 *end, u64 acc,
-				     unsigned int *cnt, unsigned int *sum)
+				     unsigned int *bits, bool slots)
 {
-	unsigned int n = *cnt + (*sum & 255U);
+	unsigned int n = *bits & 255U;
 	u64 w = swab64(acc << ((64U - n) & 63U));
 
-	if (end - p >= 8)
+	if (slots || end - p >= 8)
 		put_unaligned_le64(w, p);
 	else
 		store_tail(p, w, (n + 7U) >> 3);
 	p += n >> 3;
-	*cnt = n & 7U;
-	*sum = 0;
+	*bits = n & 7U;
 	return p;
 }
+
+/*
+ * The literals of a stream between two flushes: their codes, of up to
+ * SEQLZ_LIT_BITS bits, and the 7 bits a flush can leave fit the accumulator.
+ */
+#define LIT_FLUSH_RUN 5U
+static_assert(7U + LIT_FLUSH_RUN * SEQLZ_LIT_BITS <= 64U,
+	      "a run of codes fits the accumulator");
 
 /*
  * Writes the n_literals literals into the 8 streams that start at q[0] to q[7],
@@ -100,14 +111,15 @@ static __always_inline u8 *lit_flush(u8 *p, const u8 *end, u64 acc,
  * bit first, see seqlz_decode_literals(). Four streams at a time, each with an
  * accumulator of its own, so that the four chains of shifts run side by side.
  * One stream after the other made each literal wait for the one before.
- * ends gets where each stream ends, the partly used last byte included.
+ * ends gets where each stream ends, the partly used last byte included. slots
+ * says that the streams are in slots, see lit_flush().
  */
 static __always_inline void lit_streams(const u32 *enc, const u8 *literals,
 					unsigned int n_literals, u8 *const *q,
-					u8 **ends)
+					u8 **ends, bool slots)
 {
-	/* the literals between two flushes, 4 per stream */
-	const unsigned int run = 4U * SEQLZ_LIT_STREAMS;
+	/* the literals between two flushes, of all 8 streams */
+	const unsigned int run = LIT_FLUSH_RUN * SEQLZ_LIT_STREAMS;
 	unsigned int half, k, j;
 
 	for (half = 0; half < SEQLZ_LIT_STREAMS; half += 4) {
@@ -117,59 +129,60 @@ static __always_inline void lit_streams(const u32 *enc, const u8 *literals,
 		u8 *e0 = p1, *e1 = p2, *e2 = p3, *e3 = q[half + 4];
 		/* each stream's accumulator, see lit_put() and lit_flush() */
 		u64 a0 = 0, a1 = 0, a2 = 0, a3 = 0;
-		unsigned int c0 = 0, c1 = 0, c2 = 0, c3 = 0;
-		unsigned int s0 = 0, s1 = 0, s2 = 0, s3 = 0;
+		unsigned int b0 = 0, b1 = 0, b2 = 0, b3 = 0;
+		/* this half's 4 of the next 8 literals */
+		const u8 *l = literals + half;
 
 		/*
-		 * A run of literals, then a flush: 4 codes of up to 10 bits fit
-		 * the accumulator. The loop stops run - 4 literals before the
-		 * end, so the rest below has at most 4 per stream.
+		 * A run of literals, then a flush. The loop stops before a run
+		 * that the literals do not fill, so the rest below has at most
+		 * LIT_FLUSH_RUN per stream.
 		 */
-		for (k = half; k + run - 4U < n_literals; k += run) {
+		for (k = half; k + run - 4U < n_literals; k += run, l += run) {
 			for (j = 0; j < run; j += SEQLZ_LIT_STREAMS) {
-				a0 = lit_put(a0, &s0, enc, literals[k + j]);
-				a1 = lit_put(a1, &s1, enc, literals[k + j + 1]);
-				a2 = lit_put(a2, &s2, enc, literals[k + j + 2]);
-				a3 = lit_put(a3, &s3, enc, literals[k + j + 3]);
+				a0 = lit_put(a0, &b0, enc, l[j]);
+				a1 = lit_put(a1, &b1, enc, l[j + 1]);
+				a2 = lit_put(a2, &b2, enc, l[j + 2]);
+				a3 = lit_put(a3, &b3, enc, l[j + 3]);
 			}
-			p0 = lit_flush(p0, e0, a0, &c0, &s0);
-			p1 = lit_flush(p1, e1, a1, &c1, &s1);
-			p2 = lit_flush(p2, e2, a2, &c2, &s2);
-			p3 = lit_flush(p3, e3, a3, &c3, &s3);
+			p0 = lit_flush(p0, e0, a0, &b0, slots);
+			p1 = lit_flush(p1, e1, a1, &b1, slots);
+			p2 = lit_flush(p2, e2, a2, &b2, slots);
+			p3 = lit_flush(p3, e3, a3, &b3, slots);
 		}
 		/*
-		 * the rest, at most 4 literals per stream; the other half's 4
-		 * of every 8 are skipped
+		 * the rest, at most LIT_FLUSH_RUN literals per stream; the
+		 * other half's 4 of every 8 are skipped
 		 */
 		for (; k < n_literals; k++) {
 			switch (k % SEQLZ_LIT_STREAMS) {
 			case 0:
 			case 4:
-				a0 = lit_put(a0, &s0, enc, literals[k]);
+				a0 = lit_put(a0, &b0, enc, literals[k]);
 				break;
 			case 1:
 			case 5:
-				a1 = lit_put(a1, &s1, enc, literals[k]);
+				a1 = lit_put(a1, &b1, enc, literals[k]);
 				break;
 			case 2:
 			case 6:
-				a2 = lit_put(a2, &s2, enc, literals[k]);
+				a2 = lit_put(a2, &b2, enc, literals[k]);
 				break;
 			default:
-				a3 = lit_put(a3, &s3, enc, literals[k]);
+				a3 = lit_put(a3, &b3, enc, literals[k]);
 			}
 			if ((k & 3U) == 3U)
 				k += 4;
 		}
-		p0 = lit_flush(p0, e0, a0, &c0, &s0);
-		p1 = lit_flush(p1, e1, a1, &c1, &s1);
-		p2 = lit_flush(p2, e2, a2, &c2, &s2);
-		p3 = lit_flush(p3, e3, a3, &c3, &s3);
+		p0 = lit_flush(p0, e0, a0, &b0, slots);
+		p1 = lit_flush(p1, e1, a1, &b1, slots);
+		p2 = lit_flush(p2, e2, a2, &b2, slots);
+		p3 = lit_flush(p3, e3, a3, &b3, slots);
 		/* a stream's end: its last byte, partly used, counts */
-		ends[half] = p0 + (c0 != 0);
-		ends[half + 1] = p1 + (c1 != 0);
-		ends[half + 2] = p2 + (c2 != 0);
-		ends[half + 3] = p3 + (c3 != 0);
+		ends[half] = p0 + (b0 != 0);
+		ends[half + 1] = p1 + (b1 != 0);
+		ends[half + 2] = p2 + (b2 != 0);
+		ends[half + 3] = p3 + (b3 != 0);
 	}
 }
 
@@ -308,7 +321,8 @@ static noinline unsigned int code_sampled(u8 *d, unsigned int len, u8 *slots,
 		return len;
 	for (j = 0; j <= SEQLZ_LIT_STREAMS; j++)
 		q[j] = slots + j * slot;
-	lit_streams(seqlz_tables.lit[set].enc, literals, n_literals, q, ends);
+	lit_streams(seqlz_tables.lit[set].enc, literals, n_literals, q, ends,
+		    true);
 	for (j = 0, coded = 0; j < SEQLZ_LIT_STREAMS; j++) {
 		sizes[j] = (unsigned int)(ends[j] - q[j]);
 		coded += sizes[j];
@@ -1019,7 +1033,7 @@ unsigned int seqlz_code_own(u8 *d, unsigned int len, struct seqlz_state *st,
 	q[0] = d + header;
 	for (j = 0; j < SEQLZ_LIT_STREAMS; j++)
 		q[j + 1] = q[j] + sizes[j];
-	lit_streams(enc, literals, n_literals, q, ends);
+	lit_streams(enc, literals, n_literals, q, ends, false);
 	if (delta)
 		d[SEQLZ_LIT_HEADER(0)] = (u8)delta;
 	if (desc)
