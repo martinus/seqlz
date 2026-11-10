@@ -175,13 +175,14 @@ static __always_inline void encode_seq(struct seqlz_encoder *e, const u8 *in,
 				       unsigned int ll, unsigned int ml,
 				       unsigned int off, bool rec)
 {
-	unsigned int k = 0, tlen, raw_bits, cls, n_rec = 0;
+	unsigned int k = 0, tlen, raw_bits, cls;
 	/* what must stay below the bitstream, and the bytes it gets */
 	const u8 *top = e->lit;
 	unsigned int need = ll;
 	u32 code;
-
 #if SEQLZ_LEVELS >= 3
+	unsigned int n_rec = 0;
+
 	if (rec && e->rec) {
 		n_rec = ll ? LIT_REC : 0;
 		top = e->recs;

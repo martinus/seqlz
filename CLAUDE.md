@@ -94,7 +94,9 @@ tools/kernel-port/check.sh $K && tools/kernel-port/check.sh $K ARCH=arm64 LLVM=1
 ```
 
 - How much to run: while iterating, the build, `seqlz_test` and `seqlz_endian.c` (its hash stays as on
-  main unless the format changes), `port.py` too if `src/` or `tools/kernel-port/` changed. Before a
+  main unless the format changes), `port.py` too if `src/` or `tools/kernel-port/` changed, and
+  `test/levels.sh <dir>` if the change is in or next to a `#if SEQLZ_LEVELS` (a variable used only at
+  level 3 failed `-Werror` in the builds with 1 and 2 levels, #345). Before a
   push, clang-format, and `check.sh` on x86-64 if the kernel copy changed. CI runs the rest on every
   push (arm64, arm, s390, KUnit, fuzzers): do not repeat it locally. Instruction counts or timing only
   for changes on a hot path.
