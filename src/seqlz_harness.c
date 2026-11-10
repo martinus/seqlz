@@ -102,7 +102,8 @@ static unsigned int encode_raw(const struct seqlz_sequence *seq, unsigned int n,
 	encoder_init(&e, dst, dst_cap, literals + n_literals);
 #if SEQLZ_LEVELS >= 3
 	/* with a block, the records for the deltas, as compress_own() */
-	e.rec = block != NULL;
+	e.rec = block != NULL && dst_cap >= ENC_REC_AT + ENC_ROOM;
+	e.recs = (u8 *)dst + ENC_REC_AT;
 #endif
 	encode_all(&e, seq, n, literals);
 #if SEQLZ_LEVELS >= 3
@@ -115,7 +116,8 @@ static unsigned int encode_raw(const struct seqlz_sequence *seq, unsigned int n,
 		encode_all(&e, seq, n, literals);
 	}
 	if (e.rec)
-		*delta = seqlz_delta_literals(dst, &e.lit, block, deltas);
+		*delta = seqlz_delta_literals((u8 *)dst + ENC_REC_AT, e.recs,
+					      block, deltas);
 #endif
 	return encoder_finish(&e, dst, dst_cap);
 }

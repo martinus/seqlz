@@ -405,7 +405,7 @@ static __always_inline u64 sub_bytes(u64 a, u64 b)
 }
 
 /*
- * A record of LIT_REC bytes before a sequence's literals: where they start in
+ * A record of LIT_REC bytes for a sequence's literals: where they start in
  * the block, how many there are, and how far before each literal the byte is
  * that SEQLZ_DELTA_LAST takes its delta to
  */
@@ -418,16 +418,16 @@ static __always_inline void read_rec(const u8 *p, unsigned int *pos,
 }
 
 /*
- * The delta of the literals from d + SEQLZ_HEADER up to end, with the record
- * before each sequence's literals, see LIT_REC and SEQLZ_LIT_DELTA_AT: the one
- * whose best fixed table takes the fewest bits, 0 for none.
+ * The delta of the literals whose records are recs up to end, see LIT_REC and
+ * SEQLZ_LIT_DELTA_AT: the one whose best fixed table takes the fewest bits, 0
+ * for none.
  *
  * Each delta is priced as seqlz_code_own() prices the fixed tables, with the
  * code lengths of seqlz_tables.lit_cost, on every DELTA_STEP-th literal. A
  * delta also pays for its byte in the header, DELTA_HDR_BITS. The bits of the
  * fixed tables also tell which delta suits a table of the block's own.
  */
-static unsigned int pick_delta(const u8 *d, const u8 *end, const u8 *block)
+static unsigned int pick_delta(const u8 *recs, const u8 *end, const u8 *block)
 {
 	u64 s[DELTA_CHOICES] = { 0 };
 	u64 even[DELTA_CHOICES] = { 0 };
@@ -444,7 +444,7 @@ static unsigned int pick_delta(const u8 *d, const u8 *end, const u8 *block)
 	 * with each delta, in the 8-bit lanes of s, LIT_COST_RUN at a time,
 	 * then in the 16-bit lanes
 	 */
-	for (p = d + SEQLZ_HEADER; p < end; p += LIT_REC + ll) {
+	for (p = recs; p < end; p += LIT_REC) {
 		read_rec(p, &pos, &ll, &last);
 		for (k = j; k < ll; k += DELTA_STEP) {
 			const unsigned int at = pos + k;
@@ -483,76 +483,50 @@ static unsigned int pick_delta(const u8 *d, const u8 *end, const u8 *block)
 }
 
 /*
- * Picks the delta of the literals from the records before them, see LIT_REC and
- * SEQLZ_LIT_DELTA_AT, and moves the literals down over the records, to right
- * after the u16; *lit_end, their end, moves down with them. With a delta, their
- * deltas are also written to deltas. Returns the delta, 0 for none.
+ * Picks the delta of the literals from their records, recs up to recs_end, see
+ * LIT_REC and SEQLZ_LIT_DELTA_AT, and with a delta writes the literals' deltas
+ * to deltas. Returns the delta, 0 for none.
  */
-unsigned int seqlz_delta_literals(u8 *d, u8 **lit_end, const u8 *block,
-				  u8 *deltas)
+unsigned int seqlz_delta_literals(const u8 *recs, const u8 *recs_end,
+				  const u8 *block, u8 *deltas)
 {
-	u8 *const end = *lit_end;
-	const unsigned int pick = pick_delta(d, end, block);
-	u8 *out = d + SEQLZ_HEADER;
+	const unsigned int pick = pick_delta(recs, recs_end, block);
 	u8 *to = deltas;
 	unsigned int k, x, j, pos, ll, last;
-	u8 *p;
+	const u8 *p;
 
-	/*
-	 * The literals down over the records, and their deltas into deltas: the
-	 * ones near the block's start as they are. 8 bytes at a time, also up
-	 * to 7 bytes past a sequence's last literal; memcpy() was a call for
-	 * every sequence, and a loop over the last bytes mispredicted. The
-	 * bytes past the literals are the next sequence's place, which its
-	 * literals overwrite. Each sequence's literals move down by LIT_REC
-	 * bytes more than the one before, so only the first sequence's copy
-	 * reaches into the next record, and only its first byte, which was read
-	 * before. After the last literals dst has ENC_ROOM bytes more, see
-	 * encode_seq().
-	 */
-	p = d + SEQLZ_HEADER;
-	if (p < end)
+	if (!pick)
+		return 0;
+	for (p = recs; p < recs_end; p += LIT_REC) {
+		const u8 *pin;
+
 		read_rec(p, &pos, &ll, &last);
-	while (p < end) {
-		const u8 *in = p + LIT_REC;
-		const u8 *pin = block + pos;
-		const unsigned int n_lit = ll;
-		const unsigned int at = pos;
-		const unsigned int dist = last;
-
-		p += LIT_REC + n_lit;
-		if (p < end)
-			read_rec(p, &pos, &ll, &last);
-		/* a load, then a store: the copy overlaps its source */
-		for (k = 0; k < n_lit; k += 8)
-			put_unaligned_le64(get_unaligned_le64(in + k), out + k);
-		out += n_lit;
-		if (!pick)
-			continue;
+		pin = block + pos;
 		x = pick == SEQLZ_DELTA_4 ? 4U :
 		    pick == SEQLZ_DELTA_8 ? 8U :
-					    dist;
-		j = x > at ? x - at : 0;
-		for (k = 0; k < j && k < n_lit; k++)
+					    last;
+		/* the literals near the block's start as they are */
+		j = x > pos ? x - pos : 0;
+		for (k = 0; k < j && k < ll; k++)
 			to[k] = pin[k];
 		/*
-		 * past the last literal only inside the block;
-		 * to - deltas <= at
+		 * 8 bytes at a time, also up to 7 bytes past the sequence's
+		 * last literal, which the next sequence's deltas overwrite;
+		 * past it only inside the block. to - deltas <= pos
 		 */
-		if (at + n_lit + 8 <= SEQLZ_BLOCK_SIZE) {
-			for (; k < n_lit; k += 8) {
+		if (pos + ll + 8 <= SEQLZ_BLOCK_SIZE) {
+			for (; k < ll; k += 8) {
 				u64 a = get_unaligned_le64(pin + k);
 				u64 r = get_unaligned_le64(pin + k - x);
 
 				put_unaligned_le64(sub_bytes(a, r), to + k);
 			}
 		} else {
-			for (; k < n_lit; k++)
+			for (; k < ll; k++)
 				to[k] = (u8)(pin[k] - *(pin + k - x));
 		}
-		to += n_lit;
+		to += ll;
 	}
-	*lit_end = out;
 	return pick;
 }
 
