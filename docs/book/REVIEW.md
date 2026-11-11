@@ -8,7 +8,7 @@ never did kernel or compression work and wants to understand every line of src/.
 For each chapter assigned to you, in this order of importance:
 
 1. **Correctness.** Check every technical claim against the code, the docs (docs/format.md,
-   docs/seqlz.md, docs/plan.md, docs/explored-designs.md) and `git log`. Wrong semantics of a C line,
+   docs/why.md, docs/plan.md, docs/explored-designs.md) and `git log`. Wrong semantics of a C line,
    a wrong bit position, a wrong number, a measurement attributed to the wrong hardware or date, a
    reason the repository does not give presented as fact. Re-run the worked examples that matter
    (compile small programs against src/ with `gcc -O2 -Isrc src/seqlz_*.c seqlz_tables.c`, the tables from `tools/gen-tables/gen-tables.sh seqlz_tables.c`, in a scratch directory outside the repository, or python3; tools/seqlz-ref/seqlz_ref.py has load_tables(12)). Check that

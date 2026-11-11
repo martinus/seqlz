@@ -8,78 +8,45 @@ speed and the size of `zstd` at level 3, zram's default level for it.
 
 <img src="docs/plots/levels-vm.svg" alt="Memory per page against the time per page written for lz4, lzo-rle, zstd 3 and seqlz levels 1 to 3. seqlz-1 to seqlz-3 lie between lz4 and zstd 3 in time; seqlz-3 stores less than zstd 3, in less time. A dashed line joins lz4 and the three levels, the codecs with the lowest score for some exchange rate of bytes against time.">
 
-The numbers behind the chart: zram as swap in a Linux VM on a Ryzen 9 7950X, the means over four zram
-dumps, two of a phone and two of a desktop, on 1st November 2026. Memory is what zsmalloc holds per
-page, the time per page written is a swap-out plus 0.73 swap-ins, the reads per write of a phone in
-daily use; a desktop had 0.34 ([plan.md §1.1](docs/plan.md#11-the-score-memory-against-time-not-bars)):
+zram as swap in a Linux VM on a Ryzen 9 7950X, the means over four zram dumps of a phone and a
+desktop, 1st November 2026: `seqlz-2`, zram's default level, stores a page in 28% less memory than
+`lz4` for 13% more time per page written, and `seqlz-3` stores 4.4% less than `zstd` 3 in 70% of its
+time. Every level swaps in slower than `lz4`, most on a phone's little core, so the case for seqlz is
+memory at a cost in time. The numbers on the VM, a Mi 9T in its own kernel and a Pixel 9a, the
+alternatives and what is still open are in [Why a new codec](docs/why.md).
 
-| codec | memory per page | swap-out | swap-in, cold | time per page written |
-| --- | ---: | ---: | ---: | ---: |
-| `lz4` | 36.5% | 6.40 µs | 3.19 µs | 8.73 µs |
-| `lzo-rle` | 34.9% | 6.18 µs | 3.65 µs | 8.84 µs |
-| **`seqlz-1`** | **29.1%** | **6.66 µs** | **3.49 µs** | **9.21 µs** |
-| **`seqlz-2`** | **26.4%** | **7.12 µs** | **3.78 µs** | **9.88 µs** |
-| `zstd` 3 | 25.3% | 14.63 µs | 6.39 µs | 19.30 µs |
-| **`seqlz-3`** | **24.2%** | **10.42 µs** | **4.12 µs** | **13.43 µs** |
+## How it works
 
-- `seqlz-1` stores 20% less than `lz4` for 5% more time per page written.
-- `seqlz-2`, zram's default level, stores 28% less for 13% more.
-- `seqlz-3` stores 4.4% less than `zstd` 3, in 70% of its time per page written, and a swap-in takes 36%
-  less time than with `zstd` 3.
-- In these means, from the fastest to the smallest, `lz4`, `seqlz-1`, `seqlz-2` and `seqlz-3` each have
-  the lowest score for some exchange rate of bytes against µs, the dashed line in the chart: 624, 165 and
-  26 bytes per µs from one to the next. `zstd` 3 stores more than `seqlz-3` in more time. `lzo-rle` is
-  above the line: it stores 4.5% less than `lz4`, but its slower swap-ins make it 1.3% slower per page
-  written.
+Like `lz4` and `zstd`, seqlz cuts a page into sequences: some literals, bytes stored as they are, then
+a match, a copy of earlier bytes of the page. The differences are in how a sequence is written down
+([compression from zero](https://martin.ankerl.com/seqlz/#ch-compression)):
 
-All three swap in 9% to 29% slower than `lz4`, so the case for seqlz is memory, at a cost in time. The
-work memory is 8 KiB per CPU for `seqlz-1` and 16 KiB for the other two, against 20 KiB for `lz4`, as
-`kmalloc()` hands them out.
+- **One token per sequence.** The literal count, the match length and the offset's class are one
+  symbol with a Huffman code from a fixed table, so a frequent sequence takes a few bits and the
+  decoder needs one table lookup per sequence ([the token](https://martin.ankerl.com/seqlz/#ch-format--token)).
+- **Offset classes.** The repeat offset costs no bits, and two classes store offsets that are
+  multiples of 8, which pointers and fields of 8 bytes make common
+  ([offset classes](https://martin.ankerl.com/seqlz/#ch-format--offsets)).
+- **Fixed tables.** All codes are trained once and are part of the format: a page carries no table
+  at levels 1 and 2, and the decoder builds nothing from it
+  ([where the code lengths come from](https://martin.ankerl.com/seqlz/#ch-codes--lengths)).
+- **The page.** A small header, all literals in one block, then the sequences as one bitstream. The
+  encoder writes it in one pass, the literals from the front of zram's buffer and the bits from its
+  back ([the encoder](https://martin.ankerl.com/seqlz/#ch-encoder)).
 
-## The levels
+The three levels write the same format, and one decoder reads all of them:
 
-- **`seqlz-1`**: LZ sequences from a greedy matcher, coded with static Huffman tables that are part of
-  the format; the literals as they are.
-- **`seqlz-2`**: the same, and the literals coded with the best of 8 fixed literal tables for the page.
+- **`seqlz-1`**: a greedy matcher, the literals as they are.
+- **`seqlz-2`**: the same, and the literals coded with the best of 8 fixed literal tables for the page,
+  in 8 streams that the decoder decodes side by side
+  ([coding the literals](https://martin.ankerl.com/seqlz/#ch-literals-enc)).
 - **`seqlz-3`**: the matcher looks one position further for a longer match, a page gets a literal
   table of its own where that saves 32 bytes, and the literals are stored as deltas to the byte 4 or 8
-  before or to the byte at the last match's offset, where that codes them in fewer bits.
+  before, or to the byte at the last match's offset, where that codes them in fewer bits
+  ([the deltas](https://martin.ankerl.com/seqlz/#ch-header--deltas)).
 
-One decoder reads all three: the format is the same, and a page does not say which level wrote it.
-How they work, and why, is in [seqlz in short](docs/seqlz.md) and in the book below.
-
-## On a phone
-
-A Xiaomi Mi 9T, zram in the phone's own kernel (Linux 4.14, so no `lzo-rle`), 19 775 pages from a
-session on the phone, the time per page written as above, write + 0.73 × cold read, on 1st November
-2026:
-
-| codec | memory per page | big core, A76 | little core, A55 |
-| --- | ---: | ---: | ---: |
-| `lz4` | 33.3% | 14.6 µs | 43.0 µs |
-| **`seqlz-1`** | **26.1%** | **15.5 µs** | **49.0 µs** |
-| **`seqlz-2`** | **24.3%** | **17.4 µs** | **53.8 µs** |
-| `zstd` 3 | 23.2% | 51.1 µs | 165.3 µs |
-| **`seqlz-3`** | **21.3%** | **25.7 µs** | **75.8 µs** |
-
-On the phone `seqlz-3` stores 8.4% less than `zstd` 3 in about half its time, 50% on the big core and
-46% on the little one. The gap to `lz4` is larger than on the PC, most of all on the little core, and
-cold reads there cost `seqlz-2` 30% more than `lz4`. Chart and details:
-[seqlz.md](docs/seqlz.md#level-3-zstd-3s-memory-in-less-than-half-its-time)
-([explored-designs.md](docs/explored-designs.md#the-numbers-again-on-1st-november-seqlz-3-44-below-zstd-3-in-70-of-its-time-the-readmes-charts)).
-
-On a current phone, a Pixel 9a with Google's Tensor G4, the codecs in userspace on each of its three
-kinds of core, the same pages, each page timed once per pass over all of them, as a swap-in sees it:
-
-<img src="docs/plots/pixel-cores.svg" alt="Memory against the time to write and to read a page on the Cortex-X4, A720 and A520 of a Pixel 9a, for lz4, lzo-rle, zstd 3 and seqlz levels 1 to 3.">
-
-On the big cores `seqlz-1` writes and reads as fast as `lz4`, 5.57 against 5.60 µs per page written
-on the X4, and `seqlz-2` takes 11% and 24% more time than `lz4` on the X4 and the A720. The little A520
-is where seqlz costs: `seqlz-2` takes 1.7 times `lz4`'s time per page written there, and a cold read
-6.39 instead of 3.65 µs. `seqlz-3` stores 8.4% less than `zstd` 3 in 61% to 66% of its time on every
-core. These are the codec's times in a harness, not zram in the phone's kernel, with clocks that could
-not be fixed without root; every run ended at its core's highest clock, on 1st November 2026
-([explored-designs.md](docs/explored-designs.md#the-numbers-again-on-1st-november-seqlz-3-44-below-zstd-3-in-70-of-its-time-the-readmes-charts)).
+Why each choice, with what it was measured at: the book's chapter
+[Why seqlz is shaped this way](https://martin.ankerl.com/seqlz/#ch-decisions).
 
 ## Where it stands
 
@@ -87,7 +54,7 @@ As of 1st November 2026. The details, and what comes next, are in [the plan,
 §9](docs/plan.md#9-where-the-project-stands-and-the-next-actions).
 
 - [x] Benchmark harness, page collectors, zram dumps of a desktop and of a phone
-- [x] The codec, three levels of [`seqlz`](docs/seqlz.md), and every alternative that was measured
+- [x] The codec, three levels of [`seqlz`](#how-it-works), and every alternative that was measured
 - [x] [The format](docs/format.md), two reference decoders written from it, fuzzing, the worst case measured
 - [x] Measured in a kernel: a VM on x86-64, and the Mi 9T's own kernel on arm64
 - [x] The tables on pages they were not trained on, Chrome, Firefox, Android 13 and 15, the phone 12
@@ -139,7 +106,6 @@ codecs need a Linux source tree, see [Measuring](docs/measuring.md). How to chan
 | document | read it if you want to |
 | --- | --- |
 | [Why a new codec](docs/why.md) | review the case for seqlz and against it in one page, with the alternatives, the open weaknesses, and how to check it on pages of your own |
-| [seqlz in short](docs/seqlz.md) | see the result against zram's codecs and the choices with their numbers; the book below has the details |
 | [seqlz, line by line](https://martin.ankerl.com/seqlz/) | read every line of `src/` explained, with the decoder and the matcher step by step on real pages; the book's sources are in [`docs/book/`](docs/book) |
 | [The seqlz format](docs/format.md) | write a decoder, or check one |
 | [Reading the code](docs/reading.md) | read and review `src/`, in an order and with what to check |

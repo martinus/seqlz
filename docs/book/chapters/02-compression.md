@@ -279,7 +279,7 @@ and the sum must be exactly `2^bits` ([every way it can fail](#ch-codes--first-c
 That buys a decoder without the check: any bits decode to some symbol, so there is no "invalid code"
 branch from one sequence to the next. When the project made all its codes complete, the decoder ran
 6% fewer instructions
-([`docs/seqlz.md`](https://github.com/martinus/seqlz/blob/main/docs/seqlz.md#the-choices-with-their-numbers)).
+([the format's choices](#ch-decisions--format)).
 A damaged page then decodes to wrong symbols, not to an error, and the checks on lengths, offsets and
 the end of the page catch it ([`decode_block()`](#ch-decode)).
 
@@ -410,7 +410,7 @@ then the offset in as many plain bits as the class says, then length values only
 decoder does one table lookup per sequence, where `zstd` steps three FSE states. What seqlz gives up
 is tables that fit the page: a literal table of each page's own made writes 14% slower, for 32 bytes
 less per page, 2.4% of the stored size, and was not kept
-([`docs/seqlz.md`](https://github.com/martinus/seqlz/blob/main/docs/seqlz.md#the-choices-with-their-numbers)).
+([fixed tables](#ch-decisions--bet)).
 
 The example page, `cat=1,dog=2;cat=3,dog=4;` and zeros after, is {{cat.len}} bytes in seqlz:
 {{ch02.HEADER}} bytes of header, the literal count {{cat.lits}}; the {{cat.lits}} literals as they

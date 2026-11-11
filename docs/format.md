@@ -7,7 +7,7 @@ format as `src/` writes and reads it. Sentences marked *Why:* explain a choice a
 not part of the format; the measurements behind them are in
 [explored-designs.md](explored-designs.md). How seqlz works, for a reader new to compression, is
 in the book [seqlz, line by line](https://martin.ankerl.com/seqlz/), the result and the numbers in
-[seqlz.md](seqlz.md).
+[why.md](why.md).
 
 `seqlz-1`, `seqlz-2` and `seqlz-3`, the levels of `seqlz_compress()`, are the same format: level 1
 always stores the literals as they are, level 2 codes them with one of 8 fixed tables where that pays,

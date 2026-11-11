@@ -60,6 +60,8 @@ per write of a phone in daily use ([plan.md §1.1](plan.md#11-the-score-memory-a
 
 ## 3. What it buys
 
+![Memory per page against the time per page written for lz4, lzo-rle, zstd 3 and seqlz levels 1 to 3 in the kernel VM](plots/levels-vm.svg)
+
 Memory as % of the page, time per page written in µs, write + 0.73 × cold read, 1st November 2026:
 
 | codec | kernel VM, x86-64 | Mi 9T in its own kernel, A76 / A55 | Pixel 9a userspace, X4 / A720 / A520 |
@@ -88,6 +90,42 @@ and 54 in 3 runs with `lz4`, on 5th October 2026
 Cold launches of the same setup move by 51% to 173% between runs
 ([spread](explored-designs.md#the-app-tests-spread-zrams-memory-moves-by-2-to-3-between-runs-cold-launches-by-51-to-173)),
 so this says that the memory shows up as apps kept, not by how much.
+
+<details>
+<summary>The phones as charts, the slowest pages, and how the VM times</summary>
+
+The Mi 9T in its own kernel, and the Pixel 9a's three kinds of core in userspace, the same pages:
+
+![seqlz's levels against lz4 and zstd 3 on the Mi 9T, memory against time](plots/levels-phone.svg)
+
+![Memory against the time to write and to read a page on the Cortex-X4, A720 and A520 of a Pixel 9a](plots/pixel-cores.svg)
+
+**How the VM times.** [`tools/zram-vm/run.sh`](../tools/zram-vm/run.sh) boots a kernel with every
+codec as a zram backend, one CPU of the Ryzen 9 7950X fixed at 4.5 GHz, 3 boots per dump with the
+codecs in turns. With `MODE=swap`, the numbers above, a program in the VM swaps each page out and
+faults it back in, so a time is the whole fault, the kernel's part included. Without it, zram's reads
+and writes are timed with `pwrite` and `pread`, the compressed page flushed from the cache before a
+cold read; that decode follows one of the same page, which trains the branch predictor, so such reads
+are a little faster than a swap-in's. The chart has them, with the codec alone in a hot loop on the
+left, in thousands of CPU cycles per page:
+
+![seqlz-2 against zram's codecs: cycles in a hot loop, and write, cold read and memory in the kernel VM](plots/seqlz-speed.svg)
+
+**The slowest pages.** In that read mode, 1st November 2026, on the two desktop dumps, p99 is the
+time 99% of the 20 000 pages stay below: `seqlz-2` reads cold pages in 4.59 and 4.61 µs at p99,
+`lzo-rle` in 4.47 and 4.74, `lz4` in 4.02 and 4.00; it writes in 10.6 µs on both, `lz4` in 9.3 and
+9.6, `zstd` 3 in 23.7 and 24.1
+([the run](explored-designs.md#the-numbers-again-on-1st-november-seqlz-3-44-below-zstd-3-in-70-of-its-time-the-readmes-charts)).
+The slowest pages found, made up to be slow, cost `seqlz-2` 1.59 times the p99 of real pages to
+decode, `lz4` 2.58 times its own, 6th October 2026
+([worst case](explored-designs.md#the-worst-case-the-slowest-pages-found-cost-13-times-the-p99-of-real-ones-as-for-lz4)).
+
+**Work memory.** One `kmalloc()` per CPU: the matcher's hash table of 8192 bytes, and at levels 2 and
+3 a buffer of 4112 bytes the decoder decodes literals into; with one zram context per CPU the two share
+8 KiB, with split contexts they take 8 and 8 KiB. `lz4` takes 16 416 bytes from `vmalloc()`, 5 pages.
+The tables are generated when the kernel is built, constant data that all CPUs share.
+
+</details>
 
 ## 4. The alternatives
 
