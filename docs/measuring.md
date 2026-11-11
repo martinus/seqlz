@@ -93,6 +93,15 @@ KARGS=zram.zram_prefetch=8 MODE=swap ALGOS=lz4,lzo-rle,zstd,seqlz-2 \
     tools/zram-vm/run.sh <linux tree> corpus/first >swap.log
 ```
 
+On pages of your own, `tools/your-dump.sh` does the comparison of [why.md](why.md#8-on-a-dump-of-your-own)
+in one command: it imports a zram dump, draws a sample of 20 000 pages, warns if the clock is not
+fixed, runs `run.sh` with `MODE=swap`, `BOOTS=3` and zram's prefetch on `lz4`, `lzo-rle`, `zstd` 3 and
+the three levels, and prints `seqlz-score`'s table:
+
+```sh
+tools/your-dump.sh build <linux tree> zram0.raw out    # out/ has the pages, delete it after use
+```
+
 `tools/swap-fault/swap_fault.c` does the swap measurement on a running Linux as root, e.g. a rooted
 phone, with zram devices that are not in use. `tools/plot-swap-fault.py` draws both, memory against
 time, and `tools/plot-codecs.py` the reads and writes of the VM:
