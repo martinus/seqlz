@@ -37,7 +37,7 @@ their own, scripts are at the top. The commands are in [docs/measuring.md](../do
 | [`plot-zstd-levels.py`](plot-zstd-levels.py) | `seqlz-2` against `zstd` at each level, from `zram-vm/run.sh` logs with `MODE=swap` and `zstd:<level>` codecs |
 | [`plot-levels.py`](plot-levels.py) | the levels against `lz4` and `zstd` 3 on the Mi 9T, one panel per core, from `zram-phone/run.sh` and the sizes of `seqlz-bench-interleaved --no-timing` |
 | [`plot-devices.py`](plot-devices.py) | memory against time on several CPUs, one row per CPU |
-| [`plot-speed.py`](plot-speed.py) | the first chart of [docs/seqlz.md](../docs/seqlz.md#the-result-lz4s-time-zstds-size-almost): cycles in a hot loop, and write, cold read and memory in the kernel VM |
+| [`plot-speed.py`](plot-speed.py) | a chart of [docs/why.md](../docs/why.md#3-what-it-buys): cycles in a hot loop, and write, cold read and memory in the kernel VM |
 | [`retrain-tables.py`](retrain-tables.py) | seqlz's tables trained again: the counts, their literal tables in the committed order, `src/seqlz_lengths.h` and the tables' SHA-256 in `docs/format.md`, in one step |
 
 The plot scripts need `matplotlib` and the Noto Sans font.

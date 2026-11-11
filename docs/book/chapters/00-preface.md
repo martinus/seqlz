@@ -5,8 +5,8 @@ On the pages a desktop swapped into zram, `seqlz-2` stores a page in 24% fewer b
 `lzo-rle`, zram's default, and takes 17% more time than `lz4` to write a page and 9% more to read
 one. `zstd` stores pages 4% smaller still, for twice the time to write and about twice the time to
 read. Measured in the real kernel in a virtual machine on a Ryzen 9 7950X fixed at 4.5 GHz, on 14th
-October 2026; the setup is in
-[`docs/seqlz.md`](https://github.com/martinus/seqlz/blob/main/docs/seqlz.md#the-result-lz4s-time-zstds-size-almost).
+October 2026; how the VM measures is in
+[`docs/why.md`](https://github.com/martinus/seqlz/blob/main/docs/why.md#3-what-it-buys).
 Level 3, `seqlz-3`, searches a little longer and gives a page a literal table of its own where that
 pays: on the Mi 9T's Cortex-A76, in the phone's own kernel on 15th October 2026, it stored pages in
 952.0 bytes of zsmalloc memory against 951.4 for `zstd` 3, and wrote one in about 16 µs against

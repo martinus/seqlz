@@ -457,7 +457,7 @@ Measured in the real kernel in a virtual machine (`tools/zram-vm/run.sh`), on on
 the VM writes each page with `pwrite()` and reads it back with `pread()`, so each time is the whole
 system call, zram and zsmalloc included, the median of 3 runs; for a cold read the compressed page is
 flushed from the CPU caches first. Means over the pages and over 3 boots, 14th October 2026
-([`docs/seqlz.md`](https://github.com/martinus/seqlz/blob/main/docs/seqlz.md#the-result-lz4s-time-zstds-size-almost)):
+([`docs/why.md`](https://github.com/martinus/seqlz/blob/main/docs/why.md#3-what-it-buys)):
 
 | codec | stored bytes per page | write, µs | cold read, µs | time per page written, µs |
 | --- | --- | --- | --- | --- |

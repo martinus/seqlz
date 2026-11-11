@@ -22,7 +22,7 @@ For every listing, the prose after it covers:
    not guess them: use `python3`, or compile a few lines against `src/` with `gcc -O2 -Isrc` (in your
    scratch dir).
 3. **Why** it is written this way and not the obvious other way: the design reason, and where the
-   repository measured it. Reasons come from the code's comments, `docs/seqlz.md`, `docs/format.md`,
+   repository measured it. Reasons come from the code's comments, `docs/why.md`, `docs/format.md`,
    `docs/plan.md`, `docs/explored-designs.md` and `git log`. Never invent a measurement. When you quote
    a number, say what it was measured on (which CPU, which pages, kernel VM or userspace) and link the
    source.

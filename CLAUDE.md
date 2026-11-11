@@ -60,7 +60,7 @@ fuzz/           libFuzzer/AFL++ targets, smoke.sh (CI), afl.sh (long runs); .clu
 tools/          see tools/README.md. seqlz-ref/ = reference decoders, kernel-port/ (port.py, KUnit,
                 check.sh), zram-vm/ = kernel VM, zram-phone/ = zram in Mi 9T kernel, android-emu/
                 (emulator corpus, 4/16 KiB pages), samecode/ (kernel copy's machine code, old vs new)
-docs/           plan.md, format.md (spec), seqlz.md (overview), measuring.md (all commands),
+docs/           plan.md, format.md (spec), why.md (the case for and against), measuring.md (all commands),
                 explored-designs.md (every measured design), plots/*.svg; book/ = "seqlz, line by
                 line", every line of src/ explained, at the commit in docs/book/book.json
 cmake/          kernel_codecs.cmake (kernel flags), check_prefetch.cmake (ctest)

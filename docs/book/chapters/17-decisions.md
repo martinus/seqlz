@@ -910,7 +910,8 @@ Both are zram's work: an index, or more than one page decoded per fault. Neither
 ## Where zstd 3 still beats level 2, and why {#ch-decisions--zstd}
 
 `zstd` at level 3, zram's default level for it, stores pages 6% smaller than `seqlz-2` on a
-desktop's zram pages, 1105 against 1183 bytes per page in `docs/seqlz.md`'s result table. As Σ zsmalloc
+desktop's zram pages, 1105 against 1183 bytes per page in the result table `docs/seqlz.md` had on 12th
+October 2026, the mean over two desktop dumps. As Σ zsmalloc
 cost on all pages of the desktop's and the phone's zram
 ([explored-designs.md](https://github.com/martinus/seqlz/blob/main/docs/explored-designs.md#levels-3-and-4-a-hash-chain-priced-by-the-tables-as-small-as-zstd-3-on-two-of-four-dumps-and-faster-to-write-and-read-not-kept)):
 
@@ -947,8 +948,8 @@ store more and are still slower
 
 ## What is not known yet {#ch-decisions--unknown}
 
-([seqlz.md](https://github.com/martinus/seqlz/blob/main/docs/seqlz.md#what-is-not-known-yet) has the
-same list.)
+([why.md](https://github.com/martinus/seqlz/blob/main/docs/why.md#7-open-and-what-would-settle-it) has the same list, with the objections
+before it.)
 
 - **One desktop, one phone.** The pages are zram dumps of one desktop and one phone, a Mi 9T with Android
   11 and Linux 4.14, plus the Android 17 emulator, and the tables are trained on pages of the same desktop
