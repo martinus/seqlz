@@ -26,6 +26,7 @@ their own, scripts are at the top. The commands are in [docs/measuring.md](../do
 | [`seqlz-compress/`](seqlz-compress) | `compress.c`: writes each 4 KiB page file compressed at each level, `<page>.1` to `<page>.3`, each decoded again first; for checking a byte count in the docs, and for `seqlz-ref/check.sh` |
 | [`check-links.py`](check-links.py) | every relative link and `#anchor` in the Markdown files must resolve, run by CI |
 | [`pc-bench.sh`](pc-bench.sh) | the PC's clock for stable measurements: `sudo tools/pc-bench.sh set` turns boost off and fixes CPU 2 at 4.5 GHz, `restore` sets it back, `show` prints it |
+| [`your-dump.sh`](your-dump.sh) | the table of [docs/why.md](../docs/why.md) on a zram dump of your own: `zram-vm/run.sh` as swap with `lz4`, `lzo-rle`, `zstd` 3 and the three levels, then `seqlz-score` |
 | [`quick-bench.sh`](quick-bench.sh) | the fast benchmark for trying out a change: exact sizes on the whole corpus, times on a sample of 20 000 pages in 5 processes |
 | [`bench-dict.sh`](bench-dict.sh) | trains a dictionary on one dump and measures every codec with and without it on another |
 | [`plot-codecs.py`](plot-codecs.py) | memory against time, from the logs of `zram-vm/run.sh` |

@@ -138,6 +138,7 @@ codecs need a Linux source tree, see [Measuring](docs/measuring.md). How to chan
 
 | document | read it if you want to |
 | --- | --- |
+| [Why a new codec](docs/why.md) | review the case for seqlz and against it in one page, with the alternatives, the open weaknesses, and how to check it on pages of your own |
 | [seqlz in short](docs/seqlz.md) | see the result against zram's codecs and the choices with their numbers; the book below has the details |
 | [seqlz, line by line](https://martin.ankerl.com/seqlz/) | read every line of `src/` explained, with the decoder and the matcher step by step on real pages; the book's sources are in [`docs/book/`](docs/book) |
 | [The seqlz format](docs/format.md) | write a decoder, or check one |

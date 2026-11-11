@@ -12,6 +12,7 @@
 > is for two sets of pages, see below.
 
 This page is the overview: the result, what is not known yet, and the choices with their numbers. The
+case for seqlz and against it, for a reviewer of the kernel series, is [why.md](why.md). The
 book [seqlz, line by line](https://martin.ankerl.com/seqlz/) explains every line of `src/`, with
 step-throughs of the real decoder and matcher; read it to learn how `seqlz` works in detail. The exact
 bytes of a compressed page, for writing a decoder, are in [format.md](format.md); the history of every
