@@ -7,13 +7,11 @@ first, 16 KiB pages later (§3.5). This document is the goal, the evidence
 behind it, the phases with their gates, and where the project stands.
 
 > [!NOTE]
-> **Where it stands, 1st November 2026.** The codec, its three levels, its format and its fuzzing
-> are done, and `src/` is the code the kernel gets. In the kernel VM, over four zram dumps, `seqlz-2`
-> stores pages 28% smaller than `lz4` for 13% more time per page written, and `seqlz-3` 4.4% smaller
-> than `zstd` 3 in 70% of its time. Sergey Senozhatsky
+> **Where it stands, 11th November 2026.** The codec, its three levels, its format and its fuzzing
+> are done, and `src/` is the code the kernel gets. The zram maintainer
 > [answered](https://lore.kernel.org/linux-mm/atl35k5lvs34BIej@google.com/) the question of 9th
-> October: a codec in `lib/`, as the other compression libraries are, zram can use. So the series goes
-> to Andrew Morton, with the library first and the zram backend on top. The details are in
+> October: a codec in `lib/` zram can use. So the series goes to Andrew Morton, with the library
+> first and the zram backend on top. The numbers are in [why.md](why.md), the next steps in
 > [§9](#9-where-the-project-stands-and-the-next-actions).
 
 Last verified against mainline `v7.3-rc1-324-g986c24e0fe44` (`986c24e0fe44`) on 22nd September
@@ -561,84 +559,34 @@ Each phase ends in an artifact and a gate. The durations are calendar weeks at 3
 
 ### Phase 0: repository foundation (2 weeks)
 
-- [x] `LICENSE-MIT`, `LICENSE-GPL-2.0`, SPDX headers, `README.md`, `CLAUDE.md`.
-- [x] `.gitignore` with `corpus/` and `*.pages` from the first commit. **Page dumps are never committed
-  or published**, they contain keys, passwords and personal data.
-- [x] CMake, C++20 for the tools and the harness, C11 for the codec.
-- [x] CI from the first day: ASan and UBSan, gcc and clang, arm64, the same bytes on big-endian s390x
-  under qemu and on 32-bit x86, the spec's table hashes, the links of the docs.
-- [x] A CI job that compiles the codec with the kernel's flags
-  (`-std=gnu11 -ffreestanding -nostdinc -Wframe-larger-than=256 -fno-builtin`), and `checkpatch.pl`:
-  `kernel-port` builds the kernel's copy in a kernel tree with W=1 for x86-64, arm64, arm and s390, and
-  runs checkpatch and kernel-doc on it.
-- [x] [`CONTRIBUTING.md`](../CONTRIBUTING.md), with `Signed-off-by:` (DCO) as the kernel does it.
-- [x] Get the old phone and root it: a Xiaomi Mi 9T, rooted on 3rd October 2026.
-- [x] Check the employer rules (R8). Side projects are fine.
+Done: the licenses and SPDX headers, CMake, CI from the first day (sanitizers, gcc and clang, arm64,
+big-endian s390x, the kernel's flags and checkpatch in `kernel-port`), the DCO, the rooted Mi 9T (3rd
+October 2026), and the employer rules (R8). **Page dumps are never committed or published**: they
+hold keys, passwords and personal data, and `.gitignore` has had `corpus/` and `*.pages` since the
+first commit.
 
 *Gate: CI green on an empty stub codec.* Passed.
 
 ### Phase 1: corpus tooling (4 weeks)
 
-The corpus decides everything after it. Two collectors, because they answer different questions:
+The corpus decides everything after it. Rodgman sampled *resident* memory, but zram stores *cold,
+reclaimed* pages, which are a different distribution, so there are two collectors
+([measuring.md](measuring.md#pages-to-measure-on) has the commands):
 
-1. **Resident anonymous pages.** Walks `/proc/<pid>/maps`, reads anonymous private mappings with
-   `process_vm_readv()`, writes pages. Cheap, broad, and biased.
-2. **The pages that reclaim swaps out, the better one.** Rodgman sampled *resident* memory, but zram
-   stores *cold, reclaimed* pages, which are a different distribution. Capture the real thing, the
-   cheapest way first:
-   - Read the zram device itself: `dd if=/dev/zram0 bs=4096`. zram decompresses every stored page on
-     read, so this returns exactly the pages that reclaim put there, and free slots read as zeros,
-     which the tools skip as same-filled anyway. It needs root, no kernel patch and no BPF, and works
-     the same on a rooted phone. Honor collected the data for `f0f6f7871430` this way (their patch also
-     sets `huge_class_size` to 0, for some reason; reading does not need that).
-   - Swap to a plain block device in the VM instead of zram, zero it before `mkswap`, drive the VM into
-     memory pressure, and read the swap device from the host. It holds exactly the pages that reclaim
-     chose. The catches: freed slots keep stale pages, so snapshot while the workload is still under
-     pressure, and reclaim behaves a bit differently with slow disk swap than with zram, which
-     `swappiness` only partly corrects.
-   - Only if those catches matter: a small BPF or kprobe tool on `zram_write_page()`, or a locally
-     patched zram with a debugfs page dumper.
-
-Both record per page: all zero, same-filled (zram handles these before any codec, in
-`page_same_filled()`), zero density, byte entropy, and the source workload.
-
-**Workloads**, scripted and reproducible in a VM: Firefox with a fixed list of URLs, a JVM service, a
-Python and numpy job, a `make -j` kernel build, a GNOME session, PostgreSQL, Electron.
-
-**Android pages without a phone.** Cuttlefish, the AOSP virtual device, runs on x86-64 with zram
-enabled and runs real ART. ART's object layout barely depends on the architecture (compressed 32-bit
-references either way), so an x86-64 Cuttlefish with a scripted mix of apps gives Android heap pages.
-They do not replace phone data, but they show early whether Android pages look different from desktop
-pages (R4).
-
-**16 KiB pages.** An old phone runs 4 KiB pages. Only Pixel 8 and newer offer 16 KiB pages, as a
-developer option, and a Raspberry Pi 5 runs them by default. Until one of them is available, four
-adjacent 4 KiB pages of the same mapping are an approximation (§3.5).
-
-**Two corpora**, for reproducibility:
-
-- *private*: real dumps, which never leave the machine, for the headline numbers.
-- *public*: made by the scripted VM workloads, free to share, so that others can reproduce the
-  comparison without trusting anyone's private data.
-
-Where it stands:
-
-- [x] Collector 1, `seqlz-collect-resident` in `tools/collect/`. It finds resident pages with the
-  `PAGEMAP_SCAN` ioctl (Linux 6.7 and newer) and falls back to `/proc/<pid>/pagemap` on older kernels,
-  so it runs on the old phone too. Pages that are swapped already are counted but never read, because
-  reading them would swap them back in. A first run on the development machine (Fedora, zram swap)
-  found 1.8 million resident and 313 000 swapped pages.
-- [x] Collector 2 with `dd`: `seqlz-import-raw` turns a `dd` of `/dev/zram0` into a corpus, see
-  [measuring.md](measuring.md#pages-to-measure-on). The first dump of the development machine has
-  460 923 pages that are not zero. It also checks the harness against the kernel: `lzo-rle` built in
-  userspace reproduces zram's `mm_stat` for these pages to the last digit, 11 852 pages stored
-  uncompressed (`huge_pages`), 5684 same-filled (`same_pages`) and 590 800 867 compressed bytes
-  (`compr_data_size`).
-- [x] Zram dumps: three of the desktop, two of the Mi 9T.
-- [ ] The scripted VM workloads, and with them the public corpus.
-- [ ] Cuttlefish pages.
-- [x] Real 16 KiB pages: two zram dumps of the Android 17 emulator, and two of its image with 4 KiB
-  pages ([explored-designs.md](explored-designs.md#android-17-in-the-emulator-the-4-kib-tables-fit-the-16-kib-ones-trained-again-26-smaller)).
+- [x] Collector 1, `seqlz-collect-resident`: resident anonymous pages, found with `PAGEMAP_SCAN` or
+  `/proc/<pid>/pagemap`, read with `process_vm_readv()`. Cheap, broad and biased.
+- [x] Collector 2, the better one: `dd` of `/dev/zram0`, which decompresses every stored page on read,
+  and `seqlz-import-raw`. It needs root and no kernel patch, and works the same on a rooted phone. It
+  also checks the harness: `lzo-rle` built in userspace reproduces zram's `mm_stat` for the first
+  desktop dump to the last digit.
+- [x] Zram dumps: three of the desktop, two and five sessions of the Mi 9T, the Android 13, 15 and 17
+  emulators, the last with 16 KiB pages
+  ([explored-designs.md](explored-designs.md#android-17-in-the-emulator-the-4-kib-tables-fit-the-16-kib-ones-trained-again-26-smaller)).
+- [ ] Scripted workloads in a VM (Firefox, a JVM, numpy, a kernel build, PostgreSQL, ...), and from
+  them a *public* corpus, free to share, so that others can reproduce the comparison without trusting
+  anyone's private dumps. Until then [why.md](why.md#8-on-a-dump-of-your-own) runs it on the reader's
+  own dump.
+- [ ] Cuttlefish pages: Android heap pages without a phone.
 
 *Gate: at least 500 000 pages from at least 6 kinds of workload, Cuttlefish included, with the
 same-filled fraction measured and reported apart.* Not met as written: the numbers come from the
@@ -740,112 +688,23 @@ Still to do:
 
 ### Phase 2b: decoder latency spike (2 weeks)
 
-> [!NOTE]
-> Done on x86-64. The spike's code was removed on 7th October 2026; the results stay here and in
-> [explored-designs.md, "Word model"](explored-designs.md#word-model-wkdm-style-64-bit-words).
-
-The gate of Phase 2 tests the headroom in ratio. It does not test C2, and C2 is the less likely of the
-two: the kernel's `lz4` decodes a 4 KiB page mostly as `memcpy` of literals and matches, which is hard
-to beat.
-
-The spike is the smallest decoder of the design that §3.2 bets on: a WKdm-style format of 64-bit
-words with a fixed tag layout, no LZ pass, no dictionary, and a throwaway encoder. Its cold p99 per
-page (§5.2) is measured against the kernel's `lz4` on the test corpus, on x86-64 and on the phone's
-in-order little core.
-
-*Gate: the spike decoder's p99 is at or below `lz4`'s on both machines. If it is clearly slower, the
-p99 argument of §3.2 does not hold, and Phase 3 starts from the fallback of §8 instead of from the word
-model.*
-
-**The x86-64 half passed.** The spike used 64-bit words with 2-bit tags (zero, exact match or a match
-of the high 32 bits against a table of 16 recent words, literal), in four sections whose lengths follow
-from the tags, so the decoder checks the length once and the loop has no bounds checks. All decoders
-were built with the kernel's flags and `-O3`, like `lz4`, and decoded the same format.
-
-The first three decoders were at parity with `lz4`: a `switch` on the tag, a branchless one that
-selects with masks, and the `switch` with a fast path that writes a zero tag byte as 4 zero words at
-once. The table update made the difference. Those decoders write each word to the table slot of its
-hash, `slot_of(w)`, so the address of the store is known only after the table load that produced `w`,
-and the next word's table load has to wait or guess. `spike-slots` takes the slot from the stream
-instead: the stored index for exact and partial words, which the encoder wrote from the same hash, and
-the hash of the stored word for literals. Then no store address depends on a table load, and an exact
-match needs no store at all.
-
-`seqlz-bench-interleaved` runs several codecs in one process, and each repetition runs every codec
-once on the same page, so a drift of the CPU frequency hits all of them alike. On the 455 239 pages of
-the first zram dump, Ryzen 9 7950X pinned to one core, `powersave` governor, median of 5 runs per page,
-percentiles over the 344 955 pages that both store compressed:
-
-| run | decoder | warm p99 | cold p50 | cold p99 | cold p99.9 |
-| --- | --- | ---: | ---: | ---: | ---: |
-| 1 | `lz4` | 2030 ns | 1360 ns | 2450 ns | 3180 ns |
-| 1 | spike, `switch` | 1850 ns | 1630 ns | 2720 ns | 2970 ns |
-| 1 | spike, zero fast path | 1820 ns | 1610 ns | 2810 ns | 3060 ns |
-| 1 | `spike-slots` | 720 ns | 1390 ns | 1970 ns | 2160 ns |
-| 2 | `spike-slots` | 710 ns | 1380 ns | 2160 ns | 2460 ns |
-| 2 | `lz4` | 2030 ns | 1670 ns | 2890 ns | 3440 ns |
-
-Run 2 has the order of run 1 reversed, because in one binary the code layout of one codec can shift
-another. Paired over all pages, `spike-slots` is faster than `lz4` at cold p99 by 480 ns [470, 500] in
-run 1 and by 820 ns [810, 830] in run 2, and at warm p99 by 1270 and 1280 ns. The absolute numbers of
-`lz4` move between the two runs, the sign of the advantage does not. A branchless decoder in an
-earlier, separate run was slower everywhere (cold p99 3690 ns), so control flow that does not depend
-on the data is not what §3.2 hoped for. The win comes from a short dependency chain per word.
-
-`lz4` is still better on pages that it compresses below 512 bytes, with 73% zero words: cold p50 780
-against 840 ns in run 1. There `lz4` copies long matches while the spike still visits every tag.
-
-The spike is not a codec: 55.7% Σ zsmalloc cost against 34.5% for `lz4`, and 24% of the pages stored
-uncompressed. What it gave Phase 3: keep the store address of the table update independent of the
-table load, give runs of zeros and repeats a path that costs per run and not per word, and measure
-latency only interleaved. The arm64 half was not measured with the spike.
+Done on x86-64. The question was C2: can any decoder beat `lz4`'s cold p99 on a page? The spike, a
+WKdm-style decoder of 64-bit words with 2-bit tags, did, by 480 and 820 ns at cold p99 in two runs on
+the first desktop dump, once the table slot of a word came from the stream instead of from its hash,
+so that no store address depended on a table load. It stored 55.7% of the page against `lz4`'s 34.5%,
+so it was no codec; what it gave Phase 3 was to keep store addresses independent of table loads and to
+measure latency only interleaved. The arm64 half was not measured
+([explored-designs.md, "Word model"](explored-designs.md#word-model-wkdm-style-64-bit-words)).
 
 ### Phase 3: page analysis and design exploration (12 weeks)
 
-> [!NOTE]
-> Done. The design is `seqlz-2`, described in [seqlz.md](seqlz.md). Every design that was
-> measured, with its numbers and why it was kept or dropped, is in
-> [explored-designs.md](explored-designs.md). Add to it before trying something new.
-
-The questions, to answer with numbers from the corpus:
-
-- Which fraction of pages is incompressible, e.g. compressed data or encrypted buffers? Those should
-  be detected in a few hundred cycles and stored as they are.
-- What is the structure of the 8-byte words? The distribution of distinct high 32-bit prefixes per
-  page (pointer density), the autocorrelation at strides 8 and 16 (arrays of structs), the density of
-  small integers.
-- Where does `lz4` lose against `zstd`: in entropy coding, or in finding matches?
-- How many pages sit within 256 bytes above the cliff, and what gets them back below it?
-- How many pages sit a few bytes above a class boundary (§3.1), and how much Σ cost comes back if those
-  pages get one more compression attempt?
-- How often does a greedy parser get stuck in a chain of short matches on periodic data, as `lz4` with a
-  dictionary does ([explored-designs.md](explored-designs.md#the-first-runs-with-dictionaries-phases-0-to-2))?
-  A long match at a small multiple of the period is cheap to check for.
-- Do the answers hold for Cuttlefish pages and for 16 KiB pages (§3.5)?
-
-The candidate designs, in the order of their expected value:
-
-1. **A word model with a mode per page.** WKdm's idea: 64-bit words, a larger dictionary of recent
-   words, tags for zero, exact match, a match of the high bits with the low bits as literal, and
-   literal. Control flow that barely depends on the data, for the p99 win of §3.2. The class step (16
-   to 144 bytes, §3.1) pays for a mode header per page or per 512 bytes.
-2. **A fast path for zeros and runs.** Rodgman's corpus was bimodal, 44% of pages with at most 5%
-   zeros and 44% with at least 90%. Two separate modes beat one compromise. Check that our corpus is
-   bimodal too first.
-3. **A word model plus a short LZ pass** over the rest.
-4. **Recovery at a class boundary**: when the fast path lands just above a class boundary, spend more
-   compression time on that page only, e.g. a static Huffman or a small rANS stage. The encoder knows
-   the class table, so it knows the target size, and compression time is less precious than
-   decompression time. It pays most at `huge_class_size`, 455 bytes per rescued page, and 16 to 144
-   bytes at every other boundary.
-5. **Dictionary support** from the start, with `zcomp_params->dict` (C4). For seqlz it was measured and
-   dropped: its tables are part of the format
-   ([explored-designs.md, "The format written down"](explored-designs.md#the-format-written-down-one-set-of-tables-and-stream-sizes-that-hold)).
-
-What happened: the gap between `lz4` and `zstd` turned out to be mostly how the sequences are coded
+Done. The plan bet on a word model in the style of WKdm, for its branch-free decoder. The gap between
+`lz4` and `zstd` turned out to be mostly how the sequences are coded
 ([explored-designs.md, "Where the ratio of `zstd` comes from"](explored-designs.md#where-the-ratio-of-zstd-comes-from)),
 and the word models did not get to `lz4`'s memory. So the design became an LZ codec with Huffman coded
-sequences and static tables, not one of the five above.
+sequences and fixed tables: [how it works](../README.md#how-it-works). Every design that was measured,
+with its numbers and why it was kept or dropped, is in [explored-designs.md](explored-designs.md); add
+to it before trying something new.
 
 A slower sibling with a higher ratio, for recompression of idle pages with `CONFIG_ZRAM_MULTI_COMP`, is
 a legitimate second target (working name `wuzl`), but only after the main codec lands.
@@ -856,33 +715,19 @@ passed. The p99 part did not, and the score of §1.1 replaced it as the target.
 
 ### Phase 4: reference implementation, format spec, fuzzing (20 weeks)
 
-This phase exists because of §2.2: everything Biggers asked for, before the first patch.
+This phase exists because of §2.2: everything Biggers asked for, before the first patch. Done:
 
-- [x] The codec, `src/seqlz_*.c`, `src/seqlz.h` and `src/seqlz_internal.h`: C11, freestanding, no libc, no allocation, a
-  scratch buffer passed in by the caller. The page size was a parameter until 1st November 2026;
-  the blocks are 4 KiB since, whatever the page size (§3.5).
-- [x] The tests in CI, until 1st November 2026 also with 16 KiB pages (§3.5).
-- [x] **[The format](format.md)**: a byte-exact specification, and two deliberately slow reference
-  decoders written from the spec alone, `tools/seqlz-ref/seqlz_ref.py` and `tools/seqlz-ref/seqlz_ref.c`.
-  The fast decoder is tested against them.
-- Fuzzing:
-  - [x] the decompressor on any input: it must never read or write out of bounds and must always
-    terminate, for truncated, damaged and adversarial input;
-  - [x] the roundtrip of any page;
-  - [x] the fast decoder against the reference decoder;
-  - [x] continuous fuzzing in CI with ClusterFuzzLite, since 9th October 2026
-    (`.github/workflows/cflite.yml`): once a day an hour each with ASan, UBSan and MSan, from the corpus
-    of the runs before, and 10 minutes with ASan on a PR that changes the codec. OSS-Fuzz only takes
-    projects with many users or importance for critical infrastructure, so a new codec will likely be
-    turned down before it has users. Apply anyway, and again once there are users. *"We run under
-    OSS-Fuzz"* would be a strong, checkable answer to objection 3, but the plan does not depend on it.
-- [x] ASan and UBSan in CI, big-endian in CI.
-- [x] MSan, since 9th October 2026: the fuzz targets, in CI and in ClusterFuzzLite. They mark the
-  page, the scratch and the matcher's table as unwritten before every input, so a read of a byte the
-  codec did not write for that input is reported. Not the doctest binary: libstdc++ is not built with
-  MSan, and the first report is in its `std::map`, before any test runs.
-- [x] A bound on the worst-case runtime, stated and measured: at most `PAGE / 4 + 1` sequences, and the
-  slowest pages found cost 1.14 times the p99 of real pages to compress and 1.59 times to decode
+- The codec in `src/`: C11, freestanding, no libc, no allocation, blocks of 4 KiB whatever the page
+  size (§3.5).
+- **[The format](format.md)**, byte-exact, and two deliberately slow reference decoders written from
+  it alone, in `tools/seqlz-ref/`, which the fast decoder is tested against. Two more decoders, written
+  in a clean room from the spec alone, decode 25 billion inputs the same as `src/`
+  ([format-check-results.md](format-check-results.md)).
+- Fuzzing of the decoder on any input, of the roundtrip, and of the decoder against the reference
+  decoder, with ASan, UBSan and MSan, in CI and once a day with ClusterFuzzLite since 9th October 2026.
+  OSS-Fuzz takes projects with many users; apply again once there are users.
+- A bound on the worst case, stated and measured: at most `PAGE / 4 + 1` sequences, and the slowest
+  pages found cost 1.14 times the p99 of real pages to compress and 1.59 times to decode
   ([explored-designs.md, "The worst case"](explored-designs.md#the-worst-case-the-slowest-pages-found-cost-13-times-the-p99-of-real-ones-as-for-lz4)).
 
 *Gate: 1e9 fuzz executions without a crash, spec and implementation agree on the whole corpus and the
@@ -894,28 +739,13 @@ and 298 million on the roundtrip, nothing found.
 
 ### Phase 5: kernel port and validation in a VM (16 weeks)
 
-- [x] `lib/seqlz/` and `include/linux/seqlz.h`, **free of any zram API dependency**. The zram
-  backend API has changed again and again (the rewrite of 2024, the preemption series of 2025, the
-  parameter handling of 2026). A thin `backend_seqlz.c` absorbs that. Done as `lib/seqlz/`,
-  `include/linux/seqlz.h` with only `seqlz_compress()` and `seqlz_decompress()`, which
-  `tools/kernel-port/port.py` writes into a kernel tree.
-- [x] `backend_seqlz.c` modelled on `backend_lz4.c`, including the validation in `setup_params`
-  (`7b0f677c7bd5`) and `pr_fmt` (`70922d5ef84a`): `backend_seqlz.c`.
-- [x] A QEMU test rig: a VM with zram, reads, writes and the whole page fault, `tools/zram-vm/run.sh`.
-  It measures the **actual** memory of `mm_stat`, which is where the fragmentation of §3.1 shows up and
-  where the userspace cost model is confirmed or not.
-- [x] Sustained swap thrash under memory pressure: `tools/kernel-port/stress.sh`, 4 CPUs swapping 1.5
-  times the free memory to zram with seqlz for 15 minutes per boot, every page compared with what it
-  should hold.
-- [x] KUnit tests of `lib/seqlz/`: the tables against the hashes of the spec, its example, round trips,
-  damaged pages, and pages made from the spec's rules that break one rule each. CI runs them in UML
-  with KASAN and UBSan, `tools/kernel-port/kunit.sh`.
-- [x] `tools/testing/selftests/zram/`, with new cases as needed: `stress.sh` runs them with seqlz.
-  No new cases so far; the thrash covers what they don't.
-- [x] Correct under `CONFIG_DEBUG_ATOMIC_SLEEP`, `PROVE_LOCKING`, KASAN, and with preemption disabled.
-  Minchan's zBeWalgo panic was exactly this kind of bug. Also UBSan's bounds and shift checks.
-  x86-64 has no `preempt=none` any more, its choices are `full` and `lazy`, and `stress.sh` boots
-  both.
+Done. `tools/kernel-port/port.py` writes `lib/seqlz/` and `include/linux/seqlz.h`, **free of any zram
+API dependency**, and a thin `backend_seqlz.c`, modelled on `backend_lz4.c`, that absorbs the changes
+of zram's backend API. CI builds them for four architectures and runs the KUnit tests in UML with
+KASAN and UBSan. `tools/zram-vm/run.sh` measures zram in a VM, the actual `mm_stat` included, and
+`tools/kernel-port/stress.sh` thrashes swap under KASAN, lockdep, UBSan and `DEBUG_ATOMIC_SLEEP`, with
+`preempt=full` and `lazy`, and runs the zram selftests: Minchan's zBeWalgo panic was exactly the kind
+of bug these catch.
 
 *Gate: a kernel with seqlz survives sustained swap thrash under KASAN, and `mm_stat` in the VM
 confirms the userspace prediction within 2%.* Passed on 8th October 2026, kernel `986c24e0fe44`: 4
@@ -981,45 +811,10 @@ phase does not start from zero.
 ## 6. Repository layout
 
 The plan had the codec in `src/` and the kernel files in `kernel/`. The codec grew up in `explore/`,
-next to the designs it beat. Those designs were removed on 7th October 2026, their results are in
-[explored-designs.md](explored-designs.md) and their code is in git history before `57fb8fb`. Then
-`explore/` became `src/`. The kernel port of Phase 5, `tools/kernel-port/`, splits it into a `lib/`
-part and a zram backend when it writes them into a kernel tree. In #168 `seqlz.c` was split in three,
-as `lib/lz4` is, and since 30th October 2026 the files of `src/` have the kernel's includes, guards and
-exports themselves.
-
-```text
-src/                        the codec, freestanding C, as the kernel gets it
-  seqlz_compress.c            the compressor, with seqlz_encoder.h and seqlz_match.h
-  seqlz_compress_literals.c   the coded literals, a page's own table, the deltas
-  seqlz_decompress.c          the decoder
-  seqlz_decompress_literals.c the coded literals, decoded
-  seqlz_codes.c               the codes and decode tables, built from the code lengths
-  seqlz_lengths.h             the trained code lengths, part of the format, generated
-  seqlz_format.h, seqlz_tables.h, seqlz_internal.h   what the files share
-  linux/seqlz.h               the kernel's interface; the other linux/*.h stand in for kernel headers
-  seqlz.h, seqlz_harness.c    what only the tests and tools use
-  zram_seqlz.c                seqlz as a zram backend calls it, for the harness
-bench/                      the harness: per-page timing, zsmalloc's cost model, table training
-  kernel_codecs/              zram's calls into lib/lz4, lib/lzo and zstd, built in userspace
-cmake/kernel_codecs.cmake   builds those from SEQLZ_KERNEL_TREE with the kernel's flags, sources never copied
-test/                       doctest unit tests
-fuzz/                       libFuzzer and AFL++ targets, the CI smoke run and the long runs
-tools/                      see tools/README.md
-  collect/                    page collectors and page statistics
-  seqlz-ref/                  the reference decoders, written from docs/format.md alone
-  zram-vm/                    the kernel VM: zram's reads and writes, or with MODE=swap the whole fault
-  swap-fault/                 the whole page fault on a running Linux, e.g. the phone
-  phone-apps/                 the app launch test on the phone
-  seqlz-bound/, seqlz-worst/  bits per field against their entropy; the worst case
-  seqlz-compress/             compresses page files with src/, for checking numbers in the docs
-  kernel-port/                writes the codec into a kernel tree, builds and checks it, KUnit, the series
-  zram-phone/                 zram in the Mi 9T's own kernel
-docs/                       this plan, the format, how seqlz works, measuring, explored designs, plots
-  book/                       the book, seqlz line by line, built and published by CI
-.github/workflows/ci.yml    gcc and clang, ASan and UBSan, arm64, s390x and 32-bit, fuzz smoke, format,
-                            docs, the book, the kernel port on four architectures
-```
+next to the designs it beat; those were removed on 7th October 2026, their code is in git history
+before `57fb8fb`, and `explore/` became `src/`. The kernel copy is written by `tools/kernel-port/`, not
+kept in the repository. What is where today: the [README](../README.md#what-is-where) and
+[tools/README.md](../tools/README.md).
 
 ---
 
@@ -1062,50 +857,10 @@ docs/                       this plan, the format, how seqlz works, measuring, e
 
 ## 9. Where the project stands, and the next actions
 
-As of 1st November 2026:
-
-- **Phases 0 to 3: done.** The harness, the collectors, zram dumps of the desktop and of the Mi 9T,
-  and the design: `seqlz-2` ([seqlz.md](seqlz.md)), with every alternative that was measured in
-  [explored-designs.md](explored-designs.md). Not done from them: the scripted VM workloads, and
-  publishing the comparison.
-- **Phase 4: done.** [The format](format.md), and two reference decoders written from it. The
-  tables were trained again on 7th October, on swapped pages too. Fuzzing of the decoder, of the
-  roundtrip, and of the decoder against the reference decoder in C: 1.7 billion inputs with AFL++ on the
-  tables of 6th October, 1.5 billion with libFuzzer on the new ones, and 3.65 billion with AFL++ on the
-  codec of 9th October, no difference found. ASan and UBSan
-  in CI, big-endian on s390x in CI. The worst case is measured: against its own p99,
-  `seqlz-2`'s slowest pages cost 1.14 times to compress and 1.59 times to decode, the least of
-  it, `lz4`, `lzo-rle` and `zstd`. MSan on the fuzz targets
-  and continuous fuzzing with ClusterFuzzLite since 9th October.
-- **Phase 5: done, the gate passed.** `tools/kernel-port/` writes `lib/seqlz/`, a minimal
-  `include/linux/seqlz.h`, the zram backend and KUnit tests into a kernel tree; CI builds it for
-  x86-64, arm64, arm and s390 and runs the KUnit tests. `stress.sh` swapped 34.9 million pages through
-  it under KASAN, lockdep and UBSan without a report or a wrong page, the zram selftests pass with it,
-  and `mm_stat` on a new device is exactly the model's memory
-  ([explored-designs.md](explored-designs.md#zrams-memory-against-the-model-exact-on-a-new-device-σ-zsmalloc-cost-035-to-047-below-it)). The kernel VM of `tools/zram-vm/` measures reads, writes and the whole
-  page fault.
-- **Phase 6: half.** The Mi 9T, A76 and A55, 4 KiB pages, its own pages, in its own kernel as zram and
-  as swap: done. Open: 16 KiB pages and a current phone. The first series is for 4 KiB pages only
-  (Phase 7), and `src/` has no format for 16 KiB blocks since 1st November 2026, so 16 KiB pages are
-  for a later series (§3.5).
-- **Phase 7: the question to the maintainers is answered** (R3, R11). Sent on 9th October 2026 to
-  linux-mm, linux-block and linux-kernel ([the thread](https://lore.kernel.org/linux-mm/CAAFOosa2WLf--T17cujJu5CUsN12NNjgTitOvno2LY7jAr1gfw@mail.gmail.com/)); Sergey Senozhatsky
-  [answered](https://lore.kernel.org/linux-mm/atl35k5lvs34BIej@google.com/) on 22nd October: a codec in `lib/` zram can use, zram is not on a path to
-  acomp, and a compressor private to zram is not his to decide (§3.4). The kernel port already writes
-  that form.
-- **Level 3**, a lazy matcher and a literal table of the page's own (15th October), stores its
-  literals as deltas to an earlier byte since 21st and 22nd October. In the kernel VM, over four zram
-  dumps, 24.2% of a page in 13.43 µs per page written, against `zstd` 3's 25.3% in 19.30 µs; on the Mi
-  9T 8.4% less memory than `zstd` 3 in 50% and 46% of its time on the big and the little core
-  ([explored-designs.md](explored-designs.md#the-numbers-again-on-1st-november-seqlz-3-44-below-zstd-3-in-70-of-its-time-the-readmes-charts)).
-- **Since 22nd October:** `src/` has the kernel's includes, guards and exports, so the kernel copy is
-  nearly a copy (30th October). The deltas are priced on every 11th literal, literals are coded from 35
-  bytes saved at level 2 and 19 at level 3, own tables from 32, and level 2 picks its literal table from
-  a sample of every 7th literal; on the Mi 9T's little core levels 2 and 3 take 4.4% less time per page
-  written than on 23rd October. The decoder undoes the deltas 16 bytes at a time. The 16 KiB blocks
-  went from `src/` (1st November, §3.5). An optimal parse in today's format would store 56 bytes per
-  page less than level 3, the bound for a level for recompression only, which is not built
-  ([explored-designs.md](explored-designs.md#an-optimal-parse-in-todays-format-the-bound-for-a-level-for-recompression-only-56-bytes-per-page-under-level-3-half-of-it-matches-level-3s-matcher-does-not-find-not-built)).
+As of 11th November 2026: Phases 0 to 5 are done, Phase 6 is half done (the Mi 9T, 4 KiB pages; not a
+current phone, not 16 KiB pages), and Phase 7 has the maintainers' answer: a codec in `lib/` zram can
+use (R3, R11). What the codec gives and costs, measured, is in [why.md](why.md); the history of every
+design in [explored-designs.md](explored-designs.md).
 
 Next, in this order:
 
@@ -1113,22 +868,18 @@ Next, in this order:
    compression libraries, with its own Kconfig symbol and `MAINTAINERS` entry, and the zram backend
    on top of it, no crypto API. The question in it: which tree to base the series on, as
    `backend_seqlz.c` follows his zcomp rework of 5th October (Phase 7).
-2. Done in #231 and #232: the library on blocks of 4 KiB, whatever `PAGE_SIZE` is (§3.5), its tables
-   generated when the kernel is built.
-3. Done on 23rd October and again on 1st November: the numbers for today's level 3, in the kernel VM,
-   in the Mi 9T's kernel and on the Pixel 9a. On the 16 KiB pages of the Android 17 emulator a page cut
-   into four blocks of 4 KiB takes 7.0% to 8.6% more memory than one block with the 16 KiB tables
-   (§3.5), which is for the form of the second series.
-4. The cover letter (Martin), with the two questions of Phase 7 first: why a new library in `lib/`,
+2. [why.md](why.md), the case for and against for the reviewers, which the cover letter links, with
+   its alternatives measured in one run.
+3. The cover letter (Martin), with the two questions of Phase 7 first: why a new library in `lib/`,
    and why a fixed block size.
-5. The checklist of `.claude/skills/kernel-patches/SKILL.md`: a cleanup pass over the kernel files
+4. The checklist of `.claude/skills/kernel-patches/SKILL.md`: a cleanup pass over the kernel files
    (one done on 1st November), KUnit on the exact base, the newest gcc and clang,
-   `git format-patch --base`. The x86 prefetch patch can go to the x86 maintainers on its own first,
-   after 7.4-rc1.
-6. The series, to Andrew Morton with the Cc list of Phase 7: (1) the library with KUnit, the spec and
+   `git format-patch --base`. The x86 prefetch patch went to tip on its own on 3rd November 2026
+   (Phase 7).
+5. The series, to Andrew Morton with the Cc list of Phase 7: (1) the library with KUnit, the spec and
    `MAINTAINERS`, (2) the zram backend.
-7. Later, each a series of its own: 16 KiB pages, in the form step 3 picks, with the work memory of
-   48 KiB per CPU priced in the score (§1.1); a crypto wrapper, so that zswap, which compresses
+6. Later, each a series of its own: 16 KiB pages, in one of the two forms of §3.5, with the work
+   memory of 48 KiB per CPU priced in the score (§1.1); a crypto wrapper, so that zswap, which compresses
    4 KiB pages through acomp, can use the library (R11); `CONFIG_ZRAM_BACKEND_SEQLZ=y` for Android's
    `gki_defconfig` (Phase 7).
 
