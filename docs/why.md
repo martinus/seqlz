@@ -4,8 +4,8 @@
 
 I wrote seqlz, so this is the argument of its author. To keep it checkable, every number here has its
 hardware, its date and a link to the measurement, or it says "not measured". The cons that I cannot
-refute are in it as they are. Most numbers are from one run, the kernel VM of 1st November 2026, so that
-they compare with each other; the history of every design behind them is in
+refute are in it as they are. The numbers of section 3 are from one run, the kernel VM of 1st November
+2026, those of section 4 from one run of 11th November, so that they compare with each other; the history of every design behind them is in
 [explored-designs.md](explored-designs.md).
 
 ## Contents
@@ -129,21 +129,38 @@ The tables are generated when the kernel is built, constant data that all CPUs s
 
 ## 4. The alternatives
 
-Each with where it wins. They are not all from one run; the date says which.
+All in one kernel VM run of 11th November 2026, set up as the run of section 1 but with boost on and a
+newer kernel tree, so its times are 16% to 18% lower for every codec and compare only with each other:
+the mean over the same four dumps, memory as % of the page, µs per page written
+([the run](explored-designs.md#all-alternatives-in-one-run-11th-november-no-zstd-level-stores-less-than-seqlz-2-in-less-time-wkdm-on-the-hull-at-the-fast-end)).
 
-| alternative | memory | time | where it wins | measured |
-| --- | --- | --- | --- | --- |
-| `lz4` | 36.5% | 8.73 µs per page written, swap-in 3.19 | the fastest swap-in, and the best choice above 624 bytes per µs | VM, 1 Nov |
-| `lzo-rle`, zram's default | 34.9% | 8.84, swap-in 3.65 | swap-out, 6.18 µs against `lz4`'s 6.40; at 0.73 reads per write its slower swap-in puts it behind `lz4` | VM, 1 Nov |
-| `zstd` 3 | 25.3% | 19.30, swap-in 6.39 | 4.5% more memory than `seqlz-3` in 1.44 times its time: nowhere in this run | VM, 1 Nov |
-| `zstd` at any other level, -5 to 22 | | | no level stored less than `seqlz-2` in less time; the levels that store less take at least 6.6 µs more per page written | [VM, 7 Oct](explored-designs.md#zstd-at-every-level-in-a-swap-in-no-level-stores-less-in-less-time-than-seqlz-fast-lit), older seqlz tables |
-| `lz4` and `zstd` with a dictionary | `lz4` 0.70% less, `zstd` 3 6.97% more | | trained on one desktop dump, measured on a later one: `lz4` + dict still 3.48% above `lzo-rle` | [userspace, 23 Sep](explored-designs.md#lz4-with-a-dictionary) |
-| `lz4hc` | 30.7% at level 9 | about 10 times `lz4`'s compression time | the same decoder as `lz4`; better matches in the `lz4` format end at about 30.7% | [userspace, 23 and 25 Sep](explored-designs.md#where-the-ratio-of-zstd-comes-from), not in the VM |
-| WKdm, Apple's C version | 50.1% | 8.18, `lz4` 9.21 in that run | writes 1.5 µs faster than `lz4`, best above 580 bytes per µs | [VM, 16 Oct](explored-designs.md#wkdm-in-the-kernel-vm-818-µs-per-page-written-against-lz4s-921-at-501-of-the-page-against-365-not-pursued) |
-| `lz4` in hardware, e.g. Qualcomm's `qpace-lz4` | as `lz4` | `lz4`'s own time set to 0 | even then `seqlz-2` stays the best choice from 3.1 to 73 bytes per µs | [what-if, 8 Oct](explored-designs.md#lz4-in-hardware-a-what-if-seqlz-fast-lit-stays-on-the-hull-up-to-73-and-72-bytes-per-µs-instead-of-155-and-211), no hardware here |
-| zram's recompression, write fast, recompress idle pages | the second codec's | 7.8 to 10.1 µs per idle page with `seqlz-3`, 13.3 to 15.9 with `zstd` 3 | complements seqlz rather than replacing it: `seqlz-1` writes, `seqlz-3` recompresses | [VM, 16 Oct](explored-designs.md#recompression-with-level-3-78-to-101-µs-per-page-level-3s-memory-at-level-1s-write-time-on-the-hull-where-idle-time-weighs-less-than-03) |
+| alternative | memory | µs per page written | where it wins |
+| --- | ---: | ---: | --- |
+| `lz4` | 36.5% | 7.28 | the fastest swap-in but one, 2.65 µs |
+| `lzo-rle`, zram's default | 34.9% | 7.38 | about as good as `lz4`: 4.5% less memory for 0.10 µs more |
+| WKdm, Apple's C version | 50.1% | 6.44 | the fastest write, 4.13 µs: the best choice above 666 bytes per µs |
+| `seqlz-1` | 29.1% | 7.75 | from 218 to 624 bytes per µs |
+| `seqlz-2` | 26.4% | 8.26 | from 33 to 218 bytes per µs |
+| `seqlz-3` | 24.2% | 10.96 | below 33 bytes per µs, down to where only `zstd` 12 and above store less |
+| `zstd` 3 | 25.3% | 16.15 | nowhere: 4.5% more memory than `seqlz-3` in 1.47 times its time |
+| `zstd` -5, -3, -1 | 38.4%, 34.3%, 29.5% | 10.35, 10.91, 11.50 | nowhere: more memory than `seqlz-2` in more time |
+| `zstd` 1, 2, 5, 7, 9 | 25.8% to 24.4% | 15.09 to 68.46 | nowhere: more memory than `seqlz-3` in more time |
+| `zstd` 12, 15, 19, 22 | 23.7% to 23.2% | 171 to 986 | 0.5 to 1.0 points of the page less than `seqlz-3`, for 160 µs and more per page |
+| `lz4hc` | 32.7% | 36.14 | the fastest swap-in, 2.52 µs; nowhere on the line |
 
-Not measured: all of these in one run.
+The line of best choices goes WKdm, `lzo-rle`, `seqlz-1`, `seqlz-2`, `seqlz-3`; `lz4` is a few bytes
+per µs above it, next to `lzo-rle`. Three more, two of them from other runs:
+
+- **`lz4` in hardware**, e.g. Qualcomm's `qpace-lz4`: no hardware here. In this run, with `lz4`'s own
+  time set to 0 and the swap's costs left, `seqlz-2` stays the best choice up to 81 to 84 bytes per µs
+  on the four dumps.
+- **`lz4` and `zstd` with a dictionary**, trained on one desktop dump and measured on a later one, in
+  userspace on 23rd September: `lz4` 0.70% less memory, still 3.48% above `lzo-rle`; `zstd` 3 6.97%
+  more ([dictionaries](explored-designs.md#lz4-with-a-dictionary)). Not in the VM.
+- **zram's recompression**, writing with a fast codec and compressing idle pages again with a second:
+  7.8 to 10.1 µs per idle page with `seqlz-3`, 13.3 to 15.9 with `zstd` 3, VM, 16th October
+  ([recompression](explored-designs.md#recompression-with-level-3-78-to-101-µs-per-page-level-3s-memory-at-level-1s-write-time-on-the-hull-where-idle-time-weighs-less-than-03)).
+  It complements seqlz rather than replacing it: `seqlz-1` writes, `seqlz-3` recompresses.
 
 ## 5. Objections
 
@@ -172,11 +189,11 @@ then stores 2.4% more than `zstd` 3 instead of 4.3% less
 phone with 16 KiB pages: not measured.
 
 **"Just run `zstd` at a lower level."** The negative levels store more than `seqlz-2` and are still
-slower; see the table. That was with the tables of 7th October, before levels 1 and 3 changed.
+slower, see section 4: no level from -5 to 22 stores less than `seqlz-2` in less time.
 
 **"`lz4` in hardware makes this moot."** Even at 0 µs for `lz4` itself, the swap's own costs stay,
 and `seqlz-2` stores 28% less. On a device with such an engine the range where seqlz is the better
-choice shrinks, by the what-if above to 73 bytes per µs and below. Not measured on hardware.
+choice shrinks, by the what-if of section 4 to 84 bytes per µs and below. Not measured on hardware.
 
 **"Nobody uses it, and one person maintains it."** That is right. The dumps it was measured on hold
 keys and passwords and cannot be published, which is why [section 8](#8-on-a-dump-of-your-own) exists.
@@ -204,7 +221,8 @@ Any of these, measured on your own pages with [section 8](#8-on-a-dump-of-your-o
   16 KiB pages.
 - **A current phone in its own kernel.** The Pixel 9a numbers are a userspace harness; zram there
   needs root, which that phone does not get.
-- **All alternatives in one run**, with today's tables.
+- **The alternatives with boost off, and on the phones.** Section 4's run had boost on; the Mi 9T and
+  the Pixel 9a have only `lz4`, `lzo-rle` and `zstd` 3 next to seqlz.
 - **The cold swap-in on little cores**, where seqlz is 30% behind `lz4`.
 - **If upstream says "prove it elsewhere first"**, whether a userspace release is the way to do that is
   not decided.
