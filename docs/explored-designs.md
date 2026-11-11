@@ -239,6 +239,7 @@ One line per entry, by area, newest first: date measured, verdict, link, result,
 
 **The score**
 
+- 2026-11-11 **measurement** [All alternatives in one run](#all-alternatives-in-one-run-11th-november-no-zstd-level-stores-less-than-seqlz-2-in-less-time-wkdm-on-the-hull-at-the-fast-end): kernel VM, boost on, four samples, `main` at `163f00d`, % of the page and µs per page written: `lz4` 36.5%, 7.28; `lzo-rle` 34.9%, 7.38; `zstd` 3 25.3%, 16.15; `lz4hc` 32.7%, 36.14; WKdm 50.1%, 6.44; `seqlz-1` 29.1%, 7.75; `seqlz-2` 26.4%, 8.26; `seqlz-3` 24.2%, 10.96. Hull WKdm, `lzo-rle`, `seqlz-1`, `seqlz-2`, `seqlz-3` at 666, 624, 218, 33 bytes per µs. `zstd` -5 to 22: none stores less than `seqlz-2` in less time; 12 and above store less than `seqlz-3` in 171 to 986 µs. `lz4` at 0 µs of its own: `seqlz-2` best up to 81 to 84 bytes per µs. Code: `tools/zram-vm/run.sh`, `seqlz-score`. Now: current. Untried: boost off; the phones with these alternatives; dictionaries in the VM.
 - 2026-11-01 **measurement** [The numbers again on 1 November, all docs' charts](#the-numbers-again-on-1st-november-seqlz-3-44-below-zstd-3-in-70-of-its-time-the-readmes-charts): Kernel VM `MODE=swap`, 3 boots, mean of p3/p5/zram0/zram0-2026-09-24: lz4 36.5% 8.73 µs, lzo-rle 34.9% 8.84, seqlz-1 29.1% 9.21, seqlz-2 26.4% 9.88, seqlz-3 24.2% 13.43, zstd 3 25.3% 19.30; hull 624, 165, 26 B/µs. Mi 9T (A76/A55 per page written): seqlz-2 17.41/53.84, seqlz-3 25.67/75.84 at 871.1 B, zstd 3 51.05/165.30. Pixel 9a: seqlz-3 61% to 66% of zstd 3's time. Read mode and hot loop on the desktop dumps. Code: `c8f8c3f`; the charts of README and seqlz.md. Now: current.
 - 2026-10-16 **measurement** [Swap-in bursts on a Pixel 9a](#swap-ins-on-a-pixel-9a-in-use-92-of-the-pages-in-bursts-of-1024-or-more-073-reads-per-write-again): 15 minutes in use, 10 ms samples: 0.732 reads per write; single swap-ins 0.0% of the pages, 92% in bursts of 1024 pages or more, 61% in bursts of 8192 or more, the largest 72 621. The mean time per page is the right measure. Code: tools/swap-bursts/. Now: current. Untried: an hour or a day of use; which core; burst durations.
 - 2026-10-16 **measurement** [Reads per write on phones](#reads-per-write-on-phones-073-on-a-pixel-9a-in-daily-use-the-score-uses-it): Pixel 9a in daily use, 7.1 days: pswpin/pswpout 0.73 (refaults, not readahead); the desktop had 0.34, the Mi 9T 0.16 idle and 0.45 to 0.61 in scripted sessions. The score's r is 0.73 since (seqlz-score, tools/plot-*.py); lz4 then ahead of lzo-rle, the levels unchanged. Code: bench/score.h. Now: current; 15 minutes of use gave 0.732 again ([bursts](#swap-ins-on-a-pixel-9a-in-use-92-of-the-pages-in-bursts-of-1024-or-more-073-reads-per-write-again)). Untried: other phones and users.
@@ -406,9 +407,9 @@ One line per entry, by area, newest first: date measured, verdict, link, result,
 
 - 2026-10-19 **not pursued** [File data of an Android 17 image](#file-data-of-an-android-17-image-in-4-kib-blocks-seqlz-3-09-points-behind-zstd-3-at-21-times-lz4s-decode-cycles-on-the-a55-not-pursued): 40 000 test blocks, 4 / 16 KiB: seqlz-3 56.8 / 53.8%, zstd 3 55.9 / 51.7%, lz4hc 12 66.3 / 60.6%, lz4 69.2 / 64.8%; A55 decode cycles per 4 KiB block seqlz-3 29 743, lz4 13 862, zstd 3 73 876. Three times the literals of swap pages; tables trained on the image 0.4 to 0.7 points. EROFS needs format work; flash I/O not measured. Code: ~/seqlz-corpus/erofs-exp/. Now: current. Untried: clusters of 64 KiB; EROFS itself; arm64 libraries.
 - 2026-10-17 **not built** [Reference pages per device on the Mi 9T](#reference-pages-per-device-on-the-mi-9t-1024-of-them-save-zstd-3-95-with-their-own-memory-any-earlier-page-34-not-built): eight Mi 9T dumps, K references from the first half of the slots (min-hash cover), 20 000 second-half pages each with its best reference by sketch as prefix, zsmalloc cost: zstd 3 K = 16, 64, 256, 1024 -1.7%, -3.3%, -6.3%, -12.0%, with the references' memory -1.7% to -9.5%; lz4 about a point more. Any first-half page: -34%, 11.6% of the pages exact copies, -26% on the rest. 19 Oct, references from an earlier boot: 1024 save zstd 3 3.8% to 6.7% net, a seqlz-1 estimate 4.2% to 7.3%; a sketch over every 32nd position keeps most of it. zram's work, not built. Code: offline, ~/seqlz-corpus/research/2026-10-17-tools/offline/. Now: current. Untried: times; a seqlz with references; references replaced while running; dedup of exact copies in zram alone.
-- 2026-10-16 **not pursued** [WKdm in the kernel VM](#wkdm-in-the-kernel-vm-818-µs-per-page-written-against-lz4s-921-at-501-of-the-page-against-365-not-pursued): Apple's C WKdm (xnu-2050.48.11) as zram backend `wkdm`, one run with the six codecs of the README, mean of the four VM samples, r = 0.73: 50.1% of the page / 8.18 µs per page written against lz4 36.5% / 9.21, seqlz-1 29.1% / 9.66; writes 1.5 µs faster than lz4, reads 0.67 slower, cold p99 1.3 to 1.6 µs above lz4. On the hull at the fast end in lz4's place, wkdm to seqlz-1 at 580 bytes per µs; the levels' rates unchanged. Decoder trusts its header (C6). Code: tools/zram-vm/backend_wkdm.c, run.sh (downloads Apple's code, not in the repo). Now: current. Untried: the phones, Apple's assembly versions, WK4x4, 16 KiB pages.
-- 2026-10-08 **measurement** [lz4 in hardware what-if: seqlz-2 stays on hull](#lz4-in-hardware-a-what-if-seqlz-fast-lit-stays-on-the-hull-up-to-73-and-72-bytes-per-µs-instead-of-155-and-211): seqlz-score --what-if on VM swap logs: with lz4's codec time at 0, seqlz-2 keeps the lowest score from 3.1 to 73 and 10.3 to 72 bytes per µs (was 155 and 211); Mi 9T 0.9 to 25 (A76), 0.2 to 7.1 (A55). No hardware measured. Code: seqlz-score --what-if, bench/score.cpp what_if(). Now: current. Untried: Whether qpace-lz4 stores software lz4's bytes; swap times of a phone with the engine; DMA and polling cost.
-- 2026-10-07 **measurement** [zstd at every level against seqlz-2 in a swap-in](#zstd-at-every-level-in-a-swap-in-no-level-stores-less-in-less-time-than-seqlz-fast-lit): Kernel VM MODE=swap, zstd -5 to 19: every level storing less than seqlz-2 takes at least 6.6 µs more per page written; negative levels store more and are slower (zstd -1: 111 and 75 bytes, 3.3 and 3.0 µs more). Code: tools/zram-vm/init.c (zstd:<level>), tools/plot-zstd-levels.py, docs/plots/zstd-levels.svg. Now: Tables of 7 October since replaced ('The tables trained again without the last sequences', 'Offset 2 in 1 bit'); seqlz-3 (kept 15 Oct) is compared with zstd 3 in 'Level 3, a lazy matcher'. Untried: zstd's levels in the phone's own kernel; levels above 19.
+- 2026-10-16 **not pursued** [WKdm in the kernel VM](#wkdm-in-the-kernel-vm-818-µs-per-page-written-against-lz4s-921-at-501-of-the-page-against-365-not-pursued): Apple's C WKdm (xnu-2050.48.11) as zram backend `wkdm`, one run with the six codecs of the README, mean of the four VM samples, r = 0.73: 50.1% of the page / 8.18 µs per page written against lz4 36.5% / 9.21, seqlz-1 29.1% / 9.66; writes 1.5 µs faster than lz4, reads 0.67 slower, cold p99 1.3 to 1.6 µs above lz4. On the hull at the fast end in lz4's place, wkdm to seqlz-1 at 580 bytes per µs; the levels' rates unchanged. Decoder trusts its header (C6). Code: tools/zram-vm/backend_wkdm.c, run.sh (downloads Apple's code, not in the repo). Now: again in one run on 11 Nov ([all alternatives](#all-alternatives-in-one-run-11th-november-no-zstd-level-stores-less-than-seqlz-2-in-less-time-wkdm-on-the-hull-at-the-fast-end)). Untried: the phones, Apple's assembly versions, WK4x4, 16 KiB pages.
+- 2026-10-08 **measurement** [lz4 in hardware what-if: seqlz-2 stays on hull](#lz4-in-hardware-a-what-if-seqlz-fast-lit-stays-on-the-hull-up-to-73-and-72-bytes-per-µs-instead-of-155-and-211): seqlz-score --what-if on VM swap logs: with lz4's codec time at 0, seqlz-2 keeps the lowest score from 3.1 to 73 and 10.3 to 72 bytes per µs (was 155 and 211); Mi 9T 0.9 to 25 (A76), 0.2 to 7.1 (A55). No hardware measured. Code: seqlz-score --what-if, bench/score.cpp what_if(). Now: again in one run on 11 Nov ([all alternatives](#all-alternatives-in-one-run-11th-november-no-zstd-level-stores-less-than-seqlz-2-in-less-time-wkdm-on-the-hull-at-the-fast-end)). Untried: Whether qpace-lz4 stores software lz4's bytes; swap times of a phone with the engine; DMA and polling cost.
+- 2026-10-07 **measurement** [zstd at every level against seqlz-2 in a swap-in](#zstd-at-every-level-in-a-swap-in-no-level-stores-less-in-less-time-than-seqlz-fast-lit): Kernel VM MODE=swap, zstd -5 to 19: every level storing less than seqlz-2 takes at least 6.6 µs more per page written; negative levels store more and are slower (zstd -1: 111 and 75 bytes, 3.3 and 3.0 µs more). Code: tools/zram-vm/init.c (zstd:<level>), tools/plot-zstd-levels.py, docs/plots/zstd-levels.svg. Now: again in one run on 11 Nov ([all alternatives](#all-alternatives-in-one-run-11th-november-no-zstd-level-stores-less-than-seqlz-2-in-less-time-wkdm-on-the-hull-at-the-fast-end)); Tables of 7 October since replaced ('The tables trained again without the last sequences', 'Offset 2 in 1 bit'); seqlz-3 (kept 15 Oct) is compared with zstd 3 in 'Level 3, a lazy matcher'. Untried: zstd's levels in the phone's own kernel; levels above 19.
 - 2026-09-30 **not built** [Word model plus run path, bound only](#the-word-model-with-a-path-for-runs-not-even-lz4s-memory-not-built): Offline bound, desktop dumps of 23, 24, 28 Sep: with every repeat of 8 bytes and more for 3 bytes, 1673.0, 2237.4, 2203.3 bytes per page against lz4 1411.8, 1737.3, 1619.2 and seqlz-2 993.0, 1287.9, 1277.5. Lacks short matches and entropy coding. Code: throwaway, not in repo; model of spike/wk64.h. Now: current.
 - 2026-09-25 **not kept** [lz4's format from a page compressor (lz4page)](#lz4s-format-from-a-compressor-for-pages-measured-not-kept): Kernel VM, desktop dumps 1/2: best variant 1376.3 / 1682.0 bytes per page (lzo-rle 1361.1 / 1678.5) for 11.02 / 11.60 us per page written; lz4's decoder reads its pages 5% to 10% faster. Not on the hull: lzo-rle as fast and smaller. Code: branch feat/lz4page. Now: current.
 - 2026-09-23 **measurement** [lz4 with a dictionary](#lz4-with-a-dictionary): Dictionary from resident pages: 2.4% less Σ zsmalloc cost than lz4, still worse than lzo-rle. 64 KiB dictionary from the 24 Sep dump, measured on 28 Sep: lz4 saves 0.70%, zstd 3 costs 6.97% more, lz4 compress p99 doubles. Code: tools/bench-dict.sh; lz4/lz4#1805; harness fix after reading a freed dictionary. Now: current.
@@ -759,7 +760,7 @@ CPUs only the step to `zstd` 3 moves by more than 1%, from 3.1 to 2.5 and from 1
 
 ## zstd at every level, in a swap-in: no level stores less in less time than seqlz-fast-lit
 
-Status: measurement, 2026-10-07. Now: Tables of 7 October since replaced ('The tables trained again without the last sequences', 'Offset 2 in 1 bit'); seqlz-3 (kept 15 Oct) is compared with zstd 3 in 'Level 3, a lazy matcher'.
+Status: measurement, 2026-10-07. Now: Tables of 7 October since replaced ('The tables trained again without the last sequences', 'Offset 2 in 1 bit'); seqlz-3 (kept 15 Oct) is compared with zstd 3 in 'Level 3, a lazy matcher'. Again with today's code in one run on 11 Nov ([all alternatives](#all-alternatives-in-one-run-11th-november-no-zstd-level-stores-less-than-seqlz-2-in-less-time-wkdm-on-the-hull-at-the-fast-end)).
 
 *zram lets `zstd` run at any level, from the fast negative ones to 22, through `algorithm_params`. So is
 there a level that beats `seqlz-fast-lit`? Not in a swap-in: every level that stores less takes at least
@@ -819,7 +820,7 @@ tools/plot-zstd-levels.py --row "First desktop dump=g1.log,g2.log" --out zstd-le
 
 ## lz4 in hardware, a what-if: seqlz-fast-lit stays on the hull, up to 73 and 72 bytes per µs instead of 155 and 211
 
-Status: measurement, 2026-10-08. Now: current.
+Status: measurement, 2026-10-08. Now: again with today's code in one run on 11 Nov ([all alternatives](#all-alternatives-in-one-run-11th-november-no-zstd-level-stores-less-than-seqlz-2-in-less-time-wkdm-on-the-hull-at-the-fast-end)).
 
 *Qualcomm posted a zram backend `qpace-lz4` for a page compression engine in its new SoCs on 30th
 September 2026 ([series 1177021](https://patchwork.kernel.org/series/1177021/), `docs/plan.md` R12).
@@ -4573,6 +4574,104 @@ nothing and the A55 2 to 2.6 µs of cold reads for 4.8 bytes per page. format.md
 the tests and the bit by bit page read most significant bit first now; `seqlz_ref.py` agreed with
 `seqlz_decode()` on 1800 pages from two dumps, 1040 valid and the others with a flipped bit or cut
 short.
+
+## All alternatives in one run, 11th November: no `zstd` level stores less than seqlz-2 in less time, WKdm on the hull at the fast end
+
+Status: measurement, 2026-11-11. Now: current.
+
+*The alternatives of `docs/why.md` came from runs of 23rd September to 1st November, with older tables
+and codecs. Are they the same in one run of today's `main`? One kernel VM run with `lz4`, `lzo-rle`,
+`zstd` 3, `lz4hc`, WKdm and the three levels, and two more with `zstd` from -5 to 22, `lz4` and
+`seqlz-2` in each as anchors, which agree across the three runs within 0.05 µs. No `zstd` level stores
+less than `seqlz-2` in less time: the negative levels store 29.5% to 38.4% of the page against its
+26.4% and take 10.35 to 11.50 µs per page written against 8.24, and the levels that store less take
+6.85 µs more or more. Only `zstd` 12 and above store less than `seqlz-3`, 23.2% to 23.7% against
+24.2%, in 171 to 986 µs. `lz4hc` stores 32.7% in 36.14 µs. WKdm is on the hull at the fast end, 50.1%
+in 6.44 µs, with `lzo-rle` and `lz4` within a few bytes per µs of each other next to it: wkdm, `lzo-rle`,
+`seqlz-1`, `seqlz-2`, `seqlz-3` at 666, 624, 218 and 33 bytes per µs, the means over the four dumps.
+With `lz4`'s own time at 0, the what-if of hardware `lz4`, `seqlz-2` stays the best choice up to 81 to
+84 bytes per µs on the four dumps. Times are 16% to 18% lower than on 1st November for the codecs of both runs,
+with boost on and a newer kernel tree: compare them within this run only.* Code: `main` at `163f00d`;
+`tools/zram-vm/run.sh`, `seqlz-score`.
+
+![seqlz's levels, lz4 and lzo-rle against zstd at every level from -5 to 22, in zram as swap: memory against the swap-out, the cold swap-in and the time per page written](plots/zstd-levels-1111.svg)
+
+**Setup.** `tools/zram-vm/run.sh` on `finehill` at `5b0764a53235` (a merge of 21st October 2026), gcc
+16.2.1, Ryzen 9 7950X, CPU 2 at 4.501 GHz with minimum = maximum, **boost on** (`pc-bench.sh show`:
+`boost: 1`; Martin's call, not fixed for this run), `MODE=swap`, `KARGS=zram.zram_prefetch=8`,
+`BOOTS=3`, 20 000 pages of each of p3, p5, zram0 and zram0-2026-09-24. Run A:
+`ALGOS=lz4,lzo-rle,zstd,lz4hc,wkdm,seqlz-1,seqlz-2,seqlz-3`; run B in two groups,
+`lz4,seqlz-2,zstd:-5,zstd:-3,zstd:-1,zstd:1,zstd:2,zstd:5` and
+`lz4,seqlz-2,zstd:7,zstd:9,zstd:12,zstd:15,zstd:19,zstd:22`. `seqlz-score` per log, `r = 0.73`, then the
+mean over the dumps; the boots' means spread by 0.01 to 0.02 µs. Bytes are zram's memory per page,
+µs the time per page written, swap-out + 0.73 swap-ins.
+
+Run A, bytes per page and µs per page written:
+
+| codec | p3 | p5 | zram0 | zram0-2026-09-24 | mean |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| `lz4` | 1408.1, 6.92 | 1366.8, 7.01 | 1450.3, 7.34 | 1754.4, 7.83 | 36.5%, 7.28 |
+| `lzo-rle` | 1362.9, 6.90 | 1308.0, 7.05 | 1361.0, 7.42 | 1678.5, 8.13 | 34.9%, 7.38 |
+| `zstd` 3 | 998.4, 15.49 | 943.9, 15.40 | 1012.3, 16.33 | 1197.4, 17.37 | 25.3%, 16.15 |
+| `lz4hc` | 1273.4, 37.80 | 1212.6, 40.85 | 1293.7, 35.24 | 1584.3, 30.67 | 32.7%, 36.14 |
+| `wkdm` | 1747.5, 6.48 | 1663.9, 6.47 | 2107.3, 6.48 | 2687.9, 6.32 | 50.1%, 6.44 |
+| `seqlz-1` | 1114.7, 7.32 | 1063.3, 7.39 | 1119.0, 7.89 | 1477.6, 8.40 | 29.1%, 7.75 |
+| `seqlz-2` | 1039.5, 7.81 | 994.9, 7.81 | 1032.3, 8.32 | 1264.8, 9.09 | 26.4%, 8.26 |
+| `seqlz-3` | 906.6, 10.57 | 891.2, 10.44 | 982.8, 10.81 | 1190.4, 12.04 | 24.2%, 10.96 |
+
+Run B, first group:
+
+| codec | p3 | p5 | zram0 | zram0-2026-09-24 | mean |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| `lz4` | 1408.1, 6.91 | 1366.8, 6.99 | 1450.3, 7.33 | 1754.4, 7.83 | 36.5%, 7.27 |
+| `seqlz-2` | 1039.5, 7.78 | 994.9, 7.77 | 1032.3, 8.30 | 1264.8, 9.10 | 26.4%, 8.24 |
+| `zstd` -5 | 1472.0, 9.73 | 1415.7, 9.99 | 1551.9, 10.66 | 1858.9, 11.02 | 38.4%, 10.35 |
+| `zstd` -3 | 1314.5, 10.22 | 1255.6, 10.49 | 1359.8, 11.22 | 1694.6, 11.72 | 34.3%, 10.91 |
+| `zstd` -1 | 1140.1, 10.85 | 1069.8, 11.01 | 1148.9, 11.73 | 1481.4, 12.39 | 29.5%, 11.50 |
+| `zstd` 1 | 1008.0, 14.50 | 964.4, 14.53 | 1022.3, 15.30 | 1224.2, 16.04 | 25.8%, 15.09 |
+| `zstd` 2 | 1010.2, 14.76 | 959.8, 14.78 | 1024.8, 15.47 | 1234.1, 16.58 | 25.8%, 15.40 |
+| `zstd` 5 | 974.8, 27.61 | 917.7, 27.29 | 973.4, 29.15 | 1162.6, 32.67 | 24.6%, 29.18 |
+
+Run B, second group:
+
+| codec | p3 | p5 | zram0 | zram0-2026-09-24 | mean |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| `lz4` | 1408.1, 6.87 | 1366.8, 6.98 | 1450.3, 7.30 | 1754.4, 7.78 | 36.5%, 7.23 |
+| `seqlz-2` | 1039.5, 7.74 | 994.9, 7.76 | 1032.3, 8.30 | 1264.8, 9.05 | 26.4%, 8.21 |
+| `zstd` 7 | 968.9, 42.15 | 913.0, 42.35 | 971.9, 47.47 | 1159.5, 48.75 | 24.5%, 45.18 |
+| `zstd` 9 | 964.6, 62.14 | 910.9, 63.97 | 972.3, 70.49 | 1150.3, 77.23 | 24.4%, 68.46 |
+| `zstd` 12 | 929.7, 152.95 | 877.9, 157.53 | 957.0, 178.79 | 1124.5, 195.63 | 23.7%, 171.22 |
+| `zstd` 15 | 909.7, 340.28 | 857.7, 363.35 | 936.9, 408.35 | 1100.5, 403.98 | 23.2%, 378.99 |
+| `zstd` 19 | 916.8, 680.77 | 857.5, 706.98 | 939.4, 820.36 | 1098.3, 812.57 | 23.3%, 755.17 |
+| `zstd` 22 | 914.8, 1006.45 | 854.6, 1021.48 | 936.1, 986.70 | 1096.9, 929.42 | 23.2%, 986.01 |
+
+Means of swap-out / cold swap-in, run A: `lz4` 5.34 / 2.65, `lzo-rle` 5.16 / 3.03, `zstd` 12.25 / 5.34, `lz4hc` 34.30 / 2.52, `wkdm` 4.13 / 3.16, `seqlz-1` 5.63 / 2.90, `seqlz-2` 5.96 / 3.14, `seqlz-3` 8.46 / 3.43
+
+The bytes of `lz4`, `lzo-rle`, `zstd` 3, `seqlz-1` and `seqlz-2` are those of 1st November to the
+digit. `seqlz-3` on zram0 is 982.8 instead of 981.6: since 9e5be16 a few pages per sample lose their
+deltas where records and bitstream do not fit behind `ENC_REC_AT`, and zram's memory grows by whole
+zspages.
+
+The what-if, `seqlz-score --what-if lz4:0` per dump: `lz4` at 0 µs of its own, the next step to
+`seqlz-2` at 81.0, 81.5, 82.5 and 83.9 bytes per µs on p3, p5, zram0 and zram0-2026-09-24, then
+`seqlz-3` as without it.
+
+Not measured: with boost off; the Mi 9T and the Pixel 9a with these alternatives; `lz4` and `zstd` with
+a dictionary in the VM (zram's `algorithm_params` takes one, `init.c` does not set it); `deflate` and
+`842`.
+
+```sh
+L=<linux tree>; export BOOTS=3 MODE=swap KARGS=zram.zram_prefetch=8
+for d in phone-dump/p3 phone-dump/p5 zram0 zram0-2026-09-24; do
+    ALGOS=lz4,lzo-rle,zstd,lz4hc,wkdm,seqlz-1,seqlz-2,seqlz-3 tools/zram-vm/run.sh $L ~/seqlz-corpus/$d-sample20000 >A-$(basename $d).log
+    ALGOS=lz4,seqlz-2,zstd:-5,zstd:-3,zstd:-1,zstd:1,zstd:2,zstd:5 tools/zram-vm/run.sh $L ~/seqlz-corpus/$d-sample20000 >B1-$(basename $d).log
+    ALGOS=lz4,seqlz-2,zstd:7,zstd:9,zstd:12,zstd:15,zstd:19,zstd:22 tools/zram-vm/run.sh $L ~/seqlz-corpus/$d-sample20000 >B2-$(basename $d).log
+done
+for f in *.log; do ./build/seqlz-score $f; done
+./build/seqlz-score --what-if lz4:0 A-p3.log
+tools/plot-zstd-levels.py --clock "4.5 GHz, boost on" --source "main of 11th November 2026, 163f00d" \
+    --row "Mean over four zram dumps=$(ls A-*.log B1-*.log B2-*.log | paste -sd,)" --out docs/plots/zstd-levels-1111.svg
+```
 
 ## The numbers again on 1st November: seqlz-3 4.4% below zstd 3 in 70% of its time, the README's charts
 
@@ -11214,7 +11313,7 @@ cd tools/seqlz-bound && python3 reps.py <the seven .seq files>
 
 ## WKdm in the kernel VM: 8.18 µs per page written against `lz4`'s 9.21, at 50.1% of the page against 36.5%, not pursued
 
-Status: not pursued, 2026-10-16. Now: current.
+Status: not pursued, 2026-10-16. Now: again with today's code in one run on 11 Nov ([all alternatives](#all-alternatives-in-one-run-11th-november-no-zstd-level-stores-less-than-seqlz-2-in-less-time-wkdm-on-the-hull-at-the-fast-end)).
 
 *Is WKdm, the classic page compressor (Wilson and Kaplan, 1997; Apple's macOS and iOS compress memory
 with descendants of it), a better answer than seqlz? Apple's C version as a zram backend, in one kernel
