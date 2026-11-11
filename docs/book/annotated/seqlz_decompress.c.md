@@ -151,14 +151,15 @@ Offsets below 8 avoid it: they store one register again and again, with no load 
 @end
 
 @@ 35-65
-Copies the `nl` literals 16 bytes at a time, also past `nl`, a wild copy
-([chapter 3](book:#ch-cpu--wild-copy)). The bytes past `nl` are wrong for a moment; the match after the
-literals writes over them.
+The literal copy of the slow path and of the last sequence; the fast path copies its literals with one
+`copy16()` of its own ([line 572](#b550)). It copies too much on purpose, a wild copy
+([chapter 3](book:#ch-cpu--wild-copy)): 3 literals cost the same two loads and two stores as 16, and
+the bytes past `nl` are wrong only until the match and the sequences after it write over them.
 
-The first `copy16()` has no loop: most sequences have fewer than 16 literals, and a loop that runs 0 or
-1 times mispredicts. `lit_bound` is the end of what may be read, not the end of the literals. For raw
-literals it is the end of the input, with the bitstream between; for level 2's coded ones, the end of
-the scratch. Only within 15 bytes of the page's end or of `lit_bound` does it copy byte by byte.
+The two limits are on different buffers. `d_end` ends the page being written. `lit_bound` ends what may
+be read, which is more than the literals: for raw literals the end of the compressed page, so the last
+copies read bitstream bytes; for level 2's coded ones the end of the scratch, which has 16 bytes more
+than a page of literals for this ([where `lit_bound` is](#ch-decode--lit-bound)).
 @more {#ch-dec-basics--literals} Why copying 16 bytes is faster than copying 3
 A sequence with 3 literals gets 16 bytes copied. The 13 bytes too many land where the sequence's match
 goes, and the match writes over them right after. Copying exactly 3 would need a loop that runs 3
@@ -174,15 +175,16 @@ last sequence, have checked that the `nl` literals are there and fit into the pa
 @end
 
 @@ 66-71
-For an offset of 1 to 7, how far on the same 8 bytes of a repeated pattern fit again: the largest
-multiple of `off` up to 8. Offset 3 repeats `abc`, and `abcabcab` fits again 6 bytes on. Entry 0 is a
-placeholder, offset 0 is rejected before.
+Offset 3 repeats `abc`: the 8 bytes `abcabcab` written at `d` fit again at `d + 6`, which starts with
+`a`, but not at `d + 8`, which would start with `c`. Offsets 1, 2 and 4 divide 8 and step a full 8. A
+table of 8 bytes saves the division of `8 / off * off`. Entry 0 is a placeholder, offset 0 is rejected
+before.
 
 @@ 72-92
-The 8 bytes that a byte-by-byte copy with offset `off` would write, built in one register. Load 8 bytes
-at `d - off`, keep the low `off` bytes, multiply by a constant with a 1 in every byte at a multiple of
-`off`. The copies of the pattern do not overlap, so no carry crosses a byte: `abc` times
-`0x0001000001000001` is `abcabcab`.
+What a byte-by-byte copy with offset `off` would write at `d`, built with one load, a mask and one
+multiply, with no loop over the pattern. The load also takes bytes at `d` and after, not written yet;
+the mask drops them. Then `abc` times `0x0001000001000001` is `abcabcab`: three copies that do not
+overlap, so no carry crosses a byte, and the third copy's `c` falls off the top.
 
 The load is little endian on every CPU because the multiply needs the pattern's first byte in the
 lowest byte.
@@ -242,20 +244,18 @@ multiply needs the pattern's first byte in the lowest byte ([chapter 3](#ch-cpu-
 @end
 
 @@ 93-128
-The match copy of the slow path: matches with a length value (up to a page long) and matches near the
-end of the page.
+The match copy of the slow path: matches with a length value, up to a page long, and every match of a
+sequence too near the end of the page, the literals or the input for the fast path.
 
-Below offset 8 the match overlaps the bytes it writes. So the pattern is built once and stored every
-`step` bytes: stores only, and no load waits for a store. `repeat_step[off]` needs no mask, `off` is
-below 8 here. With fewer than 8 bytes left in the page, all of the match goes to the byte loop at the
-bottom.
+Below offset 8 it is one load and then stores only: a match of `len` bytes at offset 1 is `len / 8`
+stores of the same register, rounded up. `repeat_step[off]` needs no mask, `off` is below 8 here; the
+panel has the mask it had until 28th October 2026. In the page's last 7 bytes all of the match goes to
+the byte loop.
 
 The comment's "many times slower than lz4": the first decoder copied a match up to the end of the page
 byte by byte, and its slowest 1% of pages took more than 10 times as long as `lz4`'s.
 @more {#ch-dec-basics--copy-match} copy_match() on two matches, and what stores only bought
-Below offset 8 it is the pattern of [`repeat_pattern()`](#ch-dec-basics--pattern): build the register once, store it every `step`
-bytes, and no load waits for a store. With fewer than 8 bytes left in the page, the byte loop at the
-end copies all of the match. The comment on lines 116 to 119 bounds the load of `repeat_pattern()`: it
+The register is the pattern of [`repeat_pattern()`](#ch-dec-basics--pattern). The comment on lines 116 to 119 bounds the load of `repeat_pattern()`: it
 reads up to `d - off + 7`, at most `d + 6`, inside the page also when the page is nearly full. For
 `off = 3, len = 20` the stores are at `k = 0, 6, 12, 18`, as in [its figure](#ch-dec-basics--pattern). For the example page's match
 of [chapter 4](#ch-format--example), `off = 2, len = 4094`, the loop stops at `k = 4088`, where 8 more
@@ -269,8 +269,7 @@ before it knew which side of the `?:` it needed; the commit does not say. Inside
 changed nothing: for `off` from 1 to 7, `off & 7U` is `off`, and gcc 16.2.1 and clang 22.1.8 made the
 same machine code with and without it, on x86-64 and arm64. Commit `51cb119` removed it.
 
-The caller has checked that `d - off` is inside the page and `d + len` at most `d_end`. The last sentence
-of the comment's first paragraph has a measurement behind it: the first decoder of seqlz, in September 2026,
+The last sentence of the comment's first paragraph has a measurement behind it: the first decoder of seqlz, in September 2026,
 copied a match that ran up to the end of the page byte by byte, all of it. On a page that ends in a long
 run of zeros that is up to 4000 single bytes with offset 1, each load waiting for the store before it,
 and the slowest 1% of pages took 5700 ns, where `lz4` took 500
@@ -289,9 +288,9 @@ The format has changed since; the numbers say which way the change went, not wha
 @end
 
 @@ 129-151
-From offset 8 on, `copy8()` is right: each load ends before the bytes its store writes. Two copies
-without a loop first, since most matches are at most 16 bytes. 32 bytes first made the slowest pages
-slower: they have many short matches, and each copied 32 bytes.
+From offset 8 on, plain `copy8()`s are right: each load ends before the bytes its own store writes.
+The 16 bytes without a loop come first even when `len` is shorter. That choice dates from when every
+match came here; today the fast path takes the short ones, and the panel has why it is still 16.
 
 The byte loop at the end is the format's own definition of a match. It runs only in the last 7 bytes
 of the page.
@@ -330,8 +329,9 @@ check at [the end of the page](#b633) catches that, instead of a check on every 
 make wrong lengths and offsets, never a wrong memory access: each one is checked where it is used.
 
 @@ 168-179
-One unaligned big-endian load of 8 bytes, shifted down below the `count` real bits and ORed in. `p`
-moves on by the bytes that went in whole, `(63 - count) >> 3`.
+The refill everywhere but in the stream's last 7 bytes: one load and a few shifts, adds and ORs, with
+no loop and no branch. `next_token_fast()` calls it directly, every other reader through
+`seqlz_br_refill()` below, which checks for the 8 bytes first.
 
 `count | 56` is `56 + count % 8`, so after a refill `count` is 56 to 63 and the decoder can rely on 56
 bits. The partial byte at the bottom is not counted; the next refill loads it again to the same place,
@@ -456,11 +456,12 @@ the CPU predicts. The example page of [chapter 4](#ch-format--example) has a bit
 with its offset bits, 11 + 12 bits, never 64.
 
 @@ 199-220
-A length value: one lookup with the top 8 bits gives the code's length `n`, the number of extra bits
-`x` and the base, packed into one `u32`. The value is the base plus the `x` bits after the code.
+Only the slow path calls this, right after a refill, for a token whose `ll` or `ml` is at its cap, and
+adds the value to the token's count. One load of the entry gives the code's length, the extra bits and
+the base, and the value is two shifts and an add after it.
 
-`(bits << n) >> (64 - x)` would be a shift by 64 for `x = 0`, which is undefined. `>> 1` and then
-`>> (63 - x)` gives 0 for `x = 0` and the same otherwise, without a branch.
+The two shifts: `>> 1` clears bit 63, so for `x = 0` the `>> 63` that follows gives 0; for any other
+`x` the two together are the `>> (64 - x)` that a single shift could not do for `x = 0`.
 @more {#ch-dec-basics--value} What seqlz_br_value() returns, on the example page
 A plain number: how many literals or match bytes a long sequence has beyond what its token can say. The
 token holds `ll` from 0 to 15 and `ml` from 4 to 35, and the top value of each means "this many or
@@ -505,10 +506,13 @@ leaves at least 56. The largest base, {{ch12.base_max|grp}}, fits the entry's 16
 ## Deltas, level 3 only
 
 @@ 221-241
-Adds 4 or 8 bytes to the bytes `dist` before them, each byte on its own, modulo 256, in one word.
-The low 7 bits of each byte add without a carry into the next byte (at most `0x7f + 0x7f`); bit 7
-is then fixed with an XOR of both top bits. A plain word addition would carry from one byte into the
-next.
+Four or eight additions modulo 256 in one integer addition, the inverse of the encoder's
+[`sub_bytes()`](#ch-literals-enc--sub-bytes); the panel runs it on two bytes. Why add, when a XOR is one
+instruction and these are 6: a counter or a pointer differs from the one before by a small number, and
+a small difference is a small delta, while a XOR spreads it over every bit a carry flips. On the ten
+20 000-page samples level 3 stored 0.84% fewer bytes per page with deltas than with XORs, measured on
+21st October 2026
+([explored-designs.md](https://github.com/martinus/seqlz/blob/main/docs/explored-designs.md#level-3-stores-its-literals-as-deltas-not-xors-084-fewer-bytes-than-the-xor-kept)).
 
 `add8()` is only for a distance of 8 or more. With a distance of 4, the 8 bytes it adds would include 4
 of the bytes it is restoring, still deltas.
@@ -551,21 +555,23 @@ from the offset of the sequence before, and is at least 4 ([the format](book:#ch
 ([what the deltas cost](#ch-literals-dec--undelta-cost)).
 
 @@ 253-270
-16 bytes in words: two `add8()` for a distance of 8 or more, else four `add4()`. Each word adds the
-word `dist` bytes before it, which ends before this word starts. So going forward, every byte a word
-reads is restored already. Both restoring functions take their steps from here.
+Each word may read bytes the word before it just restored, which is why the words go forward. On
+`dist = 5`: `add4(p, 5)` reads `p - 5` to `p - 2`, all final, and `add4(p + 4, 5)` reads `p - 1` to
+`p + 2`, restored by the first a moment before; `add8(p, 5)` would have read `p` to `p + 2` while they
+were still deltas ([`add8()`](#b221) waits for a distance of 8). The branch
+goes the same way for a whole page of `SEQLZ_DELTA_4` or `SEQLZ_DELTA_8`; only `SEQLZ_DELTA_LAST`
+changes `dist` from sequence to sequence. Both restoring functions take their steps from here.
 
 @@ 271-299
-Turns the `nl` deltas just copied to `d` back into literals. The byte a delta is to may be one a match
-wrote, so this happens in the page, right after the copy, and before the match after the literals,
-which may copy from them ([the deltas in the loop](book:#ch-decode--deltas)).
+This runs in the page itself, right after the literals are copied and before the match: a delta can be
+to a byte a match wrote, and the match after may copy from these literals
+([the deltas in the loop](book:#ch-decode--deltas)).
 
-`k` starts at `dist - at` near the page's start: literals before byte `dist` have nothing to be a delta
-to, and stay as they are. Then steps of 16 bytes forward. Where the page has room for 15 bytes past the
-literals, the last step covers the tail too. So a sequence of up to 16 literals is one step, and no
-loop has a trip count that changes from sequence to sequence. Only at the page's end does the tail go
-byte by byte. The bytes read are at `d + k - dist`, which is never before `dst`, since `k` starts at
-`dist - at` or later.
+The loop's bounds on numbers, with `k` from 0: for `nl = 20` with room, `end` is 35, and steps at
+`k = 0` and `16` cover 32 bytes, 12 of them past the literals, and the byte loop has nothing left.
+Without the room `end` is 20: one step, then bytes 16 to 19 one at a time. In the page's first `dist`
+bytes `k` starts at `dist - at`, so `d + k - dist` is never before `dst`; the literals there have
+nothing to be a delta to and stay as they are.
 @more Why the bytes `dist` back are always final
 `undelta_literals()` restores the `nl` literals at `d`, `at` bytes into the page. `k` is the first
 literal that is a delta, by the one rule of the format ([the deltas](#ch-format--deltas)), the same
@@ -595,9 +601,10 @@ again.
 @end
 
 @@ 300-317
-The same for the fast path, which copied 16 bytes whatever `nl` is: one [`undelta16()`](#b253), no
-loop, no branch on `nl`. The bytes past `nl` become garbage, which they were already; the match
-writes over them. Near the page's start it falls back to `undelta_literals()`.
+The fast path copied 16 bytes whatever `nl` is, so it restores all 16 with one
+[`undelta16()`](#b253): no loop, no branch on `nl`, and no check of room, since the fast path runs only
+with 64 bytes of room in the page ([the rooms](#b396)). The bytes past `nl` were garbage before and
+stay garbage until the match writes over them.
 @more The second sequence of the page of pointers, on the fast path
 The fast path copies 16 bytes of literals whatever `nl` is, at most 14
 ([the fast path](#ch-decode--fast)), and `undelta_fast()` restores all 16, one path for all three
@@ -654,13 +661,10 @@ more and was not kept ([explored-designs.md](https://github.com/martinus/seqlz/b
 ## Helpers of the fast path
 
 @@ 318-341
-A fast match has at most 34 bytes, and the caller guarantees 40 bytes of room, so the copy needs no
-loop: 16, 32 or 40 bytes in `copy8()`s. With `8 <= off < 16` a load reads what the store before
-wrote, as the overlap needs.
-
-`m = d - off` once, because clang computed `d + 8 - off` again for every load. Always copying 40
-bytes, without the branches on `len`, was slower: the extra loads read bytes the stores just before
-them wrote.
+A fast match is 4 to 34 bytes and has 40 bytes of room, so two branches on `len` pick 2, 4 or 5
+`copy8()`s: 16 bytes for a match of up to 16, 32 for 17 to 32, 40 for 33 and 34. Copying 40 bytes
+always, without the branches, was slower: the extra loads read bytes the stores just before them
+wrote. The panel has the numbers, also those of `m`.
 @more {#ch-decode--copy-match-fast} What `m` and the branches on `len` were measured at
 Computing `m = d - off` once, instead of the `d + 8 - off` that clang computed anew for every load,
 took the decoder from 17 842 to 17 542 instructions per page on the Mi 9T's little Cortex-A55
@@ -681,8 +685,8 @@ wrote
 @@ 342-359
 Below offset 8: the pattern register, stored 5 times without a loop. The smallest step is 5, so 5
 stores cover at least 28 bytes, with step 8 they cover 40, every fast match. The loop runs only for a
-longer match with a step of 5, 6 or 7. The caller has rejected offset 0, so `repeat_step[off]` never
-reads the placeholder entry 0.
+longer match with a step of 5 or 6; with step 7 the five stores already cover every fast match. The
+caller has rejected offset 0, so `repeat_step[off]` never reads the placeholder entry 0.
 @more {#ch-decode--five-stores} The five stores on numbers, and the loop that was slower
 The register is the pattern of [`repeat_pattern()`](#ch-dec-basics--pattern). The smallest step is
 {{ch14.cmf.min_step}}, for `off = {{ch14.cmf.min_step_off}}`, and then the 5 stores cover
@@ -699,14 +703,11 @@ slower in the kernel VM with gcc and clang
 @end
 
 @@ 360-373
-The token: the top 11 bits index a table of 2048 entries. Every index is valid because the token code
-is complete ([complete](book:#ch-compression--complete)). The entry has the lengths and the offset's
-class, so the offset's bits follow without a second lookup. The table is the global
-`seqlz_tables.token`.
-
-It refills only when fewer than 11 + 12 bits are left (a code and the longest offset), so most lookups
-use bits that are already in the register and do not wait for a load. Used for the first sequence and
-after a slow one.
+The token read for the first sequence and after a slow one; the fast path has
+[`next_token_fast()`](#b374). The top 11 bits index the 2048 entries of `seqlz_tables.token.decode`
+directly, with no check: the token code is [complete](book:#ch-compression--complete), so every 11-bit
+value starts with the code of some token or of the escape. One entry has `ll`, `ml`, the code's length,
+and how many offset bits follow and how to scale them ([its bits](book:#ch-internal--token-entry)).
 @more {#ch-decode--next-token} Why a refill only below 23 bits, measured
 11 + 12 bits are {{ch14.need}} bits, a token's longest code and the longest offset. The `(int)` keeps
 the compare signed, so a negative `count` reads as what it is. A refill puts a load in front of the
@@ -725,15 +726,14 @@ The format of then had other tables and another bit order.
 @end
 
 @@ 374-395
-Two tricks, both for a page the CPU decodes once (a swap-in):
+Called at the top of the fast path, so a fast sequence looks up the next token before it copies
+anything: on the Cortex-A55, which runs instructions in order, the copies run while the entry is on its
+way ([in-order cores](book:#ch-cpu--in-order)).
 
-- The next token is looked up before this sequence's copies. No length value follows on the fast path,
-  so the next code starts right after the offset bits. An in-order core such as the Cortex-A55 copies
-  while the lookup is on its way ([in-order cores](book:#ch-cpu--in-order)).
-- The refill comes every second fast sequence, without checking the bits left. Whether the bits run
-  short depends on the codes before, a branch the predictor cannot learn on a page it has not seen; a
-  branch that alternates it gets right. Two fast sequences take at most 2 × (11 + 12) = 46 bits, and a
-  refill leaves 56.
+`skip` makes the refill a schedule, refill, none, refill, none, instead of a test of `count`, which a
+page seen once mispredicts; a branch that alternates does not. After every slow sequence
+`decode_block()` sets `skip = 0`, so the first fast one after it refills. The panels have why the bits
+last and what this saved.
 @more {#ch-decode--next-token-first} The next token before the copies, measured
 An out-of-order core would overlap the lookup and the copies anyway; an in-order core such as the A55
 would wait for the lookup at the top of the next round. On 3rd October 2026, phone pages in the
@@ -780,9 +780,10 @@ slower and kept a loop of its own until 10th October 2026, when every core got t
 @end
 
 @@ 396-404
-The three limits of the fast path. In the page: it writes at most 14 literal bytes and 40 bytes of
-match, rounded up to 64. In the literals: one `copy16()`. In the input: one refill of 8 bytes. With
-these, the fast path checks nothing else.
+With these three, the fast path's condition is one compare per buffer ([the limits](#b498)) and its
+copies check nothing. The price: a sequence takes the slow path when fewer than 64 bytes of the page
+are left, fewer than 16 before `lit_bound`, or fewer than 8 bytes of input after the bit reader's `p`,
+which is the case for the page's last match.
 @more {#ch-decode--rooms} The three rooms in a figure
 A fast sequence writes the 16 bytes of `copy16()` at `d`, moves on by at most {{ch14.fast_nl}}
 literals and writes at most {{ch14.cmf.room}} bytes of match, {{ch14.cmf.max_write}} bytes in all, below
@@ -833,12 +834,10 @@ the {{ch14.room.page}} of `FAST_BLOCK_ROOM`. The compiler checks that with the `
 ## decode_block(): the loop
 
 @@ 405-417
-The room of the block above, checked by the compiler. A sequence takes the fast path only with `ll`
-and `ml` below their caps, so it has at most {{ch14.fast_nl}} literals and a match of at most
-{{ch14.fast_len}} bytes. `copy_match_fast()` writes 40 bytes with its five stores, or `len + 7` with its
-loop, for a longer match at an offset below 8: {{ch14.fast_nl}} + 40 and {{ch14.fast_nl}} +
-{{ch14.fast_len}} + 7 bytes, both within the 64. A change of the caps that lets the fast path write
-past its room stops the build, instead of waiting for a fuzzer to find it.
+The caps come from the format (`SEQLZ_LL_CAP` and `SEQLZ_ML_CAP` in
+[`seqlz_format.h`](seqlz_format.h.html)) and give the fast path at most {{ch14.fast_nl}} literals and
+{{ch14.fast_len}} bytes of match; the room comes from this file. A change of the format that lets the fast path write past its 64
+bytes stops the build here; without the `static_assert` it would take a fuzzer to find the overflow.
 
 @@ 418-427
 @anchor ch-decode
@@ -895,10 +894,10 @@ build without level 3 sets it to 0.
 [once from `delta`](#b470), the field of the header that [`seqlz_decode_literals()`](#b460) reads.
 
 @@ 444-458
-The tables are prefetched before the header is read, so that their cache misses overlap with each
-other and with the work on the header and the literals. An in-order core stops at every miss it did not
-see coming. That is {{ch14.pf.token}} prefetches for the token table and {{ch14.pf.len}} for each
-length table ([why](book:#ch-dec-basics--prefetch)).
+{{ch14.pf.token}} prefetches for the token table and {{ch14.pf.len}} for each length table go out
+before the header is looked at. Their misses then overlap with each other and with the work on the
+header and the literals, where the loop's lookups would meet them one at a time
+([why](book:#ch-dec-basics--prefetch); the animation under this note).
 
 The header's low 15 bits are the number of literals; more than a page is invalid, raw or coded.
 @anim misses A model of 8 cache misses, one after another or overlapped
@@ -926,12 +925,14 @@ The function also gets `d`, the output page, for level 3's literal table of the 
 that table there, before the loop writes over it ([own table](book:#ch-literals-dec--own)).
 
 @@ 470-479
-From `delta` the page takes `delta_fixed` once: 4 for `SEQLZ_DELTA_4`, 8 for `SEQLZ_DELTA_8`, and 0
-for `SEQLZ_DELTA_LAST`, whose distance changes with each sequence. Then [`delta_dist()`](#b242) has one
-test per sequence instead of two.
+Picked here, the test that remains in [`delta_dist()`](#b242) goes the same way for the whole page.
+On the Mi 9T on 31st October 2026, one decode per page seen once, a page with deltas mispredicted 31.1
+branches more than the same page without them on the A76 before this and 27.2 after, 71.2 and 61.4 on
+the A55 ([what the deltas cost](#ch-literals-dec--undelta-cost)).
 
 @@ 480-483
-The sequences' bitstream follows the coded literals, and the loop reads the literals from the scratch.
+From here on the loop does not know that the literals were coded: `lit`, `lit_end` and `lit_bound`
+point into the scratch, and the bit reader starts at `q`, where `seqlz_decode_literals()` stopped.
 @more {#ch-decode--lit-bound} Where `lit_bound` is for coded literals
 Coded literals end at `lit_end` in the scratch, and `lit_bound` is the end of the scratch,
 `SEQLZ_SCRATCH` bytes after its start, 16 bytes more than the most literals a page has, for the 16-byte
@@ -949,10 +950,10 @@ reader would have to know that.
 @anim abbits The 9-byte example page, one field per step
 
 @@ 498-510
-The fast path copies without checking the room, so it is taken only where there is enough: three
-compares against these limits. They are numbers and not pointers, because for a short input
-`s_end - 8` would point before the buffer, which C does not allow. As numbers they are then below `lit`
-and `br.p`, and the fast path is not taken.
+Computed once per page, so that the fast path's test is a compare per buffer, `d <= d_fast` instead of
+`d_end - d >= 64`. C leaves a pointer before the start of its buffer undefined even if nothing reads
+through it, and `s_end - 8` is one for an input of fewer than 8 bytes. As an `unsigned long` it is
+just a number below `br.p`, and the fast path is not taken.
 @more {#ch-decode--fast-limits} The limits on a page of 9 bytes
 `unsigned long` has the size of a pointer on every architecture the kernel has. With a short input the
 limits are below `lit` and `br.p`, which never point before byte 2 of the input, so the fast path,
@@ -965,10 +966,11 @@ already covered (commit `3ae2e09`).
 @end
 
 @@ 511-521
-The format has no count of sequences, and the last one has no token: the page ends when the literals
-left fill the bytes left. `d_end - d == lit_end - lit` is the same as `d - lit == d_end - lit_end`,
-whose right side never changes. So the loop compares two pointers it moves anyway against `end_gap`
-([the end](book:#ch-format--end)).
+The format has no count of sequences and gives the last one no token
+([the end](book:#ch-format--end)), so the decoder has to see the end coming: after a match, when the
+literals not used yet are as many as the bytes not written yet, they are the last sequence. As
+`d_end - d == lit_end - lit` that is two subtractions and a compare in every slow sequence; with the
+constant side computed here, one subtraction and a compare.
 
 A page of only literals has no token at all and jumps to the end. With raw literals such a page would
 be 2 bytes larger than the page itself, and zram keeps the page uncompressed instead; with level 2's
@@ -1122,10 +1124,9 @@ limits. The body: the next token first, 16 bytes of literals, the offset check, 
 The offset check `off - 1U >= d - dst` is one unsigned compare for `1 <= off <= d - dst`: `off = 0`
 wraps to the largest `unsigned int`.
 
-`nl` is not checked against the literals left. On a damaged page `lit` can run past `lit_end`, but it
-stays inside `lit_bound`, and the slow path, where every page ends, rejects it. The page's last match
-never takes the fast path: fewer than 8 bits are left after it, and the fast path wants 8 bytes of
-input.
+The two comments trade a check per sequence for one later: literals overrun on a damaged page are
+caught at the next slow sequence, and the end of the page only on the slow path, which every page
+reaches.
 @more {#ch-decode--fast} The fast path's condition and body, part by part
 Each part of the condition lets the body skip a check. Bit 30 of the entry, `TOK_VALUE_AT`, says that no
 length value follows, so `nl` is at most 14 and `len` at most 34; one test instead of two compares, and
@@ -1167,7 +1168,8 @@ On a page with deltas, [`undelta_fast()`](#b300) adds the earlier bytes back to 
 deltas](#anim-undelta) steps through its four `add4()` on a page of counters.
 
 @@ 578-586
-The match, then the next sequence: the token was looked up before the copies.
+The offset check, the match, and back to the top with the next token already looked up. The
+`continue` skips the slow path's end test, so only a slow sequence can end the loop.
 
 @@ 587-595
 The slow path, with every check. `nl == 15` means a length value follows.
@@ -1199,9 +1201,9 @@ A match length of 35 in the token means a length value follows. With it `len` ca
 page, which the check of room catches. `last` is set before the checks; when they fail it no longer
 matters.
 
-When the literals left fill the bytes left, no match can follow (a match has at least 4 bytes): the
-loop ends. Otherwise the next token comes through the checked `next_token()`, and `skip = 0` restarts
-the fast path's refill schedule.
+The end test is where [`end_gap`](#b511) is used. After it, `skip = 0` makes the next fast sequence
+refill: `next_token()` made sure of only 23 bits, fewer than the fast path's schedule counts on
+([why the bits never run short](#ch-decode--bits-left)).
 @more {#ch-decode--long-match} How long `len` can get
 With 4 KiB pages a match length value is at most {{ch14.max_value}}, so `len` can be {{ch14.max_len}},
 more than a page; `len > d_end - d` rejects it before [`copy_match()`](#ch-dec-basics--copy-match).

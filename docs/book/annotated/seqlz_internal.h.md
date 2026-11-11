@@ -132,8 +132,9 @@ When a swap-in comes, whatever ran since the last one may have pushed the decode
 caches, and each first lookup into a line is then a miss of about 100 ns. Prefetches issued back to
 back let these misses overlap ([prefetches](book:#ch-cpu--prefetch)).
 
-`PREFETCH_STEP` is 512 bytes, 8 lines of 64 bytes per round of the outer loop. The second paragraph is
-about the last line of a table, see the next block.
+With 512 bytes per round, the token table takes {{ch12.tok.rounds}} rounds of 8 prefetches; the panel
+has what one line per round cost. The comment's second paragraph belongs to `prefetch(end - 1)` in the
+next block.
 @anim misses A model of 8 cache misses, one after another or overlapped
 @more {#ch-dec-basics--prefetch} Why the tables are prefetched, 8 lines at a time
 The decoder looks things up in tables: one lookup in the token table, 8 KiB, per sequence, and for
@@ -194,9 +195,9 @@ tables always do.
 @assert ch12.ml.mod == ch12.ll.mod and ch12.tok.mod == 0 and ch12.ll.last_entry - ch12.ll.first_extra + 1 == ch12.ll.tail and ch12.lit.last_entry - ch12.lit.first_extra + 1 == ch12.lit.tail and ch12.lit.mod % 8 != 0
 
 Until 11th October 2026 the decoder left that line out (#179). With canonical codes the last entries
-belong to the longest codes, the rarest symbols, so it cost a miss only on a rare code. Line 142 is one
-`prefetch()` more per table; where the table starts a line, it asks for a line the loop asked for
-already. Aligning the tables to 64 bytes instead would need a struct aligned to 64, which the tests and
+belong to the longest codes, the rarest symbols, so it cost a miss only on a rare code.
+`prefetch(end - 1)` is one `prefetch()` more per table; where the table starts a line, it asks for a
+line the loop asked for already. Aligning the tables to 64 bytes instead would need a struct aligned to 64, which the tests and
 tools that get it from `malloc()` do not have. On x86-64 the extra prefetch made no difference in a quick
 bench; it was not measured on the phone (commit `bafef14`).
 @end

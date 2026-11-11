@@ -48,9 +48,10 @@ An entry of a length table packs three numbers into one `u32`. E.g. symbol 18 of
 values 64 to 127: base 64 and 6 extra bits, so its entries are `64 << 8 | 6 << 4 | l`, with `l` its
 code's length. The base can need more than 8 bits, hence `u32`.
 
-The third paragraph explains masks that change no value, such as `n & 63U` on a shift count that is
-below 64 anyway. A kernel with UBSan adds a compare and a branch before every shift and index the
-compiler cannot prove in range; the mask is that proof ([UBSan](book:#ch-cpu--ubsan)).
+The third paragraph is about masks that change no value, such as `n & 63U` on a shift count that is
+below 64 anyway. On a shift they cost nothing in a build without UBSan either: x86-64 and arm64 use
+only the low 6 bits of a 64-bit shift's count, so the compiler drops the `& 63U`. What they saved is
+[under the next note](#b30) ([UBSan](book:#ch-cpu--ubsan)).
 @anim table From code lengths to a decode table and back
 @more {#ch-internal--decode-tables} Symbol 18 of `ll`: its entry, and the entries it fills
 The rule is [table decoding](#ch-compression--table-decoding): a code of $l$ bits in a table of $2^L$
@@ -95,9 +96,8 @@ has the cycles).
 @@ 38-43
 Both forms in one struct, because one computation makes them: `build_values()` works out each
 symbol's code once and writes it to both. No function reads both, so a CPU loads only the cache lines
-of the array it uses. `enc[]` has the code in the low 16 bits and its length from bit 16 on. The
-comment on `decode[]` is the layout of its entries, which `length_entry()` builds
-([its layout](book:#ch-codes--length-entry)) and [`seqlz_br_value()`](seqlz_decompress.c.html#b199)
+of the array it uses. The comment on `decode[]` is the layout of its entries, which `length_entry()`
+builds ([its layout](book:#ch-codes--length-entry)) and [`seqlz_br_value()`](seqlz_decompress.c.html#b199)
 takes apart.
 @more {#ch-internal--value-table} Symbol 18 of `ll` in `enc[]`, and the sizes
 `decode[256]` is indexed by the top 8 bits of the decoder's bit register, {{ch07.size.value_decode}}
@@ -258,10 +258,12 @@ every code above it. A 9th fixed table would need code 8 itself, and this assert
 build.
 
 @@ 92-101
-The delta `SEQLZ_DELTA_LAST` subtracts the byte as far back as the offset of the sequence before. It
-is in this header because the encoder and the decoder both need it. Below 4 it is the smallest
-multiple of `last` that is at least 4: `last` 1 or 2 gives 4, 3 gives 6. After a match at offset 3 the
-bytes repeat every 3, so the byte 6 back equals the byte 3 back.
+A literal right after a match often differs little from the byte the match would have copied next,
+the one `last` bytes back. With the delta `SEQLZ_DELTA_LAST` each literal is stored as its difference
+to that byte: where the guess is good, the literals bunch up around 0, and a literal table codes
+them in fewer bits. Offsets below 4 are stretched: `last` 1 or 2 gives 4, 3 gives 6. After a match at
+offset 3 the bytes repeat every 3, so the byte 6 back equals the byte 3 back. It is in this header
+because the encoder and the decoder both need it.
 
 At least 4, because the decoder undoes the deltas 4 bytes at a time: none of the 4 bytes it adds may lie
 in the word it is writing.

@@ -267,16 +267,17 @@ deltas, and writes about 0.2 µs faster on the Mi 9T, reads within the noise
 ## Three ways to store the literals
 
 @@ 1-18
-The ways a page can store its literals: raw, coded with one of the fixed tables at level 2
-(`SEQLZ_LEVEL_CODED`), and at level 3 (`SEQLZ_LEVEL_OWN`) also with a table of the page's own, and as
-deltas first. Everything after the includes is under `#if SEQLZ_LEVELS >= 2`: a build of level 1
-compiles the file to nothing.
+The includes are the kernel's own headers: `static_assert()` from `build_bug.h`, `div_u64()` from
+`math64.h`, `min()`, `sizeof_field()`, `memmove()` and `memcpy()`, `swab64()`, and the unaligned loads
+and stores. Outside the kernel, `src/linux/` has stand-ins of the same names. Everything after them is
+under `#if SEQLZ_LEVELS >= 2`: a build of level 1 compiles the file to nothing.
 
 ## Lanes of 8 tables
 
 @@ 19-29
-Reads one sum out of its 16-bit lane: `even` has tables 0, 2, 4 and 6, `odd` tables 1, 3, 5 and 7,
-4 lanes each. `k / 2` is the lane.
+The one reader of the 16-bit lanes, used three ways: `code_sampled()` with `j = 0`, the one sum of its
+sample; `pick_delta()` with `j` the delta it prices; `seqlz_code_own()` with `j` the stream. E.g.
+table 5 is bits 32 to 47 of `odd[j]`.
 @more {#ch-literals-enc--lit-bits} Table 5's sum of 4 literals, read out
 `even` and `odd` have one word per sum `j`. Level 2 has one sum, the sample of
 [`code_sampled()`](#b300), so `j` is 0; level 3 has [more](#b533). Table 5 is odd, so its sum is in
@@ -324,17 +325,16 @@ x >> 8 & lanes   = {{ch11.odd}}    odd:  tables 7, 5, 3, 1 = {{ch11.sum.7.dec}},
 ## Codes into streams
 
 @@ 43-60
-Appends one literal's code to a stream's accumulator. `enc[b]` has the code's length in its low byte
-and the code from bit 8 on. `*bits += e` adds the whole entry, not only the length: the codes add only
-into bits 8 and up, so the low byte stays a count of bits, the at most 7 a flush left plus the lengths
-since, at most 57. That is one mask per flush instead of one per literal, and one count per stream
-where there were two until 10th November 2026.
+Coding one literal is two loads, a shift, an OR and an add. `*bits += e` adds the whole entry, not
+`e & 63`: the code lands in bits 8 and up, where nothing reads it, and the low byte keeps counting, so
+the mask is paid once per flush, in `lit_flush()`, not once per literal. `acc` is never cleared
+either: the bits a flush wrote stay in it and fall off the top as later codes shift in. Until 10th
+November 2026 each stream had two counts, `cnt` and `sum`.
 @more {#ch-literals-enc--lit_put-one-code-into-an-accumulator} Stream 0 of the page of letters, code by code
 `e & 63U` is the code's length: the low byte holds at most 10, and the mask lets the compiler see a
 shift below 64, for UBSan ([the masks](#ch-internal--masks)). In `*bits += e` the codes add only into
 bits 8 and up, and a carry never goes down, so the low byte stays the count; between two flushes it
-is at most $7 + {{ch11.run}} \times 10 = 57$, and `lit_flush()` reads `*bits & 255U`. What piles up
-above the low byte is never read. Stream 0 of [the page of letters](#ch-literals-enc--example), in
+is at most $7 + {{ch11.run}} \times 10 = 57$, and `lit_flush()` reads `*bits & 255U`. Stream 0 of [the page of letters](#ch-literals-enc--example), in
 table {{ch11.set}}, gets literals 0, 8, 16, 24 and 32 in its first run:
 @assert ch11.run == 5
 
@@ -360,8 +360,7 @@ Writes the whole bytes of a stream's accumulator, like level 1's
 [`enc_flush()`](seqlz_encoder.h.html#b125) but forwards. The shift puts the `n` bits not yet in memory
 on top, with zeros below, and a byte swap followed by a little-endian store is a big-endian store: the
 stream's first bit is the top bit of its first byte. The zeros are also what the format wants after a
-stream's last code ([how a page ends](book:#ch-format--end)). The swap is done once, before the
-branch, because the compiler did not merge one swap in each branch.
+stream's last code ([how a page ends](book:#ch-format--end)).
 
 `slots` is a constant at each call. Level 2 writes into slots, which always have 8 bytes of room
 ([`LIT_SLOT()`](#b207)), so with `true` the test and `store_tail()` drop out of its copy. Level 3
@@ -407,9 +406,12 @@ memory are the same on every machine; CI checks that on s390x.
 ## Four streams at a time
 
 @@ 108-135
-Writes the literals into the 8 streams, literal `k` into stream `k % 8`. One stream is one chain:
-each code waits for the shift before it. So 4 streams with 4 accumulators run side by side, twice;
-one stream after the other cost about 3.5 cycles per literal. `ends` gets where each stream stopped; in a slot, `ends[j] - q[j]` is the stream's size.
+Called by `code_sampled()` to write into slots and by `seqlz_code_own()` to write in place. Literal
+`k` goes into stream `k % 8` so that the decoder can take one literal from each of the 8 streams per
+round and still write them in order ([the decoder](seqlz_decompress_literals.c.html)). On this side
+a stream is one chain, each code waiting for the shift before it, so 4 accumulators run side by side,
+twice; one stream after the other cost about 3.5 cycles per literal. Only level 2 reads `ends[]`, for
+the sizes of its streams in the slots; level 3 knows the sizes before it writes.
 @more {#ch-literals-enc--streams} Why 4 streams at a time, measured
 Appending a code is `acc = acc << len | code`, and the next code of the same stream needs the result:
 one stream is one chain where every step waits for the one before. Written one stream after the
@@ -428,10 +430,10 @@ format before in one loop
 @end
 
 @@ 136-152
-`LIT_FLUSH_RUN` literals per stream of this half, then a flush. The `static_assert` is the argument
-for 5: 5 codes of at most 10 bits on top of the 7 a flush can leave are 57 bits, which fit 64. The
-loop stops before a run the literals would not fill, so what is left for the tail below fits without
-a flush.
+One pass of the outer loop is a run: {{ch11.run_lits}} literals of the page, {{ch11.run}} per stream.
+This half's 4 streams take theirs, `l[j]` to `l[j + 3]` for every 8th `j`, then each is flushed once.
+`LIT_FLUSH_RUN` is the most that the `static_assert` lets through, and more literals per flush means
+fewer flushes per page ([measured](#ch-literals-enc--runs-of-32-literals)).
 @more {#ch-literals-enc--runs-of-32-literals} Which literals a run takes, and why 5 per stream
 A run is `run`, {{ch11.run_lits}} literals of the page, {{ch11.run}} for each stream of this half: for
 `half = 0` and `k = 0`, stream 0 gets literals 0, 8, 16, 24 and 32, stream 1 gets 1, 9, 17, 25 and 33;
@@ -448,9 +450,10 @@ and took the A55's from 30.96 to 30.79 µs, with about 800 kernel instructions p
 @end
 
 @@ 153-188
-The rest, at most `LIT_FLUSH_RUN` literals per stream: one loop with a switch, skipping the other
-half's literals (`k += 4` after each group of 4), then the last flushes. A stream's end counts its last
-byte if it holds bits, `b != 0`: the flush left them there without moving `p` past it.
+Fewer literals than a run are left, so they go in without a flush in between. Cases 0 and 4 share
+`a0`, which is stream 0 in the first half and stream 4 in the second, and `k += 4` after every fourth
+literal jumps over the other half's. The last flushes can leave a partly filled byte, already in
+memory with zeros below its bits; `p` stays on it, and the `+ (b != 0)` counts it.
 @more {#ch-literals-enc--the-tail-at-most-4-literals-per-stream-one-switch} The tail of the page of letters
 Cases 0 and 4 both go to `a0`, which is stream 0 for `half = 0` and stream 4 for `half = 4`, so one
 switch serves both halves. [The page of letters](#ch-literals-enc--example), {{ch11.n}} literals,
@@ -474,7 +477,10 @@ skip makes `k` {{ch11.tr4.jump}}, past the end, where the loop condition stops i
 @end
 
 @@ 189-206
-The 8 stream sizes in `width` bits each, lowest bit first, exactly `width` bytes.
+Called by `lit_finish()` for the header. With exactly 8 sizes, their `8 * width` bits are always
+`width` whole bytes: the loop ends with nothing left in `acc`, so no last partial byte needs a store.
+The decoder's `lit_stream_sizes()` reads them back
+([the decoder](seqlz_decompress_literals.c.html#b72)).
 @more {#ch-literals-enc--sizes} The 8 sizes of the page of letters in 5 bytes
 The 8 sizes are one number of `8 * width` bits, little endian, size 0 in the lowest `width` bits
 ([format.md](https://github.com/martinus/seqlz/blob/main/docs/format.md#layout-of-a-compressed-block)).
@@ -518,10 +524,10 @@ of the pages, the mean over the dumps, so the header is now mostly 9 to 11 bytes
 ## code_sampled()
 
 @@ 241-264
-Ends every coded page, once the streams are in place: it writes the u16 with the coded flag, byte 2
-and the stream sizes, and moves the bitstream down to right after the coded literals. The caller
-passes byte 2 and where the sizes go, as level 3 puts a byte of its own before the sizes.
-`__always_inline`, so the caller's constants stay constants.
+The common end of both levels' coders. The u16 keeps the count of literals, now with
+`SEQLZ_LIT_CODED`, and the bitstream's bytes do not change, only their place. The caller passes byte 2
+and where the sizes go, as level 3 puts a byte of its own before the sizes. `__always_inline`, so the
+caller's constants stay constants.
 @more {#ch-literals-enc--header} The u16 and byte 2 of three pages
 The u16 gets `SEQLZ_LIT_CODED`: the {{ch11.n}} literals of [the page of letters](#ch-literals-enc--example)
 are `{{ch11.u16hex}}`, the bytes `{{ch11.u16}}`. Byte 2 is the literals' code in bits 0 to 3,
@@ -550,9 +556,11 @@ The copy of 400 to 600 bytes on a third of the pages stayed.
 @anchor ch-literals-enc
 `code_sampled()`, level 2's coder. Level 3 calls it too, for the pages that try neither deltas nor a
 table of their own, so the minimum of [the rule](#b322) is an argument: `coded_min` is
-{{ch11.coded_min}} at level 2 and {{ch11.coded_min_own}} at level 3. `slots` is the matcher's state.
-`x` collects the sample's sums, `s_even` and `s_odd` take them over before `x` can overflow, and `q[]`
-and `ends[]` are where the streams start and end.
+{{ch11.coded_min}} at level 2 and {{ch11.coded_min_own}} at level 3. Four steps: price a sample and
+give up early where it says so ([the sample](#b300)), write the streams into slots, check the rule on
+their real sizes ([the rule](#b322)), and copy them into place ([the copy](#b334)). The header of 8 to
+15 bytes in the comment is `SEQLZ_LIT_HEADER(width)`, `3 + width`, for a width from
+`SEQLZ_SIZE_BITS_MIN` to `SEQLZ_SIZE_BITS_MAX` bits.
 @more {#ch-literals-enc--overview} Where the streams go, and why the raw literals need no copy here
 The coded literals go where the raw ones were, so the streams are written somewhere else first, or
 the raw literals are read from somewhere else. `code_sampled()` writes the streams into `slots`, the
@@ -679,18 +687,18 @@ So the rule kept the old 19 bytes as its constant, which 51 replaced on 5th Octo
 @end
 
 @@ 334-354
-A page that gets coded has its streams copied over the raw literals, which are all read by now, 8
-bytes at a time. A store up to 7 bytes past a stream's end lands where the next stream goes next. The
-last stream ends exactly, with [`store_tail()`](#b61), as the bitstream may start right behind it. The
-loads past a stream's end stay inside its slot.
-
-Then [`lit_finish()`](#b241) writes the header: byte 2 with table `set` and the width, and the sizes
-right after it.
+The one extra pass that the slots cost: the streams move over the raw literals, which `lit_streams()`
+has read in full. Stream `j + 1` goes after stream `j`, so what a store writes past a stream's end is
+written again. With today's minimums the last stream ends at least 8 bytes before the bitstream, so a
+full store would fit there too; [`store_tail()`](#b61) keeps the copy right for any minimum that the
+`static_assert` below allows. Bytes 2 up to the streams' start still hold raw literals until
+[`lit_finish()`](#b241) writes the header over them.
 
 @@ 355-365
-Level 2's bounds, checked by the compiler: with level 2's minimum the coded literals end before the
-bitstream, the state's `literals` take no memory beyond the matcher's table, and the sample's sums fit
-their 16-bit lanes. Level 3 has [asserts of its own](#b898).
+Three bounds that `code_sampled()` relies on, each with room to spare: the largest header,
+{{ch11.header_max}} bytes, against the u16 plus the minimum, {{ch11.coded_min_h}}; the matcher's table
+of {{ch11.hash_bytes|grp}} bytes against a page; the sample's largest sum, {{ch11.sample.max_bits|grp}}
+bits, against a lane's 65 535. Level 3 has [asserts of its own](#b898).
 @more {#ch-literals-enc--asserts} What the asserts rely on, in numbers
 The first assert is the step of [why the streams never reach the bitstream](#ch-literals-enc--in-place)
 that the compiler can check. The second: `struct seqlz_state` is a union of the matcher's table,
@@ -712,11 +720,11 @@ Level 2's entry point: `code_sampled()` with level 2's minimum, `SEQLZ_LIT_CODED
 ## Deltas
 
 @@ 372-384
-`pick_delta()` prices the deltas on every {{delta.step}}th literal only, `DELTA_STEP`. The step is a
-prime, so the priced literals do not keep hitting the same byte of fields of 2, 3, 4 or 8 bytes.
-`DELTA_HDR_BITS` is the delta's byte in the header, 8 bits scaled as the sums are: $8 / 11$ is 0 in
-integer division, so the macro takes {{delta.penalty}}. `DELTA_CHOICES`, 4, counts no delta and the 3
-deltas.
+The deltas are priced on every {{delta.step}}th literal, level 2's table on every
+{{ch11.sample.step}}th: two steps, each measured on its own. One bit of the deltas' sums stands for
+about {{delta.step}} bits of the page, so the delta's byte would be `8 / DELTA_STEP`, 0 in integer
+division. The macro takes {{delta.penalty}}, which prices the byte at about {{delta.step}} bits of the
+page instead of 8: a small tilt towards no delta.
 @more {#ch-literals-enc--delta-step} Why every {{delta.step}}th literal, measured
 Every 11th instead of every 5th made pages 0.08% larger on ten samples of 20 000 pages, and level 3's
 writes on the Mi 9T 2.5% faster on the A55 and 3.1% on the A76, on 31st October 2026
@@ -879,9 +887,9 @@ how many there are, and the offset before them. `read_rec()` turns that offset i
 will use, not the raw offset.
 
 @@ 420-441
-Picks the delta. It prices the literals as they are and with each of the 3 deltas, in all 8 fixed
-tables at once, as [level 2's sample](#b300) prices the tables: `DELTA_CHOICES`, 4, sums. A delta also
-pays for its byte in the header, `DELTA_HDR_BITS`.
+The choice of delta, made before any stream is written: the literals as they are and with each of the
+3 deltas, each priced in all 8 fixed tables at once, as [level 2's sample](#b300) prices the tables.
+`s`, `even` and `odd` hold one sum per choice, so the 4 choices of a literal are 4 independent adds.
 
 The comment's last sentence is an assumption: the delta is chosen by the fixed tables, also for a page
 that then gets a table of its own.
@@ -939,8 +947,10 @@ deltas to {{delta.ptr.l3.len}} with them ([the page of pointers](#ch-header--del
 @end
 
 @@ 485-497
-Two passes over the records: [`pick_delta()`](#b420) prices, and this function, with a delta, writes
-the literals' deltas into `deltas`, the matcher's state. It returns the delta, 0 for none.
+Level 3's first step on the literals, called by `compress_own()` in
+[`seqlz_compress.c`](seqlz_compress.c.html) right after matching, before `encoder_finish()`. With a
+delta, the deltas of all sequences go one after the other into the matcher's state, in the order the
+literals have in `dst`, so that `seqlz_code_own()` can code them in place of the literals.
 @more {#ch-literals-enc--deltas} What the deltas are, and when they are chosen
 The format lets a page store each literal as its delta to an earlier byte, the literal minus that
 byte modulo 256, one of three ways for the whole page ([the deltas](#ch-header--deltas)). Which way
@@ -1010,13 +1020,11 @@ XORed were `0x10` and {{delta.ptr.h.10}} deltas are.
 ## Pricing every literal
 
 @@ 533-571
-Level 3 prices every literal, with one sum per stream and table: `x[j]` sums stream `j`'s literals in
-all 8 tables, with the adds of [level 2's sample](#b300). 25 literals per stream go into the 8-bit
-lanes, then [`lanes_spill()`](#b30) moves them into the 16-bit lanes of `even[j]` and `odd[j]`. The 8
-sums of a table are the 8 streams' sizes in bits, so the streams can be written in place without a
-second pass. The same pass can count the bytes for a table of the page's own, the even and the odd
-literals in two histograms, so that a run of one byte does not wait for its own count.
-`seqlz_code_own()` calls it on the pages that may get deltas or a table of their own.
+Level 3's pricing of every literal, called by `seqlz_code_own()` on the pages that may get deltas or a
+table of their own. It is [level 2's sample](#b300) without the step and with one sum per stream, so
+that a table's 8 sums are the 8 streams' sizes in bits. With those, level 3 puts each stream at its
+final place before it writes any, with no slots and no second pass. With `hist`, the same loads also
+count the bytes for [`own_code()`](#b757).
 @anim pricing The sums of stream 0, one add per literal, and their move into the 16-bit lanes
 @more {#ch-literals-enc--pricing} One sum per stream and table, in chunks of 200 literals
 The adds are those of [level 2's example](#ch-literals-enc--lanes), one `x[j]` per stream. A chunk is
@@ -1065,13 +1073,11 @@ level 2 left it out: the sizes come from the streams in [the slots](#b322)
 ## A table of the page's own
 
 @@ 572-611
-The work memory of a page's own table, at most `OWN_WORK`, 4 KiB, lives in the matcher's 8 KiB state
-behind the copy of the literals, so it costs nothing extra. Only pages with `OWN_LITERALS_MIN`,
-{{own.enc.min_lits}}, literals or more try a table of their own, and it has to save `OWN_SAVES_MIN`,
-{{own.enc.saves_min}}, bytes against the best fixed table.
-
-The description takes at most 256 bytes; its room is 512, a power of 2, so `own_put()` can mask its
-index and the compiler sees the bound.
+The memory plan of a page's own table: the matcher's state, free once the page is matched, holds the
+copy of the literals or their deltas in its first `OWN_LITERALS_MAX` bytes, {{own.enc.max_lits|grp}},
+and `struct own_work`, {{own.enc.work_size|grp}} bytes, behind them, so the table costs no work
+memory. Two thresholds pick the pages that try one, {{own.enc.min_lits}} literals and
+{{own.enc.saves_min}} bytes saved against the best fixed table, both measured, under the note.
 @more {#ch-literals-enc--the-work-memory} Which pages may try, measured, and why 256 bytes of description at most
 A table of the page's own needs counts, lengths, codes and room for the description,
 {{own.enc.work_size|grp}} bytes in `struct own_work`. The compressor's work memory is the 8 KiB of the
@@ -1097,12 +1103,12 @@ power of 2 above that, and 8 more for the last 8-byte store of [`own_put()`](#b7
 @end
 
 @@ 612-654
-Code lengths close to Huffman without sorting. Each byte first gets the shortest `l` with
-`f * 2^l >= n`, which keeps the code within its space except where lengths are cut to 10 bits.
-
-`f * 2^l / n`, 1 to 2, is how much a byte saves per code space if its code were one bit shorter, the
-"gain". A counting sort into 16 buckets by gain gives the order for the repair below, with a multiply
-by `inv` instead of a division.
+Shannon's code lengths and a repair, instead of a Huffman code, which needs the bytes sorted by count
+and a tree. Each byte first gets $\lceil -\log_2 (f / n) \rceil$ bits, lengths that never overfill the
+code space; only the cut to 10 bits can, for a byte that occurs fewer than $n / 2^{10}$ times, so at
+most 3 times even on a page of {{own.enc.max_lits}} literals. A byte whose $f \cdot 2^l / n$ is near 2
+almost earned a bit less: that ratio, in 16 steps, is its bucket, and the counting sort lists the
+bytes by it for the repair below, without sorting them by count.
 @anim ownlens own_lengths() on two real pages, bucket by bucket
 @more {#ch-literals-enc--own_lengths-close-to-huffman-without-sorting} The first lengths and the buckets of the text page
 A Huffman code gets the code lengths right, but it needs the bytes sorted by count, and a tree. The
@@ -1146,9 +1152,11 @@ animation](#f-seqlz_decompress_literals-c-b208) reads too, where the second loop
 @end
 
 @@ 655-679
-The repair: an overfull code lengthens the bytes of the smallest gain first, then room left goes to
-the bytes of the largest gain. The result can be a few bits worse than a real Huffman code; the
-buckets save the sort and the tree.
+An overfull code lengthens bytes from bucket 0 up, where one bit more costs the fewest bits per unit
+of code space it frees. Room left goes to the top buckets first, from the end of `by_gain[]`. On the
+text page nothing is overfull and {{own.enc.room0}} units are free, which `l` and `u` take
+([worked](#ch-literals-enc--repair)). Within a bucket the order is by byte value, not by count, and
+that is where a Huffman code can be a few bits better.
 @more {#ch-literals-enc--repair} The repair on the text page: `l` and `u` get 3 bits
 An overfull code gets longer codes from bucket 0 up: lengthening a byte frees the least room where it
 costs the fewest bits per room. Room left is handed out from the top bucket down, while a byte's
@@ -1164,8 +1172,10 @@ longest code's, so another round of the `while` fills it.
 @end
 
 @@ 680-694
-`log2()` in 1/256 bits, to about 1/50 bit, with a table of 32 bytes and no division: the top bit's
-position is the integer part, the next 5 bits index the fraction.
+Only the entropy estimate of [`own_code()`](#b818) uses it, and 1/50 bit is plenty there: the estimate
+decides whether to build a code, with {{own.enc.saves_min}} bytes of margin, and never prices the
+page. The top bit's position is the integer part, the next 5 bits look up the fraction: no division
+and no floating point, which kernel code avoids.
 @more {#ch-literals-enc--log2} `log2_256(608)`, step by step
 For $f \ge 1$, `e` is the position of the top bit, the integer part of $\log_2 f$. `f << (31 - e)` moves
 the top bit to bit 31, and the 5 bits below it, `>> 26 & 31`, say where $f / 2^e$ lies between 1 and
@@ -1179,7 +1189,8 @@ ${{own.enc.log.e}} \cdot 256 + {{own.enc.log.frac}} = {{own.enc.b.20.log}}$, whe
 @end
 
 @@ 695-700
-4 counts as the 16-bit lanes of one `u64`, for [the presence test](#b757) of `own_code()`.
+For [the first loop](#b757) of `own_code()`, which adds the even and odd counts of 4 byte values in one
+add.
 
 @@ 701-716
 Appends bits to the description, like level 1's [`enc_put()`](seqlz_encoder.h.html#b98) but
@@ -1189,9 +1200,12 @@ fit. `& 63` changes nothing for `cnt` from 32 on, and `& (OWN_DESC_ROOM - 1)` ke
 `desc[]` for any input, with 8 bytes of room behind it.
 
 @@ 717-756
-The description: for each byte with a code, in order of value, the run of bytes without a code before
-it, then its code length, as symbols of the fixed code `OWN` ([the format](book:#ch-format--own)).
-`prev` starts at `~0U`, so the first run is from byte 0.
+The decoder needs only the code lengths, as the codes follow from them as for the fixed tables, and
+only for the bytes that occur: so the description is runs of byte values to skip and lengths, as
+symbols of the fixed code `OWN` ([the format](book:#ch-format--own)). A run goes out as Elias gamma
+does it, but with its width as a symbol: the width, then the bits below its top bit. On the text page,
+{{own.enc.n}} lengths and their runs take {{own.enc.d}} bytes. `prev` starts at `~0U`, so the first
+run is from byte 0.
 @more {#ch-literals-enc--canonical-codes-and-the-description} The description of the text page, run by run
 The symbols are those of `OWN` from `seqlz_tables.own.enc`. For the first byte `b - prev - 1` wraps to
 `b`, the run from byte 0. A run of `run` is `nb = 32 - clz(run)` bits wide, symbol
@@ -1211,9 +1225,9 @@ functions of the kernel copy short (commit `8993922`).
 @@ 757-800
 `own_code()` builds the page's own code from the counts: which bytes occur, a cheap estimate, the
 lengths, the codes and the description. It returns the description's bytes, or 0 where the table
-cannot pay. Its first loop adds the even and odd counts, 4 at a time, and marks which bytes occur, a
-bit per byte value, without a branch: the top bit of each 16-bit lane is set where the lane is not 0,
-and a multiply gathers the 4 top bits into 4 adjacent bits.
+cannot pay, after the cheapest step that shows it. Its first loop adds the even and odd counts, 4 at
+a time, and records which bytes occur as a set of 256 bits, without a branch per byte value. The loops
+after it visit only the bytes that occur, {{own.enc.n}} on [the text page](#ch-literals-enc--own).
 @more {#ch-literals-enc--own_code-which-bytes-and-what-the-entropy-promises} The presence test on bytes `0x60` to `0x63`, step by step
 `w->freq[0]` and `w->freq[1]` are the even and the odd literals' counts, and this loop adds them, 4
 bytes at a time: [`own_lanes()`](#b695) loads 4 counts as the 16-bit lanes of a `u64`, one add sums 4
@@ -1236,8 +1250,9 @@ bit 15 is set by the count itself, which a page of at most 4096 literals never h
 @end
 
 @@ 801-817
-The bytes that occur, in order of value (lowest set bit, then clear it), and on the way the sum of
-`f * log2(f)` for the entropy.
+`m &= m - 1` clears the lowest set bit, so the inner loop runs once per byte that occurs, in order of
+value, the order the description and the canonical codes need. `h` sums `f * log2(f)` on the way, for
+the estimate below.
 
 @@ 818-833
 The cheap test before any code is built: `n log2 n - sum f log2 f` is the entropy, the bits no prefix
@@ -1274,19 +1289,22 @@ against {{own.enc.set_coded}} with table {{own.enc.set}}.
 @end
 
 @@ 847-855
-The second test, with the real description and bits: only a page that passes it pays for
-`own_sizes()`, one more pass over the literals.
+A lower bound of the exact check: `bits / 8` is at most the 8 streams' bytes, each rounded up, and
+the header is the smallest, so a page that fails here would fail [the exact check](#b976) too. Only a
+page that passes pays for `own_sizes()`, one more pass over the literals.
 
 @@ 856-897
-The bytes of each stream with the page's own code. Eight named sums, not `sizes[k % 8]`: each is a
-chain of its own, and the compiler keeps them in registers.
+The page's own lengths exist only now, after `lit_sums()` summed the fixed tables', so the streams'
+sizes with them take a pass of their own, a lookup and an add per literal. Eight named sums, not
+`sizes[k % 8]`: each is a chain of its own, and the compiler keeps them in registers.
 
 ## seqlz_code_own()
 
 @@ 898-908
-Level 3's arguments for the compiler: the coded literals end before the bitstream with the delta's
-byte and level 3's minimum, the sums of `lit_sums()` and of the deltas fit their lanes, and
-`own_code()`'s presence test has its top bit. Level 2's are [after `code_sampled()`](#b355).
+Level 3's twins of [level 2's asserts](#b355). The first is the stricter, with the delta's byte and
+the smaller minimum, and also covers `code_sampled()` at level 3. A stream has at most
+{{ch11.stream_bits|grp}} bits, below a lane's 65 535, and no count reaches bit 15, which `own_code()`
+borrows.
 @more {#ch-literals-enc--asserts3} What the first assert means, in numbers
 The first assert is the step of [why the streams never reach the bitstream](#ch-literals-enc--in-place)
 that the compiler can check, with the delta's byte, `+ 1U`. Level 2's assert is the same without
@@ -1299,7 +1317,7 @@ with a table of its own has at most `OWN_LITERALS_MAX` literals.
 @end
 
 @@ 909-914
-`struct own_work` lives in the matcher's state behind the copy of the literals.
+`st->work` counts in `u64`, hence the `/ 8U`: the struct starts at byte {{own.enc.work_at|grp}}.
 @more {#ch-encoder--own-work} Where `struct own_work` lies in the matcher's state
 For a table of the page's own, the coder needs `struct own_work`, {{own.enc.work_size|grp}} bytes of
 counts, lengths, codes and the table's description ([own table](#ch-literals-enc--own)), and
@@ -1355,9 +1373,9 @@ The choice compares bits, not bytes: after the rounding, a table with fewer bits
 more. The code does not look for that case, and the decoder takes whatever table byte 2 names.
 
 @@ 976-995
-Level 3: a page's own table, if it and its description take at least {{own.enc.saves_min}} bytes less
-than the best fixed table. Then the page is written as for a fixed table, with the description in the
-header.
+The exact check, both sides with the delta's byte. Where the page's own table wins, `desc`, `width`,
+`header`, `coded`, `sizes` and `enc` switch over to it, and the code below writes either table the
+same way.
 @more {#ch-literals-enc--own} The text page: both checks, and why the delta's byte cancels
 `enc` holds the fixed table's codes so far. At level 3 a table of the page's own may take its place:
 Huffman-like code lengths for exactly the bytes this page has, sent in front of the streams

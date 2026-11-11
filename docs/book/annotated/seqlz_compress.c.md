@@ -34,8 +34,10 @@ the sequences and hands each one to the encoder, and `encoder_finish()` returns 
 if it did not fit. With both inlined, this is the whole compression loop. The `false` tells the matcher
 not to be lazy, which only level 3 is ([`compress_own()`](#b35)). Level 2 uses this function too.
 
-A `dst` below {{ch10.dst_min}} bytes, the u16 and `ENC_ROOM`, gives 0 at once: no page fits into less,
-and the encoder's room check needs that much to work ([why](seqlz_encoder.h.html#b192)).
+A `dst` below {{ch10.dst_min}} bytes, the u16 and `ENC_ROOM`, gives 0 at once. The encoder would come to
+the same 0 on its own: its [room check](seqlz_encoder.h.html#b192) wants `ENC_ROOM` bytes free past
+each sequence's literals, so it refuses the first sequence, and the check compares signed, so a room
+below 0 is refused too. What the early return saves is the matcher's pass over a page that cannot fit.
 @more The check of `dst_cap` here, not in the caller, measured
 The check is here and in `compress_own()`, not once in `seqlz_compress_block()`: there it took 1% more
 instructions at levels 1 and 2, on 2000 pages of a desktop dump with gcc 16.2 on x86-64, 23rd October
@@ -50,10 +52,11 @@ records go to `dst + ENC_REC_AT`, behind the furthest any page's literals reach
 ([where](seqlz_encoder.h.html#b255)), so a `dst` that ends before that, with `ENC_ROOM` to spare,
 gets no records and the page no deltas.
 
-The records take room from the bitstream. A page that does not fit with them ends with
-`e.p == e.lit`, the encoder's sign for "did not fit", and is matched once more without them:
-`encoder_init()` clears `e.rec`, so the second round is the last. A loop and not two calls, so that the
-inlined matcher is in the function once.
+The records take room from the bitstream, so a page can fit without them and not with them: up to 9 of
+20 000 pages of a sample, 10th November 2026
+([explored-designs.md](https://github.com/martinus/seqlz/blob/main/docs/explored-designs.md#level-3s-records-behind-the-literals-not-between-them-level-3-writes-42-faster-on-the-mi-9ts-a76-and-20-on-its-a55-002-bytes-per-page-more-kept)).
+Such a page ends the first round with `e.p == e.lit`, the encoder's sign for "did not fit", and is
+matched a second time; `encoder_init()` clears `e.rec`, so the second round is the last.
 
 With records, `seqlz_delta_literals()` reads them, from `ENC_REC_AT` to where `e.recs` stopped, picks
 the delta and writes the literals' deltas to `st->literals`. The literals in `dst` stay as they are,
@@ -61,7 +64,8 @@ so `encoder_finish()` finds `dst` as it would without records; the records behin
 overwritten by the bitstream or lie past the page's end. `*delta` stays 0 for a page without
 records.
 
-`noinline` on purpose: inlined next to `compress_block()`, levels 1 and 2 wrote their pages slower.
+The `noinline` came with level 3's first records, commit `1a35bf0` of 21st October 2026, whose message
+gives no number for it alone; the panel has what records in the shared loop cost levels 1 and 2.
 @more {#ch-encoder--wrappers} Level 3's records in a copy of the loop of their own, measured
 The first version, with the XOR that came before the deltas, checked `e->rec` for every sequence in
 the loop all levels share, and the decoder its XOR the same way. Levels 1 and 2 then wrote pages about
@@ -81,14 +85,18 @@ the interface's [`seqlz_compress()`](#b104).
 Level 3's delta, from `compress_own()` to `seqlz_code_own()`.
 
 @@ 81-88
-`dst_cap` is cut to `SEQLZ_COMPRESS_BOUND`, two pages, which every page fits into. The bitstream starts
-at the end of `dst`, so with a larger `dst` it would land far from the page, in memory nothing else of
-it touches.
+The cut changes no byte at levels 1 and 2: the bitstream is written backwards from the end of `dst`,
+and [`encoder_finish()`](seqlz_encoder.h.html#b274) copies it down behind the literals, so where it was
+written leaves no trace. What it changes is the memory a call touches, at most two pages from `dst`
+on. At level 3 it also keeps the bytes the same: in a larger `dst`, a page whose records and bitstream
+do not both fit into two pages would get its records, and maybe deltas.
 @more A `dst` larger than two pages, and the kernel's copy
 Every page fits into `SEQLZ_COMPRESS_BOUND` ([two pages](#ch-encoder--two-pages)). Until 24th October
 2026 a larger `dst` was not cut: with a `dst` of 64 KiB the bitstream went 56 KiB past the page, in
 memory the page has nothing else in (commit `8fed16a`). zram passes exactly two pages, so its pages did
-not change.
+not change. The test `seqlz: compress and encode use no more of dst than SEQLZ_COMPRESS_BOUND`
+compresses into 64 KiB, at every level, and checks that the page has the same bytes as in two pages
+and that nothing behind them was written.
 
 In the kernel's copy `seqlz_compress_block()` is `static` and has no test of the level: the
 interface's `seqlz_compress()` [below](#b104) is its one caller and tests it.

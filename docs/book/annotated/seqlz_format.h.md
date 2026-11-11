@@ -52,21 +52,28 @@ machine may include.
 @end
 
 @@ 8-29
-A sequence is "copy `ll` literals, then copy `ml` bytes from `offset` bytes back". The token packs
-all three into one Huffman symbol so that one table lookup in the decoder gives all three. E.g. 1
-literal, a match of 7 at the repeat offset (class 0) is token `1 + 16 * 3 + 0 = 49`, the typical
-sequence of an array of pointers. The formula in line 26 is exactly what
-[`seqlz_token()`](seqlz_internal.h.html#b39) computes.
+The decoder works a sequence at a time: copy `ll` literals, then `ml` bytes from `offset` bytes
+back. `lz4` stores the same three numbers in whole bytes, a token byte with 4 bits for `ll` and 4
+for `ml - 4`, then every offset in 2 bytes. seqlz's token also holds the offset's class, and it is a
+Huffman symbol, so a frequent combination takes a few bits. E.g. 1 literal and a match of 7 at the
+repeat offset (class 0), the typical sequence of an array of pointers, is token `1 + 16 * 3 + 0 =
+49`: a code of {{tok.len.49}} bits and no offset bits, where `lz4` spends 3 bytes besides the
+literal. The formula in line 26 is exactly what [`seqlz_token()`](seqlz_internal.h.html#b39)
+computes.
 
 "1 to the bytes before it": a match can reach back to the block's first byte and no further, so 4095
 is the largest offset in a 4 KiB block, which is what class 3's 12 bits hold
 ([the token](book:#ch-format--token)).
 
 @@ 30-41
-Class 0 is the repeat offset: the same offset as the sequence before, sent with no bits at all. Class 1
-spends a bit that is always 1, which looks wasteful. Without it the decoder would need a special case;
-with it every class's offset comes out of the same shift and mask
-([token entry](book:#ch-internal--token-entry)).
+Class 1 is offset 2 alone since 14th October 2026; before, it held the offsets below 16 in 4 bits.
+Offset 2 is about 8% of the offsets that are not the repeat offset, on phone and desktop pages, more
+than any other single offset
+([`docs/explored-designs.md`](https://github.com/martinus/seqlz/blob/main/docs/explored-designs.md#offset-2-in-1-bit-multiples-of-8-below-2048-in-8-03-to-08-smaller-at-the-same-speed-kept)).
+Class 1's bit, always 1, buys the decoder a single path: the token's decode entry says how many bits
+to read and how far to shift them, and `1 << 1` is 2 like any other class's offset ([token
+entry](book:#ch-internal--token-entry)). Offset 2 without any bits would need a third choice per
+sequence in the decoder, which was [measured slower](#ch-header--classes).
 
 Classes 4 and 5 exist because memory pages are full of 8-byte fields: offset 72 is sent as `72 / 8 =
 9` in 5 bits, instead of 8 bits in class 2 ([offset classes](book:#ch-format--offsets)). On the zram
@@ -79,9 +86,12 @@ A length value of 16 or more is sent as "where its highest bit is", as a symbol,
 that bit. E.g. 100 is `0b1100100`: the highest bit is bit 6, so symbol 18, then the 6 bits `100100`.
 The highest bit itself is not sent, the symbol says where it is.
 
-A block does not store how many sequences it has. The decoder stops when the literals left are exactly
-the bytes left to fill: a match has at least 4 bytes, so no match can follow
-([how a page ends](book:#ch-format--end)).
+Until 11th October 2026 the last sequence had a token too. It told the decoder only what it could
+work out, and cost 1.2 bytes per page
+([`docs/explored-designs.md`](https://github.com/martinus/seqlz/blob/main/docs/explored-designs.md#the-last-sequence-without-a-token-12-bytes-per-page-less-kept)).
+The same rule bounds the decoder on any input, valid or not: every sequence before the last writes
+at least 4 bytes, so it stops after at most {{const.MAX_SEQUENCES}} sequences ([how a page
+ends](book:#ch-format--end)).
 
 @@ 54-63
 The `u16` lets the decoder read from two places at once: the literals start at byte 2, the bitstream
@@ -255,11 +265,12 @@ The match of 4094 bytes in [the format's worked example](#ch-format--example) ha
 ## Offset classes without a branch
 
 @@ 174-193
-Each class's number of offset bits is one nibble of one constant, read with a shift and a mask instead
-of a `switch` or an array. For class 3, `0x85C810 >> 12` is `0x85C`, and `& 15` leaves `0xC`, 12.
-When class 3's bits were computed from the block's bits in code, gcc branched on the class; a shift
-and a mask cannot become a branch. `SEQLZ_SHIFT_NIBBLES` is the same trick for the shift, `0x330010`.
-Class 5's 8 bits hold the multiples of 8 below `8 << 8`, 2048.
+Six small numbers in one constant, which the compiler puts into the instruction, not into memory:
+for class 3, `0x85C810 >> 12` is `0x85C`, and `& 15` leaves `0xC`, 12. Only the encoder reads it
+while it runs, in [`seqlz_off_class()`](#b194) for every match, and its `ENC_SHIFT()` reads
+`SEQLZ_SHIFT_NIBBLES`, `0x330010`, the same way. The decoder never does:
+[`token_entry()`](seqlz_tables.h.html#b184) puts each token's offset bits and shift into its decode
+entry when the tables are built, so the token's one lookup gives them too.
 @more {#ch-header--offsets} The six nibbles, and what the compiler makes of them
 Class 5 holds the multiples of 8 below `8 << 8`, {{ch06.class5_end}}
 ([`docs/explored-designs.md`](https://github.com/martinus/seqlz/blob/main/docs/explored-designs.md#offset-2-in-1-bit-multiples-of-8-below-2048-in-8-03-to-08-smaller-at-the-same-speed-kept)).
@@ -591,14 +602,16 @@ pages, level 3 stores 869.7 bytes per page with deltas, 915.6 without, 5.0% less
 @end
 
 @@ 274-301
-A block's own table is its code lengths, one per byte value that has a code, and between them runs
-of byte values without one. These go out as symbols of a small fixed prefix code: 10 symbols for the
-lengths 1 to 10, then one per number of bits of a run. E.g. a run of 32 is `0b100000`, 6 bits: symbol
-`SEQLZ_OWN_RUN + 6 = 15`, then the 5 bits below the top one, `00000`. Runs of 1 to 9 bits make 9
-symbols, 19 in all, `SEQLZ_OWN_SYMBOLS`. Codes of at most `SEQLZ_OWN_CODE_BITS`, 8 bits, make the
-decoder's table for these symbols 256 entries, indexed by the next 8 bits. `seqlz_own_lengths` is
-generated into `seqlz_lengths.h`, after the 8 literal tables
-([the file](seqlz_lengths.h.html#b377)).
+A block's own table goes in byte order, so a byte value costs no bits of its own, only its length or
+its part of a run. E.g. a run of 32 is `0b100000`, 6 bits: symbol `SEQLZ_OWN_RUN + 6 = 15`, then the
+5 bits below the top one, `00000`. The code of these symbols, `seqlz_own_lengths`, is fixed and
+generated into `seqlz_lengths.h` after the 8 literal tables ([the file](seqlz_lengths.h.html#b377)).
+Most byte values of such a table get long codes, so the length 10 has a {{own.len.9}}-bit code
+there, and the length 1 one of {{own.len.0}} bits. A table takes 0.4 to 0.5 bytes per byte value
+with a code, 40 to 100 bytes on most blocks that have one
+([`docs/format.md`](https://github.com/martinus/seqlz/blob/main/docs/format.md#a-blocks-own-literal-table)),
+and the encoder sends one only where it saves at least `OWN_SAVES_MIN`, 32 bytes, against the best
+fixed table, its description included ([the encoder](seqlz_compress_literals.c.html#b572)).
 
 The comment's last paragraph is why a block's own table costs the decoder no memory. Its decode table
 needs 2 KiB, and work memory per CPU is what the project counts. The output block is still free while

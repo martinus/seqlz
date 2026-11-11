@@ -117,10 +117,16 @@ bytes early: before each sequence the encoder checks for its literals plus `ENC_
 for the exact bytes. The rest of the comment is about levels 2 and 3, which write the literals raw
 first and code them afterwards ([Part III](book:#part-level-2), [Part IV](book:#part-level-3)).
 @more What levels 2 and 3 keep in `dst` and `st`
-The literals are written raw first, so the page must fit raw even if coding would shrink it. The coded
-ones then go over them. Meanwhile `st` holds the coded streams, or at level 3 mostly a copy of the raw
-literals or their deltas ([the coder](#ch-literals-enc--overview)). Level 3 also needs a 6-byte record
-per sequence with literals, for its deltas ([records](#ch-encoder--records)); if they do not fit, it
-matches the page again without them.
+Why raw first: the encoder writes each sequence's literals the moment the matcher finds it, but which
+literal table codes them best, and whether coding saves enough at all, follows only from the literals
+of the whole page. So the page is written once with raw literals, and the coder makes a second pass
+over them. The price is the one the comment states: the page has to fit raw.
+
+The coded literals end up where the raw ones were, so one of the two has to wait somewhere else, and
+that is `st`, free once the matcher is through. Level 2 writes its coded streams there and copies them
+over the raw literals at the end; level 3 the other way round, it copies the raw literals or their
+deltas there and writes the coded ones in place ([the coder](#ch-literals-enc--overview)). Level 3's
+records, 6 bytes per sequence with literals ([records](#ch-encoder--records)), take room from the
+bitstream in `dst`; a page that does not fit with them is matched again without them.
 @end
 @anim ends The buffer dst during a real page, from both ends, then turned around
