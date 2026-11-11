@@ -273,19 +273,21 @@ than the 2 of raw literals. [Why these bytes](book:#ch-literals-enc--51) has the
 @@ 166-176
 Level 3 decides on deltas once for the whole page, and only after the last sequence does it know which
 delta is cheapest. For that it needs each literal's position and the offset of the sequence before,
-which plain literals do not carry, so the encoder writes a 6-byte record in front of each sequence's
+which plain literals do not carry, so the encoder writes a 6-byte record for each sequence with
 literals.
 
 The records go into `dst` and not the state, because the state is the hash table until the matcher is
-done. The price is room: a page that does not fit with its records is matched again without them, and
-stored without deltas.
+done. In `dst` they go behind the literals, from [`ENC_REC_AT`](seqlz_encoder.h.html#b255) up, where
+only the bitstream competes for the room: a page whose records and bitstream do not both fit there is
+matched again without records, and stored without deltas.
 @more {#ch-encoder--records} What the records hold, and what they cost on the page of pointers
-[`encode_seq()`](seqlz_encoder.h.html#b185) writes the records, and
+[`encode_seq()`](seqlz_encoder.h.html#b202) writes the records, and
 [`seqlz_delta_literals()`](#ch-literals-enc--deltas) reads them once the page is matched. Each field
 fits a `u16`, as a page's positions, lengths and offsets are at most 4096. The cost is room
 in `dst`: on [the page of pointers](#ch-matcher--back), level 3 finds {{delta.ptr.n_lit}} literals in
-{{delta.ptr.recs}} sequences, and with the records they take {{delta.ptr.with_rec|grp}} bytes.
-@assert delta.ptr.with_rec == delta.ptr.n_lit + delta.rec * delta.ptr.recs
+{{delta.ptr.recs}} sequences, and their records take {{delta.ptr.rec_bytes|grp}} bytes more, out of the
+{{delta.rec_room|grp}} that zram's two pages have behind `ENC_REC_AT` for records and bitstream.
+@assert delta.ptr.rec_bytes == delta.rec * delta.ptr.recs
 @end
 
 @@ 177-182

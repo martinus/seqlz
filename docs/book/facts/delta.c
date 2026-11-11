@@ -60,7 +60,7 @@ int main(void) {
     static u8 deltas[SEQLZ_BLOCK_SIZE];
     const struct seqlz_tables* t = fact_tables();
     struct seqlz_encoder e;
-    unsigned int k, x, i, n, pick = 0, best = ~0U, n_lit, recs = 0, last8 = 0, with_rec, distinct = 0, distinct_plain = 0;
+    unsigned int k, x, i, n, pick = 0, best = ~0U, n_lit, recs = 0, last8 = 0, rec_bytes, distinct = 0, distinct_plain = 0;
     unsigned int price[4], table[4], len, rec_pos[3], rec_ll[3], rec_last[3], rec_dist[3];
     char hex[64];
     u8* p;
@@ -116,11 +116,12 @@ int main(void) {
         counter_page(cp);
         encoder_init(&ce, cd, sizeof(cd), cp + SEQLZ_BLOCK_SIZE);
         ce.rec = true;
+        ce.recs = cd + ENC_REC_AT;
         seqlz_match_block(cs.table, cp, true, &ce);
-        if (get_unaligned_le16(cd + SEQLZ_HEADER) != 0 || get_unaligned_le16(cd + SEQLZ_HEADER + 2) < at + 8)
+        if (get_unaligned_le16(cd + ENC_REC_AT) != 0 || get_unaligned_le16(cd + ENC_REC_AT + 2) < at + 8)
             fail("the page of counters' first sequence does not hold the word");
         /* the first sequence's words start at dist, 8 bytes apart */
-        if (seqlz_delta_literals(cd, &ce.lit, cp, cs.literals) != SEQLZ_DELTA_4 || (at - dist) % 8)
+        if (seqlz_delta_literals(cd + ENC_REC_AT, ce.recs, cp, cs.literals) != SEQLZ_DELTA_4 || (at - dist) % 8)
             fail("the word is not one sub_bytes() of the page of counters");
         a = get_unaligned_le64(cp + at);
         b = get_unaligned_le64(cp + at - dist);
@@ -168,11 +169,15 @@ int main(void) {
     pointer_page(page);
     encoder_init(&e, dst, sizeof(dst), page + SEQLZ_BLOCK_SIZE);
     e.rec = true;
+    e.recs = dst + ENC_REC_AT;
     seqlz_match_block(st.table, page, true, &e);
     if (e.p == e.lit || !e.rec)
         fail("the page of pointers does not fit with its records");
-    with_rec = (unsigned int)(e.lit - (dst + SEQLZ_HEADER));
-    for (p = dst + SEQLZ_HEADER; p < e.lit; p += LIT_REC + get_unaligned_le16(p + 2)) {
+    n_lit = (unsigned int)(e.lit - (dst + SEQLZ_HEADER));
+    rec_bytes = (unsigned int)(e.recs - (dst + ENC_REC_AT));
+    fact_num("delta.rec_at", ENC_REC_AT);
+    fact_num("delta.rec_room", 2 * SEQLZ_BLOCK_SIZE - ENC_REC_AT);
+    for (p = dst + ENC_REC_AT; p < e.recs; p += LIT_REC) {
         if (recs < 3) {
             rec_pos[recs] = get_unaligned_le16(p);
             rec_ll[recs] = get_unaligned_le16(p + 2);
@@ -189,13 +194,13 @@ int main(void) {
     }
     fact_num("delta.ptr.recs", recs);
     fact_num("delta.ptr.recs_last8", last8);
-    fact_num("delta.ptr.with_rec", with_rec);
+    fact_num("delta.ptr.rec_bytes", rec_bytes);
 
     /* the prices as seqlz_delta_literals() takes them, here as plain sums of code lengths */
     {
         unsigned int sum[4][SEQLZ_LIT_SETS] = {{0}}, j = 0, sampled = 0, ll, pos, last;
 
-        for (p = dst + SEQLZ_HEADER; p < e.lit; p += LIT_REC + ll) {
+        for (p = dst + ENC_REC_AT; p < e.recs; p += LIT_REC) {
             pos = get_unaligned_le16(p);
             ll = get_unaligned_le16(p + 2);
             last = seqlz_delta_last(get_unaligned_le16(p + 4));
@@ -230,14 +235,13 @@ int main(void) {
             }
         }
     }
-    x = seqlz_delta_literals(dst, &e.lit, page, st.literals);
+    x = seqlz_delta_literals(dst + ENC_REC_AT, e.recs, page, st.literals);
     if (x != pick)
         fail("seqlz_delta_literals() picks another delta than the prices");
     fact_num("delta.ptr.pick", pick);
     memcpy(deltas, st.literals, SEQLZ_BLOCK_SIZE);
-    n_lit = (unsigned int)(e.lit - (dst + SEQLZ_HEADER));
     fact_num("delta.ptr.n_lit", n_lit);
-    if (with_rec != n_lit + LIT_REC * recs)
+    if (rec_bytes != LIT_REC * recs)
         fail("the records are not LIT_REC bytes each");
     fact_hex("delta.ptr.plain", dst + SEQLZ_HEADER, 12);
     fact_hex("delta.ptr.deltas", st.literals, 12);

@@ -92,7 +92,7 @@ literals; a tool takes them from the block. Level 3 has a matcher of its own, so
 differ ([Part IV](book:#part-level-3)).
 
 @@ 64-94
-The encoder alone, also in [`seqlz_harness.c`](seqlz_harness.c.html#b108), for sequences from
+The encoder alone, also in [`seqlz_harness.c`](seqlz_harness.c.html#b109), for sequences from
 outside: the tests, a fuzzer, and `tools/seqlz-worst/`, which writes valid pages the matcher would
 never produce, to find the slowest ones to decode. At level 1, `st` and `block` may be `NULL`; they
 are for level 3's deltas and its own table ([Part IV](book:#part-level-3)).
@@ -108,7 +108,7 @@ matches the sequences: a wrong one gives a page that decodes to something else.
 
 @@ 95-122
 The compressor itself: what the harness's [zram glue](zram_seqlz.c.html#b40) calls, and the
-kernel's [`seqlz_compress()`](seqlz_compress.c.html#b109). In the kernel's copy it is `static`;
+kernel's [`seqlz_compress()`](seqlz_compress.c.html#b104). In the kernel's copy it is `static`;
 `seqlz_compress()` returns `-EINVAL` for a level that is not built, and `-E2BIG` where this returns 0.
 
 A `dst` smaller than two blocks also works, e.g. the single page of zswap, the kernel's other

@@ -167,8 +167,8 @@ where the plain way takes 8 lookups and 8 adds.
 A lane must not pass 255, or it carries into the next table's lane. 25 codes of at most 10 bits sum to
 at most 250, so the encoder adds at most 25 literals into one word, then spreads its lanes into
 16-bit ones and starts again. At level 2,
-[`code_sampled()`](seqlz_compress_literals.c.html#b252) prices every 7th literal this way to pick the
-table. Level 3 prices every literal, and [its animation](seqlz_compress_literals.c.html#b545) shows the
+[`code_sampled()`](seqlz_compress_literals.c.html#b265) prices every 7th literal this way to pick the
+table. Level 3 prices every literal, and [its animation](seqlz_compress_literals.c.html#b533) shows the
 adds and the move into the 16-bit lanes on a real page.
 @more {#ch-internal--lit-cost} `0x00` and `e` priced in all 8 tables with one add
 <figure class="diagram">

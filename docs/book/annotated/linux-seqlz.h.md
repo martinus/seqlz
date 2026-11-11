@@ -69,7 +69,7 @@ alignment because level 3 keeps `u64`s in it; what `kmalloc()` returns has at le
   (`ENC_ROOM`) plus the next literals are free ([the room check](book:#ch-encoder--room-check)). With
   zram's 2 pages it never happens.
 
-[The function](seqlz_compress.c.html#b109) is at the end of `seqlz_compress.c`.
+[The function](seqlz_compress.c.html#b104) is at the end of `seqlz_compress.c`.
 
 @@ 81-101
 @anchor ch-header--encode-decode

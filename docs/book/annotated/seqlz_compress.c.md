@@ -7,20 +7,20 @@ In the kernel's copy both headers are in this file, the encoder first, right bef
 
 A reading order that follows the call:
 
-1. [`seqlz_compress()`](#b109), the kernel's interface, which zram calls, and
-   [`seqlz_compress_block()`](#b77), which it calls and which calls [`compress_block()`](#b16).
+1. [`seqlz_compress()`](#b104), the kernel's interface, which zram calls, and
+   [`seqlz_compress_block()`](#b72), which it calls and which calls [`compress_block()`](#b16).
 2. The encoder, in [`seqlz_encoder.h`](seqlz_encoder.h.html), and the matcher, in
    [`seqlz_match.h`](seqlz_match.h.html).
 
 @intro 2
-Level 2 adds one step after the loop: [`seqlz_code_literals()`](#b101) codes the page's raw literals
+Level 2 adds one step after the loop: [`seqlz_code_literals()`](#b96) codes the page's raw literals
 with one of 8 fixed literal tables, where that saves enough. The page itself comes from
 `compress_block()`, as at level 1.
 
 @intro 3
 Level 3 has a loop of its own, [`compress_own()`](#b35): the lazy matcher, and an encoder that writes a
-record before each sequence's literals, which the deltas need. Then `seqlz_delta_literals()` picks a
-delta for the literals, or none, and [`seqlz_code_own()`](#b94) codes them, with a fixed table or a table of the
+record for each sequence's literals, which the deltas need. Then `seqlz_delta_literals()` picks a
+delta for the literals, or none, and [`seqlz_code_own()`](#b89) codes them, with a fixed table or a table of the
 page's own.
 
 ## The two halves
@@ -35,25 +35,31 @@ if it did not fit. With both inlined, this is the whole compression loop. The `f
 not to be lazy, which only level 3 is ([`compress_own()`](#b35)). Level 2 uses this function too.
 
 A `dst` below {{ch10.dst_min}} bytes, the u16 and `ENC_ROOM`, gives 0 at once: no page fits into less,
-and the encoder's room check needs that much to work ([why](seqlz_encoder.h.html#b176)).
+and the encoder's room check needs that much to work ([why](seqlz_encoder.h.html#b192)).
 @more The check of `dst_cap` here, not in the caller, measured
 The check is here and in `compress_own()`, not once in `seqlz_compress_block()`: there it took 1% more
 instructions at levels 1 and 2, on 2000 pages of a desktop dump with gcc 16.2 on x86-64, 23rd October
 2026 (commit `75756b7`).
 @end
 
-@@ 35-76
+@@ 35-71
 Level 3's version of `compress_block()`. The matcher is lazy (`true`), and with `e.rec` the encoder
-writes a record before each sequence's literals, which the deltas need: where the sequence starts,
-how many literals it has, and the offset before it ([the records](book:#ch-encoder--records)).
+writes a record for each sequence's literals, which the deltas need: where the sequence starts, how
+many literals it has, and the offset before it ([the records](book:#ch-encoder--records)). The
+records go to `dst + ENC_REC_AT`, behind the furthest any page's literals reach
+([where](seqlz_encoder.h.html#b255)), so a `dst` that ends before that, with `ENC_ROOM` to spare,
+gets no records and the page no deltas.
 
-The records take room. A page that does not fit with them ends with `e.p == e.lit`, the encoder's sign
-for "did not fit", and is matched once more without them: `encoder_init()` clears `e.rec`, so the
-second round is the last. A loop and not two calls, so that the inlined matcher is in the function once.
+The records take room from the bitstream. A page that does not fit with them ends with
+`e.p == e.lit`, the encoder's sign for "did not fit", and is matched once more without them:
+`encoder_init()` clears `e.rec`, so the second round is the last. A loop and not two calls, so that the
+inlined matcher is in the function once.
 
-With records, `seqlz_delta_literals()` picks the delta, moves the literals down over the records and
-writes their deltas to `st->literals`. After it `encoder_finish()` finds `dst` as it would without
-records. `*delta` stays 0 for a page without records.
+With records, `seqlz_delta_literals()` reads them, from `ENC_REC_AT` to where `e.recs` stopped, picks
+the delta and writes the literals' deltas to `st->literals`. The literals in `dst` stay as they are,
+so `encoder_finish()` finds `dst` as it would without records; the records behind the literals are
+overwritten by the bitstream or lie past the page's end. `*delta` stays 0 for a page without
+records.
 
 `noinline` on purpose: inlined next to `compress_block()`, levels 1 and 2 wrote their pages slower.
 @more {#ch-encoder--wrappers} Level 3's records in a copy of the loop of their own, measured
@@ -66,15 +72,15 @@ With the records only in the lazy matcher's copy, and the decoder's loop copied 
 run's spread.
 @end
 
-@@ 77-81
+@@ 72-76
 The codec's entry point: `src` is one page, `dst` has room for `dst_cap` bytes, and the result is the
 length of the compressed page, or 0 if it does not fit or the level is not one. zram reaches it through
-the interface's [`seqlz_compress()`](#b109).
+the interface's [`seqlz_compress()`](#b104).
 
-@@ 82-85
+@@ 77-80
 Level 3's delta, from `compress_own()` to `seqlz_code_own()`.
 
-@@ 86-93
+@@ 81-88
 `dst_cap` is cut to `SEQLZ_COMPRESS_BOUND`, two pages, which every page fits into. The bitstream starts
 at the end of `dst`, so with a larger `dst` it would land far from the page, in memory nothing else of
 it touches.
@@ -85,17 +91,17 @@ memory the page has nothing else in (commit `8fed16a`). zram passes exactly two 
 not change.
 
 In the kernel's copy `seqlz_compress_block()` is `static` and has no test of the level: the
-interface's `seqlz_compress()` [below](#b109) is its one caller and tests it.
+interface's `seqlz_compress()` [below](#b104) is its one caller and tests it.
 @end
 
-@@ 94-99
+@@ 89-94
 Level 3: [`compress_own()`](#b35) writes the page, then `seqlz_code_own()` codes its literals, with the
 delta it picked, and with a fixed table or a table of the page's own.
 @more Level 3's work memory, and what it does to two pages
 `seqlz_code_own()` uses `st->literals`, the matcher's 8 KiB table as bytes
 ([what lies where](#ch-header--state)): it mostly reads the literals from a copy there while it writes
 the coded ones over the raw ones in `dst` ([in place](#ch-literals-enc--in-place)). It also uses
-[`own_work(st)`](seqlz_compress_literals.c.html#b921), the upper half of the same 8 KiB.
+[`own_work(st)`](seqlz_compress_literals.c.html#b909), the upper half of the same 8 KiB.
 
 The made-up page of words of [level 2's panel](#ch-encoder--entry) is {{words.l3.len}} bytes at level
 3, without deltas, against {{words.coded.len}} at level 2; the page of pointers
@@ -103,10 +109,10 @@ The made-up page of words of [level 2's panel](#ch-encoder--entry) is {{words.l3
 @assert words.l3.delta == 0 and pointers.l3.delta == 1
 @end
 
-@@ 100-100
+@@ 95-95
 `compress_block()` writes the page with raw literals, at levels 1 and 2.
 
-@@ 101-104
+@@ 96-99
 Level 2 codes the literals of the page `compress_block()` wrote. `seqlz_code_literals()` picks one of
 the 8 fixed literal tables and codes the literals with it if that saves enough; else it returns `len`
 unchanged. It uses the matcher's 8 KiB hash table for the coded streams, so it needs no memory of its
@@ -115,7 +121,7 @@ own. A page that did not fit, and level 1, return `len` as it is.
 `seqlz_code_literals()` uses `st->literals`, the matcher's 8 KiB table as bytes through the union in
 `struct seqlz_state` ([what lies where](#ch-header--state)). It writes the coded streams into slots
 there and copies them over the raw literals once all are read
-([the slots](seqlz_compress_literals.c.html#b309)). The page is written with raw literals first, so it
+([the slots](seqlz_compress_literals.c.html#b322)). The page is written with raw literals first, so it
 has to fit that way, also where its coded form would be smaller.
 
 A made-up page of words, of the letters `etaoinshrdlu` and spaces, is {{words.len}} bytes at level 1
@@ -124,12 +130,12 @@ level 1 and {{delta.ptr.l2.len}} at level 2.
 @assert delta.ptr.l2.len < pointers.len
 @end
 
-@@ 105-108
+@@ 100-103
 A build with level 1 only returns the page as `compress_block()` wrote it, with raw literals.
 
 ## The kernel's interface
 
-@@ 109-128
+@@ 104-123
 @anchor ch-zram-glue--api
 The interface's `seqlz_compress()`, which zram's backend calls, declared in
 [`linux/seqlz.h`](linux-seqlz.h.html). The compressor's 0 becomes `-E2BIG`, "output too small", and a

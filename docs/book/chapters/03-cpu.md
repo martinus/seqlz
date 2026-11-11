@@ -557,7 +557,7 @@ bits of the count anyway, so the compiler drops the `and`. That is why the encod
 `<< (n & 63U)` even where `n` is never 64, and why `enc[]` in `struct value_table` has
 {{ch03.enc_len_symbols}} entries for {{const.LEN_SYMBOLS}} symbols: a power of 2, so that `s &
 (ENC_LEN_SYMBOLS - 1U)` proves every index in range ([the masks](#ch-internal--masks),
-[`put_len_value()`](#f-seqlz_encoder-h-b131)). Masked shifts and indices took the compressor from 25 225
+[`put_len_value()`](#f-seqlz_encoder-h-b139)). Masked shifts and indices took the compressor from 25 225
 to 25 064 cycles per page, with 4.7% fewer instructions
 ([explored-designs.md](https://github.com/martinus/seqlz/blob/main/docs/explored-designs.md#the-compressor-second-round-fewer-instructions)).
 The decoder had 65 such checks in an early version, `lz4`'s 18, but not in its hot path: without them,

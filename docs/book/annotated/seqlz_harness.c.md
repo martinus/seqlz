@@ -1,14 +1,14 @@
 # src/seqlz_harness.c
 
 What only the tests and tools use of the compressor; the kernel does not have this file.
-[`seqlz_find()`](#b39) returns the sequences the matcher finds, and [`seqlz_encode()`](#b131) writes a
+[`seqlz_find()`](#b39) returns the sequences the matcher finds, and [`seqlz_encode()`](#b133) writes a
 page from given sequences, with the compressor's encoder. The table trainer counts the symbols of
 `seqlz_find()`'s sequences, and a fuzzer checks that `seqlz_encode()` of them gives the bytes
 `seqlz_compress_block()` gives.
 
 @intro 2
 At level 2, `seqlz_encode()` codes the literals of the page as `seqlz_compress_block()` does, and needs
-[a buffer of its own](#b123) when the caller passes no state.
+[a buffer of its own](#b125) when the caller passes no state.
 
 @intro 3
 At level 3, `seqlz_find()` runs the lazy matcher, and `seqlz_encode()` writes the page as
@@ -79,49 +79,50 @@ sequences now, and failed within seconds against the old encoder. `seqlz_compres
 affected: its matcher makes only valid sequences.
 @end
 
-@@ 103-106
-With a page (`block` not `NULL`), level 3 writes the records for the deltas, as
-[`compress_own()`](seqlz_compress.c.html#b35) does.
+@@ 103-107
+With a page (`block` not `NULL`) and a `dst` that reaches past `ENC_REC_AT`, level 3 writes the records
+for the deltas, as [`compress_own()`](seqlz_compress.c.html#b35) does.
 
-@@ 107-107
+@@ 108-108
 All sequences into the encoder.
 
-@@ 108-119
+@@ 109-121
 A page that does not fit with its records is written once more without them, as in `compress_own()`.
-With records, `seqlz_delta_literals()` picks the delta, moves the literals down over the records and
-writes their deltas to `deltas`; `*delta` is the delta, or 0. It gets `&e.lit` itself:
-`compress_own()` passes a copy so that `e` can stay in registers, which does not matter here.
+With records, `seqlz_delta_literals()` picks the delta from them and writes the literals' deltas to
+`deltas`; `*delta` is the delta, or 0. Unlike `compress_own()`, the second pass is a second call of
+`encode_all()`, not a loop: the harness is not on a hot path, and an `if` with its own `#if` block
+leaves a build of fewer levels without a loop that runs once.
 
-@@ 120-122
+@@ 122-124
 `encoder_finish()`: the page with raw literals, or 0 if it did not fit.
 
-@@ 123-130
+@@ 125-132
 The literal coder of level 2 writes its coded streams into slots, which `seqlz_compress_block()` takes
 from the state. `seqlz_encode()` may get no state below level 3 ([the header](seqlz.h.html#b64)), and
 then uses this static buffer of a state's size. One buffer for every caller is fine for the tests and
 tools, which call it from one thread.
 
-@@ 131-142
+@@ 133-144
 The public entry for sequences from outside. The level is checked before anything is written, so a
 level outside 1 to `SEQLZ_LEVEL_MAX` returns 0 as [the header](seqlz.h.html#b64) says, and `dst_cap` is
 cut as in `seqlz_compress_block()`. The kernel copy does not have this function.
 
-@@ 143-151
+@@ 145-153
 Level 3 needs the state, for the deltas and the table of the page's own, and returns 0 without it.
 `encode_raw()` gets the page for the records, then `seqlz_code_own()` codes the literals, as in
 `seqlz_compress_block()`.
 
-@@ 152-153
+@@ 154-155
 The page with raw literals. `block` and `deltas` are `NULL`: only level 3 uses them.
 
-@@ 154-159
+@@ 156-161
 At level 2, `encode_raw()` has left the raw literals in `dst`, as `compress_block()` does, and
-`seqlz_code_literals()` codes them, with the slots in `st` or in [`encode_slots`](#b123).
+`seqlz_code_literals()` codes them, with the slots in `st` or in [`encode_slots`](#b125).
 @more How `seqlz_encode()` got there
 Until 1st November 2026 it called `seqlz_code_raw_literals()`, which read the literals from
 `literals`, and until 23rd October 2026 it copied the literals into a block on its stack, a frame of
 4240 bytes where `src/` is built into a kernel (commit `d8937df`).
 @end
 
-@@ 160-161
+@@ 162-163
 Level 1's page as `encode_raw()` wrote it, or 0.

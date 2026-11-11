@@ -118,8 +118,8 @@ Level 2 adds a third step ([Part III](#part-level-2)). **The literal coder**
 streams of Huffman codes over the raw ones, where that saves enough ([the rule](#ch-literals-enc--rule)).
 
 Level 3 does more in each step ([Part IV](#part-level-3)): the matcher looks one position further and
-extends a match backwards ([level 3](#ch-matcher--lazy)), the encoder puts a record in front of each
-sequence's literals ([records](#ch-encoder--records)), and the literal coder prices every literal of a
+extends a match backwards ([level 3](#ch-matcher--lazy)), the encoder writes a record of each
+sequence's literals behind them ([records](#ch-encoder--records)), and the literal coder prices every literal of a
 page that may get a literal table of its own or deltas. It may build that table and may store the
 literals as deltas to an earlier byte
 ([own table](#ch-literals-enc--own), [deltas](#ch-literals-enc--deltas)). All levels write the one
