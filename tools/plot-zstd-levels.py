@@ -1,12 +1,13 @@
 #!/usr/bin/env python3
 # SPDX-License-Identifier: MIT OR GPL-2.0-only
-"""seqlz-2 against zstd at every level: memory against time, from logs of tools/zram-vm/run.sh with
+"""seqlz's levels against zstd at every level: memory against time, from logs of tools/zram-vm/run.sh with
 MODE=swap and zstd's levels as zram's algorithm_params, e.g. ALGOS=lz4,seqlz-2,zstd:-1,zstd:3.
 
 One row per corpus, from one or more logs of it; a codec in several logs gets the mean of them. Three
 panels: the swap-out with one page per call, the swap-in with the compressed data cold, and the time per
 page written of the score, docs/plan.md §1.1, all means per page. zstd's levels are one line, in the
-order of the levels. The numbers come from seqlz-score, so they are the score's: the corpus's pages
+order of the levels. Other codecs in the logs than zstd, lz4, lzo-rle and seqlz's levels, e.g. wkdm, are
+left out, also of the line of the best choices. The numbers come from seqlz-score, so they are the score's: the corpus's pages
 without the same-filled ones the swap mode adds. Lower left is better.
 
     ALGOS=lz4,seqlz-2,zstd:-5,zstd:-1,zstd:1,zstd:3 MODE=swap KARGS=zram.zram_prefetch=8 \\
@@ -45,7 +46,8 @@ def score_rows(score, log, r):
     rows = {}
     for line in out.splitlines()[3:]:
         f = line.split()
-        if len(f) != 6:
+        # codec, bytes, write, read, recompression, per page written, and since #203 the memory per CPU
+        if len(f) not in (6, 7):
             break
         rows[f[0]] = (float(f[1]), float(f[2]), float(f[3]))
     return rows
@@ -99,7 +101,8 @@ def main():
         title, sep, logs = row.partition("=")
         if not sep:
             raise SystemExit(f"--row {row}: TITLE=LOG[,LOG...]")
-        rows.append((title, mean_rows(args.score, logs.split(","), r)))
+        codecs = mean_rows(args.score, logs.split(","), r)
+        rows.append((title, {n: v for n, v in codecs.items() if n.startswith("zstd") or n in OTHERS}))
 
     panels = [("Swap-out, one page per call", lambda w, rd: w), ("Swap-in, compressed data cold", lambda w, rd: rd),
               (f"Time per page written: swap-out + {r:g} × swap-in", lambda w, rd: w + r * rd)]
@@ -157,8 +160,12 @@ def main():
                     main_codec = label in plot_codecs.MAIN
                     ax.plot(*pts[n], marker=marker, ms=11 if main_codec else 8, color=color, mec="white", mew=0.8,
                             ls="none", zorder=4, label=label)
-                    ax.annotate(label, pts[n], textcoords="offset points", xytext=(-4, -24), fontsize=9, color=color,
-                                fontweight="bold" if main_codec else "normal")
+                    # zstd's line and its labels are to the right of these codecs: the labels go left, lz4's and
+                    # lzo-rle's above and below, as they are close to the axis
+                    where = {"lz4": ((0, 7), "center", "bottom"), "lzo-rle": ((0, -8), "center", "top")}
+                    xy, ha, va = where.get(label, ((-9, 0), "right", "center"))
+                    ax.annotate(label, pts[n], textcoords="offset points", xytext=xy, ha=ha, va=va, fontsize=9,
+                                color=color, fontweight="bold" if main_codec else "normal")
             if j == 2:
                 h = [p for p in plot_codecs.hull([(t, m, n) for n, (t, m) in pts.items()]) if p[0] <= limit]
                 ax.plot([p[0] for p in h], [p[1] for p in h], color="#aaaaaa", lw=1.2, ls="--", zorder=1,
@@ -179,7 +186,7 @@ def main():
 
     handles, labels = axes[0][2].get_legend_handles_labels()
     fig.legend(handles, labels, loc="upper center", ncol=len(labels), frameon=False, bbox_to_anchor=(0.5, 1 - 0.42 / height))
-    fig.suptitle("seqlz-2 against zstd at each level, in zram as swap: memory against time, lower left is better",
+    fig.suptitle("seqlz's levels against zstd at each level, in zram as swap: memory against time, lower left is better",
                  fontsize=14, fontweight="bold", y=1 - 0.05 / height)
     fig.text(
         0.01,

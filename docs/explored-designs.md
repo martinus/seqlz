@@ -4594,6 +4594,8 @@ With `lz4`'s own time at 0, the what-if of hardware `lz4`, `seqlz-2` stays the b
 with boost on and a newer kernel tree: compare them within this run only.* Code: `main` at `163f00d`;
 `tools/zram-vm/run.sh`, `seqlz-score`.
 
+![seqlz's levels, lz4 and lzo-rle against zstd at every level from -5 to 22, in zram as swap: memory against the swap-out, the cold swap-in and the time per page written](plots/zstd-levels-1111.svg)
+
 **Setup.** `tools/zram-vm/run.sh` on `finehill` at `5b0764a53235` (a merge of 21st October 2026), gcc
 16.2.1, Ryzen 9 7950X, CPU 2 at 4.501 GHz with minimum = maximum, **boost on** (`pc-bench.sh show`:
 `boost: 1`; Martin's call, not fixed for this run), `MODE=swap`, `KARGS=zram.zram_prefetch=8`,
@@ -4667,6 +4669,8 @@ for d in phone-dump/p3 phone-dump/p5 zram0 zram0-2026-09-24; do
 done
 for f in *.log; do ./build/seqlz-score $f; done
 ./build/seqlz-score --what-if lz4:0 A-p3.log
+tools/plot-zstd-levels.py --clock "4.5 GHz, boost on" --source "main of 11th November 2026, 163f00d" \
+    --row "Mean over four zram dumps=$(ls A-*.log B1-*.log B2-*.log | paste -sd,)" --out docs/plots/zstd-levels-1111.svg
 ```
 
 ## The numbers again on 1st November: seqlz-3 4.4% below zstd 3 in 70% of its time, the README's charts

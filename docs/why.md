@@ -134,6 +134,8 @@ newer kernel tree, so its times are 16% to 18% lower for every codec and compare
 the mean over the same four dumps, memory as % of the page, µs per page written
 ([the run](explored-designs.md#all-alternatives-in-one-run-11th-november-no-zstd-level-stores-less-than-seqlz-2-in-less-time-wkdm-on-the-hull-at-the-fast-end)).
 
+![seqlz's levels, lz4 and lzo-rle against zstd at every level from -5 to 22, in zram as swap: memory against the swap-out, the cold swap-in and the time per page written](plots/zstd-levels-1111.svg)
+
 | alternative | memory | µs per page written | where it wins |
 | --- | ---: | ---: | --- |
 | `lz4` | 36.5% | 7.28 | the fastest swap-in but one, 2.65 µs |
