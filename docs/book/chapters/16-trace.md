@@ -287,8 +287,8 @@ one, {{ch16.zs.lower}}.
 ## Level 3: {{ch16.l3.len}} bytes, without a table of its own {#ch-trace--level3}
 
 At level 3, `seqlz-3`, `seqlz_compress_block()` takes `compress_own()` instead of `compress_block()`: the
-matcher with its lazy step and the step back ([level 3](#ch-matcher--lazy)), and a record in front of
-each sequence's literals for the deltas ([the records](#ch-encoder--records)). On this page it finds
+matcher with its lazy step and the step back ([level 3](#ch-matcher--lazy)), and a record of each
+sequence's literals for the deltas, behind the literals ([the records](#ch-encoder--records)). On this page it finds
 {{ch16.l3.seqs}} sequences instead of {{ch16.l2.seqs}}, with {{ch16.l3.lits}} literals instead of
 {{ch16.lits}}; with raw literals that would be {{ch16.l3.raw_len}} bytes instead of {{ch16.raw.len}}.
 

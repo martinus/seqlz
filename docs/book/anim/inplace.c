@@ -3,10 +3,10 @@
  * inplace.c: the data of the animation "inplace" in chapter 11. Compresses chapter 16's page with raw
  * literals, then lets code_sampled() code them at level 2, and runs lit_streams() again in place from the
  * copy, as level 3 writes the pages it prices on every literal and level 2 wrote all until 31 Oct 2026
- * with the encoder's own lit_put() and lit_flush(), recording for each run of literals which literals
- * it reads from the copy and where each stream's flush stores in dst. Prints them as JSON with the
- * layout of dst before and after. Fails if the replay writes other bytes than code_sampled(), if a
- * store leaves its stream's room or reaches the bitstream, or if the page does not decode.
+ * with the encoder's own lit_put() and lit_flush(), the stores tested for room as in place, recording for each run of literals
+ * which literals it reads from the copy and where each stream's flush stores in dst. Prints them as JSON with the layout of
+ * dst before and after. Fails if the replay writes other bytes than code_sampled(), if a store leaves its stream's room or
+ * reaches the bitstream, or if the page does not decode.
  */
 #include <stdio.h>
 #include <stdlib.h>
@@ -25,9 +25,9 @@ static u8* q[SEQLZ_LIT_STREAMS + 1];
 static unsigned int bitstream_at, steps;
 
 /* one flush of stream j, as lit_streams() does it, and where it stored */
-static u8* flush(unsigned int j, u8* p, u64 a, unsigned int* c, unsigned int* s) {
-    unsigned int n = *c + (*s & 255U), store = q[j + 1] - p >= 8 ? 8U : (n + 7U) >> 3;
-    u8* r = lit_flush(p, q[j + 1], a, c, s);
+static u8* flush(unsigned int j, u8* p, u64 a, unsigned int* b) {
+    unsigned int n = *b & 255U, store = q[j + 1] - p >= 8 ? 8U : (n + 7U) >> 3;
+    u8* r = lit_flush(p, q[j + 1], a, b, false);
 
     if (p < q[j] || p + store > q[j + 1] || (unsigned int)(p + store - replay) > bitstream_at)
         fail("a store leaves its stream or reaches the bitstream");
@@ -37,26 +37,26 @@ static u8* flush(unsigned int j, u8* p, u64 a, unsigned int* c, unsigned int* s)
 
 /* lit_streams() again, statement by statement, with a record per run of literals and its flushes */
 static void streams(const u32* enc, const u8* literals, unsigned int n_literals) {
-    const unsigned int run = 4U * SEQLZ_LIT_STREAMS;
+    const unsigned int run = LIT_FLUSH_RUN * SEQLZ_LIT_STREAMS;
     unsigned int half, k, j;
 
     for (half = 0; half < SEQLZ_LIT_STREAMS; half += 4) {
         u8 *p0 = q[half], *p1 = q[half + 1], *p2 = q[half + 2], *p3 = q[half + 3];
         u64 a0 = 0, a1 = 0, a2 = 0, a3 = 0;
-        unsigned int c0 = 0, c1 = 0, c2 = 0, c3 = 0, s0 = 0, s1 = 0, s2 = 0, s3 = 0, from;
+        unsigned int b0 = 0, b1 = 0, b2 = 0, b3 = 0, from;
 
         for (k = half; k + run - 4U < n_literals; k += run) {
             for (j = 0; j < run; j += SEQLZ_LIT_STREAMS) {
-                a0 = lit_put(a0, &s0, enc, literals[k + j]);
-                a1 = lit_put(a1, &s1, enc, literals[k + j + 1]);
-                a2 = lit_put(a2, &s2, enc, literals[k + j + 2]);
-                a3 = lit_put(a3, &s3, enc, literals[k + j + 3]);
+                a0 = lit_put(a0, &b0, enc, literals[k + j]);
+                a1 = lit_put(a1, &b1, enc, literals[k + j + 1]);
+                a2 = lit_put(a2, &b2, enc, literals[k + j + 2]);
+                a3 = lit_put(a3, &b3, enc, literals[k + j + 3]);
             }
             printf("%s{\"half\":%u,\"from\":%u,\"to\":%u,\"tail\":0,\"flush\":[", steps++ ? "," : "", half, k, k + run - 4U);
-            p0 = flush(half, p0, a0, &c0, &s0);
-            p1 = flush(half + 1, p1, a1, &c1, &s1);
-            p2 = flush(half + 2, p2, a2, &c2, &s2);
-            p3 = flush(half + 3, p3, a3, &c3, &s3);
+            p0 = flush(half, p0, a0, &b0);
+            p1 = flush(half + 1, p1, a1, &b1);
+            p2 = flush(half + 2, p2, a2, &b2);
+            p3 = flush(half + 3, p3, a3, &b3);
             printf("]}");
             /*
              * chapter 11 says that from the first run on, a stream stores past the byte of dst where
@@ -70,28 +70,28 @@ static void streams(const u32* enc, const u8* literals, unsigned int n_literals)
             switch (k % SEQLZ_LIT_STREAMS) {
             case 0:
             case 4:
-                a0 = lit_put(a0, &s0, enc, literals[k]);
+                a0 = lit_put(a0, &b0, enc, literals[k]);
                 break;
             case 1:
             case 5:
-                a1 = lit_put(a1, &s1, enc, literals[k]);
+                a1 = lit_put(a1, &b1, enc, literals[k]);
                 break;
             case 2:
             case 6:
-                a2 = lit_put(a2, &s2, enc, literals[k]);
+                a2 = lit_put(a2, &b2, enc, literals[k]);
                 break;
             default:
-                a3 = lit_put(a3, &s3, enc, literals[k]);
+                a3 = lit_put(a3, &b3, enc, literals[k]);
             }
             if ((k & 3U) == 3U)
                 k += 4;
         }
         printf(
             "%s{\"half\":%u,\"from\":%u,\"to\":%u,\"tail\":1,\"flush\":[", steps++ ? "," : "", half, from, min(k, n_literals));
-        p0 = flush(half, p0, a0, &c0, &s0);
-        p1 = flush(half + 1, p1, a1, &c1, &s1);
-        p2 = flush(half + 2, p2, a2, &c2, &s2);
-        p3 = flush(half + 3, p3, a3, &c3, &s3);
+        p0 = flush(half, p0, a0, &b0);
+        p1 = flush(half + 1, p1, a1, &b1);
+        p2 = flush(half + 2, p2, a2, &b2);
+        p3 = flush(half + 3, p3, a3, &b3);
         printf("]}");
     }
 }

@@ -84,8 +84,9 @@ field's 4 bits.
 @end
 
 @@ 24-49
-A canonical code needs only the lengths: the codes of one length are consecutive numbers, in symbol
-order. So the format stores lengths and never codes ([canonical codes](book:#ch-compression--canonical-codes)).
+Because the codes follow from the lengths, the format stores one byte per symbol and never a code:
+{{ch08.length_bytes|grp}} bytes for all of its tables, with all three levels ([canonical codes](book:#ch-compression--canonical-codes)).
+Every builder below starts here, so bad lengths are refused before their table is filled.
 
 The sum checks that the codes fill the decode table exactly. A code of `l` bits owns
 `2^(bits - l)` entries of a table of `2^bits`. With `bits = 3`, lengths 1, 2, 3, 3 own 4 + 2 + 1 + 1

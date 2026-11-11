@@ -132,8 +132,9 @@ When a swap-in comes, whatever ran since the last one may have pushed the decode
 caches, and each first lookup into a line is then a miss of about 100 ns. Prefetches issued back to
 back let these misses overlap ([prefetches](book:#ch-cpu--prefetch)).
 
-`PREFETCH_STEP` is 512 bytes, 8 lines of 64 bytes per round of the outer loop. The second paragraph is
-about the last line of a table, see the next block.
+With 512 bytes per round, the token table takes {{ch12.tok.rounds}} rounds of 8 prefetches; the panel
+has what one line per round cost. The comment's second paragraph belongs to `prefetch(end - 1)` in the
+next block.
 @anim misses A model of 8 cache misses, one after another or overlapped
 @more {#ch-dec-basics--prefetch} Why the tables are prefetched, 8 lines at a time
 The decoder looks things up in tables: one lookup in the token table, 8 KiB, per sequence, and for
@@ -194,9 +195,9 @@ tables always do.
 @assert ch12.ml.mod == ch12.ll.mod and ch12.tok.mod == 0 and ch12.ll.last_entry - ch12.ll.first_extra + 1 == ch12.ll.tail and ch12.lit.last_entry - ch12.lit.first_extra + 1 == ch12.lit.tail and ch12.lit.mod % 8 != 0
 
 Until 11th October 2026 the decoder left that line out (#179). With canonical codes the last entries
-belong to the longest codes, the rarest symbols, so it cost a miss only on a rare code. Line 142 is one
-`prefetch()` more per table; where the table starts a line, it asks for a line the loop asked for
-already. Aligning the tables to 64 bytes instead would need a struct aligned to 64, which the tests and
+belong to the longest codes, the rarest symbols, so it cost a miss only on a rare code.
+`prefetch(end - 1)` is one `prefetch()` more per table; where the table starts a line, it asks for a
+line the loop asked for already. Aligning the tables to 64 bytes instead would need a struct aligned to 64, which the tests and
 tools that get it from `malloc()` do not have. On x86-64 the extra prefetch made no difference in a quick
 bench; it was not measured on the phone (commit `bafef14`).
 @end
@@ -273,19 +274,21 @@ than the 2 of raw literals. [Why these bytes](book:#ch-literals-enc--51) has the
 @@ 166-176
 Level 3 decides on deltas once for the whole page, and only after the last sequence does it know which
 delta is cheapest. For that it needs each literal's position and the offset of the sequence before,
-which plain literals do not carry, so the encoder writes a 6-byte record in front of each sequence's
+which plain literals do not carry, so the encoder writes a 6-byte record for each sequence with
 literals.
 
 The records go into `dst` and not the state, because the state is the hash table until the matcher is
-done. The price is room: a page that does not fit with its records is matched again without them, and
-stored without deltas.
+done. In `dst` they go behind the literals, from [`ENC_REC_AT`](seqlz_encoder.h.html#b255) up, where
+only the bitstream competes for the room: a page whose records and bitstream do not both fit there is
+matched again without records, and stored without deltas.
 @more {#ch-encoder--records} What the records hold, and what they cost on the page of pointers
-[`encode_seq()`](seqlz_encoder.h.html#b185) writes the records, and
+[`encode_seq()`](seqlz_encoder.h.html#b202) writes the records, and
 [`seqlz_delta_literals()`](#ch-literals-enc--deltas) reads them once the page is matched. Each field
 fits a `u16`, as a page's positions, lengths and offsets are at most 4096. The cost is room
 in `dst`: on [the page of pointers](#ch-matcher--back), level 3 finds {{delta.ptr.n_lit}} literals in
-{{delta.ptr.recs}} sequences, and with the records they take {{delta.ptr.with_rec|grp}} bytes.
-@assert delta.ptr.with_rec == delta.ptr.n_lit + delta.rec * delta.ptr.recs
+{{delta.ptr.recs}} sequences, and their records take {{delta.ptr.rec_bytes|grp}} bytes more, out of the
+{{delta.rec_room|grp}} that zram's two pages have behind `ENC_REC_AT` for records and bitstream.
+@assert delta.ptr.rec_bytes == delta.rec * delta.ptr.recs
 @end
 
 @@ 177-182

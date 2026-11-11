@@ -42,14 +42,14 @@ builds wherever an encoder is declared before it. The kernel copy, made by
 include and fails if the header includes a kernel header that `seqlz_compress.c` does not.
 
 @@ 19-29
-5 bytes into a slot of 4096 (12 bits). `v << 24` drops 3 of the 8 bytes loaded and puts the 5 at the
-top, the multiply mixes them, and the top 12 bits are the slot: the top bits of a product depend on
-all input bits, the low ones only on the low input bits.
+The matcher hashes at every position it tries, so the hash has to be cheap: gcc 16.2.1 and clang 22
+at `-O2` fold `v << 24` into the constant, and it is one multiply by `0xcf1bbcdcbb << 24` and one
+shift. `v` comes from the loop, which loads the 8 bytes once per position and also takes from them
+`cur`, the 4 bytes it compares ([one position](#b184)). The top 12 bits and not the low ones,
+because a carry only moves up: only the top bits of the product depend on all 40 input bits.
 
-5 bytes, not 4 as in `lz4`: fewer and longer matches, 5% fewer cycles per page when it came, and
-smaller pages at level 2, most likely because a match of 4 bytes at a new offset takes about as many
-bits there as its 4 coded literals ([measured](#ch-matcher--five-bytes)). Same constant and formula as `zstd`'s 5-byte
-hash.
+5 bytes, not 4 as in `lz4`: 5% fewer cycles per page when it came, and today smaller pages at level
+2 too ([measured](#ch-matcher--five-bytes)).
 @anim hash The three steps of a hash-table matcher, as a model
 @more {#ch-matcher--hash} A pointer's 5 bytes into a slot, step by step
 The table holds the last position where 5 bytes were seen, at the slot of their hash. Two different
@@ -138,12 +138,15 @@ A hash of 6 bytes went further the same way, fewer cycles for more memory, and w
 ## seqlz_match_len()
 
 @@ 30-58
-How many bytes agree. The XOR of two little-endian words is 0 where they agree, and its lowest set bit
-is in the first byte that differs, so `ctz(x) >> 3` is the number of equal bytes, one instruction.
+The callers know that 4 bytes agree, pass `p` and `q` 4 bytes on and add 4 ([a hit](#b210)). In the
+XOR, each equal byte is 8 zero bits at the bottom, and the first byte that differs adds 0 to 7 more;
+`ctz(x) >> 3` drops those.
 
-The first 16 bytes with one branch: whether a match ends in the first 8 bytes is hard to predict, and
-the select between the two halves becomes a conditional move. `| 1ULL << 63` tells the compiler `x` is
-not 0, for which `ctz` is undefined.
+The first round of 16 bytes settles most matches: nearly all below 20 bytes end in it, and those
+were 87% of the matches when it was measured ([measured](#ch-matcher--sixteen)). clang 22 compiles
+it as the comment says, the pick between the halves a conditional move and `x | x2` the one branch.
+gcc 16.2.1 for x86-64, at `-O2` and inlined in `compress_block()` too, keeps a branch on `x1` and
+loads the second half only when the first agrees.
 @more {#ch-matcher--match-len} `L` against `x` in byte 11, step by step
 `__builtin_ctzll()` is one `tzcnt` on x86-64, `rbit` and `clz` on arm64. Say `p` holds
 `ABCDEFGHIJKLMNOP` and `q` holds `ABCDEFGHIJKxMNOP`:
@@ -156,10 +159,11 @@ not 0, for which `ctz` is undefined.
 | <code>__builtin_ctzll(x &#124; 1ULL &lt;&lt; 63)</code> | {{ch09.mlen.ctz}}: bit 2 of byte 3, $3 \times 8 + 2$ |
 | result | `8 + ({{ch09.mlen.ctz}} >> 3)` = {{ch09.mlen.len}} |
 
-The selects become conditional moves, so a match that ends anywhere in the first 16 bytes costs one
-branch, `x | x2`, which goes the same way most of the time. Whether a match ends in the first 8 bytes
-is the hard question, most do and many do not, and a branch that goes one way mostly and the other way
-at random is the worst case for a branch predictor ([chapter 3](#ch-cpu--branches)).
+With clang the selects become conditional moves, so a match that ends anywhere in the first 16 bytes
+costs one branch, `x | x2`, which goes the same way most of the time. Whether a match ends in the
+first 8 bytes is the hard question, most do and many do not, and a branch that goes one way mostly
+and the other way at random is the worst case for a branch predictor ([chapter
+3](#ch-cpu--branches)).
 
 Inside the `if`, `x` is never 0, but the compiler does not have to see that through the select. With
 bit 63 set the call is defined for any `x`, and for an `x` that is not 0 the count stays the same. The
@@ -187,10 +191,14 @@ its source, e.g. at offset 2 in a page of `ab` repeated: the matcher only reads,
 ## Level 3's lazy step
 
 @@ 76-81
-Level 3's matcher is lazy for short matches: before it takes one, it looks whether the next position
-has a longer one. A match of `SEQLZ_LAZY_LEN`, {{ch09.lazy_len}} bytes, or more is taken as it is, since a longer one
-there is rare. A lazy step up to that length kept most of what a step at every match saves
-([measured](#ch-matcher--lazy-measured)).
+A greedy matcher takes the first match it finds. A lazy one first looks whether the match one byte
+later is longer, and if it is, sends that byte as a literal and takes the later match ([an
+example](#ch-matcher--lazy)). A short match is the one a later match can beat by much, so level 3
+looks only below {{ch09.lazy_len}} bytes; `zlib` has the same limit, `max_lazy_match`, 16 at its
+default level 6. On 31st October 2026, on the ten samples of 20 000 pages, 16 instead of 20 made
+level 3 0.69 bytes per page larger for 0.40% fewer compress instructions, and 28 made it 0.62 bytes
+smaller for 0.47% more (gcc, x86-64, userspace); neither was kept
+([explored-designs.md](https://github.com/martinus/seqlz/blob/main/docs/explored-designs.md#six-more-encoder-changes-for-level-3-a-gate-before-the-pricing-more-inserts-a-second-lazy-step-seqlz_lazy_len-the-own-tables-estimate-8192-hash-slots-none-kept)).
 
 @@ 82-120
 Is there a longer match one position later? It tries the same two candidates as
@@ -207,11 +215,13 @@ the same match one byte shorter. A branch per candidate is fine here, it runs on
 
 @@ 121-149
 @anchor ch-matcher
-The plan of the matcher. It is greedy, like `lz4`'s fast mode: it takes the first match it finds and
-jumps over it. It tries two candidates, the repeat offset, which costs 0 offset bits, and the last
-position whose 5 bytes had the same hash. And it tries every position, also after a long stretch
-without a match, where `lz4` starts to skip: skipping needed state the loop has no register for, and
-without it writes got faster, pages that do not compress slower.
+The whole matcher in a few words: a cursor `pos` walks the page from byte 1. At each position it
+makes two guesses where the next 4 bytes were seen before, the repeat offset and the hash table's
+entry. A miss moves the cursor one byte; a hit counts the match, hands the sequence to the encoder
+and puts the cursor behind the match. `lz4`'s fast mode is the same loop with one guess, the hash
+table's, and a step that grows over long stretches without a match. seqlz has no step: it needs
+`anchor` in the loop, which has no register to spare for it. Without the step writes got faster, and
+pages that do not compress slower ([measured](#ch-matcher--step)).
 
 Each sequence goes to `encode_seq()` the moment it is found. In `seqlz_compress.c` that is the encoder
 of `seqlz_encoder.h`, `__always_inline`, so matching and encoding are one loop. Two passes were 6%
@@ -332,13 +342,15 @@ match `last` is at most the match's start, and `pos` only grows.
 @end
 
 @@ 184-209
-The path taken most: no match. Both candidates are read and compared, and `rep_hit | cand_hit`, a
-bitwise OR, decides with one branch. With a branch per candidate it mispredicted almost twice as often
-as `lz4`.
+The path taken most is a miss: two compares of 4 bytes, `pos` stored into its slot, and the values
+loaded ahead for `pos + 1` take their turn. `|` and not `||`, so that both compares are computed and
+one branch decides: with a branch per candidate the matcher mispredicted almost twice as often as
+`lz4`.
 
-The next position's values were started one position ahead, so on an in-order core the compares use
-loads done during the position before: 3.4% fewer cycles on the Cortex-A55, the same output. The store
-into the table comes before `cand = table[h]` of the next position, so the matches stay the same.
+Loading one position ahead means that on an in-order core the compares use loads done during the
+position before: 3.4% fewer cycles on the Cortex-A55, the same output. E.g. when `pos` and `pos + 1`
+hash to the same slot, the store of `pos` still comes first, and `pos + 1` finds `pos` as its
+candidate.
 @stepper match seqlz_match_block() on two pages, statement by statement
 @more {#ch-matcher--position} One branch for two candidates, measured
 This is the path taken most: on the phone's pages a run without a match is 4 positions long on average

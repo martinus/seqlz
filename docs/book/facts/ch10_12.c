@@ -379,7 +379,7 @@ static void chapter11(void) {
     static const u8 four[4] = {0x65, 0x20, 0x65, 0x00};
     const u64 lanes = 0x00ff00ff00ff00ffULL;
     unsigned int total[SEQLZ_LIT_SETS], order[SEQLZ_LIT_SETS], sizes[SEQLZ_LIT_STREAMS], q[SEQLZ_LIT_STREAMS + 1];
-    unsigned int n, n_lit, raw_len, cod_len, letters, i, j, k, set, coded = 0, all = 0, width, cnt, sum, bits, b_set;
+    unsigned int tail_n, n, n_lit, raw_len, cod_len, letters, i, j, k, set, coded = 0, all = 0, width, cnt, sum, bits, b_set;
     const u32* enc;
     u64 x = 0, acc;
     char* s;
@@ -594,11 +594,13 @@ static void chapter11(void) {
     fact_num("ch11.saves", raw_len - cod_len);
     fact_num("ch11.saves_pct", (200 * (raw_len - cod_len) + raw_len) / (2 * raw_len));
 
-    /* stream 0 in the chosen table: lit_put() for its first 4 literals, then lit_flush() */
+    /* stream 0 in the chosen table: lit_put() for its first LIT_FLUSH_RUN literals, then lit_flush() */
     enc = T->lit[set].enc;
     acc = 0;
     sum = 0;
-    for (i = 0; i < 4; i++) {
+    fact_num("ch11.run", LIT_FLUSH_RUN);
+    fact_num("ch11.run_lits", LIT_FLUSH_RUN * SEQLZ_LIT_STREAMS);
+    for (i = 0; i < LIT_FLUSH_RUN; i++) {
         u8 b = page[8 * i];
 
         acc = lit_put(acc, &sum, enc, b);
@@ -623,12 +625,13 @@ static void chapter11(void) {
     for (i = 0; i < 4; i++)
         sprintf(s + strlen(s), "%s%s", i ? " " : "", bin(enc[page[8 * i]] >> 8, enc[page[8 * i]] & 255U));
     str("ch11.acc.bits", "%s", s);
-    cnt = 0;
     {
         static u8 buf[16];
-        unsigned int nb = cnt + (sum & 255U);
+        unsigned int nb = sum & 255U;
         u64 sh = acc << ((64U - nb) & 63U);
-        u8* p = lit_flush(buf, buf + sizeof buf, acc, &cnt, &sum);
+        u8* p = lit_flush(buf, buf + sizeof buf, acc, &sum, true);
+
+        cnt = sum;
 
         fact_num("ch11.flush.n", nb);
         fact_num("ch11.flush.shift", (64U - nb) & 63U);
@@ -663,12 +666,17 @@ static void chapter11(void) {
         str(key("ch11.sz.%u", j), "%s", line);
     }
 
-    /* the tail of lit_streams() for half = 0 and half = 4 */
-    for (k = 0; k + 28U < n_lit; k += 32)
+    /*
+     * the tail of lit_streams() for half = 0 and half = 4, for a page of 210 literals: the page of letters
+     * has a tail of one literal
+     */
+    tail_n = 210;
+    fact_num("ch11.tail_n", tail_n);
+    for (k = 0; k + LIT_FLUSH_RUN * SEQLZ_LIT_STREAMS - 4U < tail_n; k += LIT_FLUSH_RUN * SEQLZ_LIT_STREAMS)
         ;
     fact_num("ch11.tail0", k);
     i = 0;
-    for (; k < n_lit; k++) {
+    for (; k < tail_n; k++) {
         char* line = scratch();
 
         sprintf(line, "k = %u  case %u  stream %u", k, k % 8, k % 8);
@@ -680,11 +688,11 @@ static void chapter11(void) {
     }
     str(key("ch11.tr.%u", i++), "k = %u  stop", k);
     fact_num("ch11.tr.lines", i);
-    for (k = 4, i = 4; k + 28U < n_lit; k += 32)
+    for (k = 4, i = 4; k + LIT_FLUSH_RUN * SEQLZ_LIT_STREAMS - 4U < tail_n; k += LIT_FLUSH_RUN * SEQLZ_LIT_STREAMS)
         i = k;
     fact_num("ch11.block4", i);
     fact_num("ch11.tail4", k);
-    for (; k < n_lit; k++)
+    for (; k < tail_n; k++)
         if ((k & 3U) == 3U) {
             fact_num("ch11.tr4.last", k);
             fact_num("ch11.tr4.jump", k + 4);

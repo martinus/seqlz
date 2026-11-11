@@ -17,10 +17,11 @@ is the first level to need ([the block](#b18)).
 
 @@ 1-13
 @anchor ch-zram-glue--interface
-A compressed block is only for the kernel that wrote it: the tables are part of the format, and the
-format may change from one kernel to the next ([no version](book:#ch-format--version)). zram keeps
-its pages in memory, never on disk, so nothing ever reads a block written by another kernel. The
-comment names `Documentation/staging/seqlz.rst`, which `port.py` writes from `docs/format.md`.
+Why a format that only its own kernel reads is enough: zram keeps its pages in memory, never on disk,
+so no other kernel ever reads a block. That is what lets a page carry no version and the tables be
+trained again from one kernel to the next ([no version](book:#ch-format--version)). The spec the
+comment names, `Documentation/staging/seqlz.rst`, is `docs/format.md`, which `port.py` writes into the
+kernel's tree.
 
 @@ 14-17
 The interface speaks of blocks of `SEQLZ_BLOCK_SIZE` bytes, not of `PAGE_SIZE`: a block is one memory
@@ -32,12 +33,14 @@ also had blocks of 16 KiB, with tables of their own, which the kernel's copy nev
 @end
 
 @@ 18-30
-The work memory, as constants, so that a caller can allocate it once per CPU. For compression it is
-the matcher's hash table, 8192 bytes ([what lies where](book:#ch-header--state)); levels 2 and 3 reuse
-that memory once the matcher is done. For decompression it is a buffer of a block and 16 bytes, which
-only levels 2 and 3 need, for their coded literals ([Part III](book:#part-level-2)).
-`seqlz_compress.c` checks the first against `sizeof(struct seqlz_state)` with a `static_assert()`,
-level 2's part of `seqlz_internal.h` the second against `SEQLZ_SCRATCH`.
+Constants, because zram allocates the work memory once per CPU when a device is set up, not per page,
+and keeps it as long as the device exists ([chapter 1](book:#ch-zram--work-memory)). The
+{{size.state|grp}} bytes for compressing are about half of `lz4`'s 16 416. Nothing in either buffer
+lives from one page to the next, so zram's backend can serve both from one allocation
+([the backend](book:#ch-zram-glue--backend)). A device at level 1 needs no decompression buffer at all:
+only coded literals are decoded into it ([Part III](book:#part-level-2)).
+`seqlz_compress.c` checks the first constant against `sizeof(struct seqlz_state)` with a
+`static_assert()`, level 2's part of `seqlz_internal.h` the second against `SEQLZ_SCRATCH`.
 
 @@ 31-52
 `SEQLZ_LEVELS` is the number of levels a build has: 3 unless the build says fewer, and anything but 1
@@ -69,7 +72,7 @@ alignment because level 3 keeps `u64`s in it; what `kmalloc()` returns has at le
   (`ENC_ROOM`) plus the next literals are free ([the room check](book:#ch-encoder--room-check)). With
   zram's 2 pages it never happens.
 
-[The function](seqlz_compress.c.html#b109) is at the end of `seqlz_compress.c`.
+[The function](seqlz_compress.c.html#b104) is at the end of `seqlz_compress.c`.
 
 @@ 81-101
 @anchor ch-header--encode-decode

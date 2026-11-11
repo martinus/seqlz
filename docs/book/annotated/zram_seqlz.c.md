@@ -471,9 +471,11 @@ harness's benchmarks only with `PORT=1` in the VM.
 
 @@ 1-9
 @anchor ch-zram-glue
-zram can give a device a dictionary, e.g. for `zstd`. seqlz's tables are fixed and part of the
-format, so there is nothing a dictionary could change, and this file ignores it; the kernel's backend
-refuses one ([its setup](book:#ch-zram-glue--backend-params)).
+A zram dictionary is a file of sample bytes per device, set with `dict=` in `algorithm_params`, that
+`lz4` and `zstd` use to compress small pages better. In the kernel, `lzo` has refused one since Linux
+7.3 (commit `7b0f677c7bd5`), and seqlz's backend does the same
+([its setup](book:#ch-zram-glue--backend-params)); this file and the harness's copy of `lzo` still
+ignore it.
 @more {#ch-zram-glue--head} The three levels, and why the tables are no dictionary
 `seqlz-1` keeps the literals raw. `seqlz-2` codes them with one of 8 fixed literal tables where that
 saves enough ([Part III](#part-level-2)). `seqlz-3` adds a lazy matcher, a literal table of the
@@ -491,8 +493,9 @@ interface, and `zram_codec.h`, the harness's copy of zram's interface.
 
 @@ 10-17
 `setup_params()`, once per device. seqlz compresses blocks of 4 KiB, so a corpus of 16 KiB pages, which
-the harness also runs for the other codecs, fails here instead of reading past every page. No tables are
-built: they are `const` data, generated when seqlz is built and shared by every device and CPU.
+the harness also runs for the other codecs, stops here with one error, before the first page;
+`compress()` checks each page's length again. No tables are built: they are `const` data, generated
+when seqlz is built and shared by every device and CPU.
 @more {#ch-zram-glue--setup} Tables per device until October 2026, and why not
 Lengths from a bad training stop the build that generates the tables
 ([at build time](#ch-codes--kernel)), not a benchmark. The kernel generates them the same way
@@ -541,11 +544,12 @@ line.
 The wrapper of `seqlz-1`: raw literals, no literal table.
 
 @@ 62-78
-The decompress of `seqlz-1`. A page with raw literals needs no work memory, so the decoder gets
-`NULL`. With `NULL` it takes a page with coded literals for invalid, and `seqlz-1` never writes one.
-`seqlz-1` has no decompression context of its own, so the harness passes the compression context as
-`s`, and the function ignores it. In zram with the split, such a codec gets no context at all here,
-which [a doctest](book:#ch-zram-glue--tests) checks on every test page.
+The decompress of `seqlz-1`. Raw literals are copied straight out of the compressed page, so the
+decoder needs no buffer and gets `NULL`. The price: this function cannot read a page of `seqlz-2` or
+`seqlz-3` with coded literals. The decoder returns an error for it when it reads the u16, before it
+writes a byte of `dst`, and `seqlz-1` never writes such a page. `s` is the compression context because
+the harness hands that to a codec without `create_dctx`; in zram with the split such a codec gets no
+context at all here, which [a doctest](book:#ch-zram-glue--tests) checks on every test page.
 
 `bench_prefetch_page()` asks the CPU to start loading the compressed bytes and every line of the
 output page before the decoder needs them ([prefetch](book:#ch-cpu--prefetch)). The kernel's backend
@@ -585,9 +589,9 @@ names it.
 ## Levels 2 and 3
 
 @@ 89-99
-The decompression context of `seqlz-2` and `seqlz-3`: the scratch, a buffer into which the decoder
-decodes their coded literals before it copies the sequences ([Part III](book:#part-level-2)). It is
-a page and 16 bytes, {{const.SCRATCH|grp}}. With the hash table that is
+Coded literals cannot be copied out of the compressed page as raw ones are: the decoder first decodes
+all of them into this buffer, the scratch, and then runs the sequences over it
+([Part III](book:#part-level-2)). It is a page and 16 bytes, {{const.SCRATCH|grp}}. With the hash table that is
 {{ch15.state_plus_scratch|grp}} bytes per CPU, which `kmalloc()` hands out as
 {{ch15.mem.split_gets|grp}}, below `lz4`'s 20 480.
 @more {#ch-zram-glue--fast-lit} The 16 spare bytes, and what the split cost in memory

@@ -78,8 +78,8 @@ sense given here.
   `seqlz-opt`, removed. [Chapter 6](#ch-decisions--not-kept)
 - **prefix code**: codes of which none is the start of another, so a decoder knows where each ends.
   [Chapter 2](#ch-compression--prefix-codes)
-- **record**: at level 3, the {{delta.rec}} bytes the encoder writes in front of a sequence's literals, its position,
-  `ll` and the offset before, for `seqlz_delta_literals()`. [The records](#ch-encoder--records)
+- **record**: at level 3, the {{delta.rec}} bytes the encoder writes for a sequence's literals, behind all literals
+  from `ENC_REC_AT` up: their position, `ll` and the offset before, for `seqlz_delta_literals()`. [The records](#ch-encoder--records)
 - **repeat offset**: the offset of the match before, used again for 0 bits; 1 at the start of a page.
   [Chapter 4](#ch-format--offsets)
 - **scratch**: the per-CPU buffer the decoder decodes coded literals into, a page plus 16 bytes;
